@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { Bebas_Neue, Poppins } from "next/font/google";
+import { Bebas_Neue, JetBrains_Mono, Poppins, Teko } from "next/font/google";
 import "./globals.css";
+import "./peakclip.css";
 
 const bebasNeue = Bebas_Neue({
   variable: "--font-display",
@@ -10,6 +11,18 @@ const bebasNeue = Bebas_Neue({
 
 const poppins = Poppins({
   variable: "--font-body",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+});
+
+const teko = Teko({
+  variable: "--font-display-alt",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
@@ -27,7 +40,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${bebasNeue.variable} ${poppins.variable} h-full antialiased`}
+      className={`${bebasNeue.variable} ${poppins.variable} ${jetbrainsMono.variable} ${teko.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { brand, brandGrad } from '../../lib/tokens'
+import { brand, brandGrad, brandDim, brandBorder } from '../../lib/tokens'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
@@ -16,8 +16,14 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('generate')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [greeting, setGreeting] = useState('')
 
   useEffect(() => {
+    const hour = new Date().getHours()
+    if (hour < 12) setGreeting('Good morning')
+    else if (hour < 18) setGreeting('Good afternoon')
+    else setGreeting('Good evening')
+
     const params = new URLSearchParams(window.location.search)
     const p = params.get('plan')
     if (p === 'creator' || p === 'pro') setActiveTab('upgrade')
@@ -118,29 +124,31 @@ export default function Dashboard() {
     {
       name: 'Free', price: '$0', clips: '3 clips/month',
       features: ['3 credits', '9:16 format', 'Basic subtitles'],
-      color: brand, cta: 'Current plan', disabled: true
+      cta: 'Current plan', disabled: true
     },
     {
       name: 'Creator', price: '$26.99', clips: '200 clips/month',
       features: ['200 credits', 'Animated subtitles', 'Gameplay overlay', 'HD export'],
-      color: brand, cta: 'Start Creator', popular: true,
+      cta: 'Start Creator', popular: true,
       price_id: 'price_creator'
     },
     {
       name: 'Pro', price: '$69.99', clips: 'Unlimited',
       features: ['Unlimited credits', 'Advanced editor', 'Auto-publish', 'Viral Score AI', 'Priority support'],
-      color: brand, cta: 'Start Pro',
+      cta: 'Start Pro',
       price_id: 'price_pro'
     },
   ]
 
   const tabs = [
-    { id: 'generate', icon: '⚡', label: 'Generate Clips' },
-    { id: 'clips', icon: '🎬', label: 'My Clips' },
-    { id: 'upgrade', icon: '👑', label: 'Upgrade' },
+    { id: 'generate', label: 'Generate Clips' },
+    { id: 'clips', label: 'My Clips' },
+    { id: 'upgrade', label: 'Upgrade' },
   ]
 
   const closeSidebar = () => setSidebarOpen(false)
+
+  const displayName = user?.email?.split('@')[0] || 'there'
 
   return (
     <div className="app-layout">
@@ -164,7 +172,6 @@ export default function Dashboard() {
               role="tab"
               aria-selected={activeTab === item.id}
             >
-              <span style={{ fontSize: '16px' }}>{item.icon}</span>
               {item.label}
             </button>
           ))}
@@ -195,42 +202,33 @@ export default function Dashboard() {
       )}
 
       <main className="main-content">
-        <div className="page-header">
-          <h2 className="page-title" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '1px' }}>
-            {activeTab === 'generate' && 'Generate Your Viral Clip'}
-            {activeTab === 'clips' && 'My Clips'}
-            {activeTab === 'upgrade' && 'Choose Your Plan'}
-          </h2>
-          <p className="page-subtitle">
-            {activeTab === 'generate' && 'Paste a YouTube or Twitch link — AI does the rest'}
-            {activeTab === 'clips' && `${clips.length} clips generated so far`}
-            {activeTab === 'upgrade' && 'Unlock more credits and premium features'}
-          </p>
+        <div className="dash-header">
+          <div className="dash-welcome">
+            <div className="dash-welcome-greeting">
+              {greeting}, <span className="dash-welcome-name">{displayName}</span>
+            </div>
+            <div className="dash-welcome-sub">
+              {activeTab === 'generate' && 'Paste a link to create your next viral clip'}
+              {activeTab === 'clips' && `You have ${clips.length} clip${clips.length !== 1 ? 's' : ''}`}
+              {activeTab === 'upgrade' && 'Unlock more power with a premium plan'}
+            </div>
+          </div>
+          <div className="dash-header-actions">
+            <div className="dash-credits-badge">
+              <span className="dash-credits-icon">◆</span>
+              <span className="dash-credits-count">{plan === 'pro' ? '∞' : credits}</span>
+              <span style={{ opacity: 0.6 }}>credits</span>
+            </div>
+            {activeTab === 'clips' && (
+              <button onClick={() => setActiveTab('generate')} className="dash-quick-action">
+                + New Clip
+              </button>
+            )}
+          </div>
         </div>
 
         {activeTab === 'generate' && (
           <>
-            <div className="stats-grid">
-              {[
-                { label: 'Credits', value: credits, sub: plan === 'pro' ? 'unlimited' : `of ${plan === 'creator' ? 200 : 3}`, color: credits > 0 ? brand : '#ef4444' },
-                { label: 'Total Clips', value: clips.length, sub: 'generated', color: '#fff' },
-                { label: 'Plan', value: plan.toUpperCase(), sub: plan === 'free' ? 'Click to upgrade' : 'Active', color: brand, onClick: () => setActiveTab('upgrade') },
-              ].map((s, i) => (
-                <div
-                  key={i}
-                  onClick={s.onClick}
-                  className={`stat-card${s.onClick ? ' clickable' : ''}`}
-                  role={s.onClick ? 'button' : undefined}
-                  tabIndex={s.onClick ? 0 : undefined}
-                  onKeyDown={s.onClick ? e => { if (e.key === 'Enter') { s.onClick() } } : undefined}
-                >
-                  <div className="stat-label">{s.label}</div>
-                  <div className="stat-value" style={{ color: s.color }}>{s.value}</div>
-                  <div className="stat-sub">{s.sub}</div>
-                </div>
-              ))}
-            </div>
-
             <div className="process-card">
               <label className="process-label" htmlFor="video-url">VIDEO URL</label>
               <div className="process-row">
@@ -261,90 +259,39 @@ export default function Dashboard() {
                 <span className="process-feature">Smart trimming</span>
               </div>
             </div>
+
+            {clips.length > 0 && (
+              <>
+                <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '20px', letterSpacing: '1px', marginBottom: '16px', color: '#fff' }}>
+                  Recent Clips
+                </h3>
+                <div className="dash-clip-grid">
+                  {clips.slice(0, 3).map(clip => renderClipCard(clip))}
+                </div>
+              </>
+            )}
           </>
         )}
 
         {activeTab === 'clips' && (
-          <div>
+          <>
             {clips.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">🎬</div>
-                <p className="empty-text">No clips generated yet</p>
-                <button onClick={() => setActiveTab('generate')} className="empty-btn">
-                  Generate your first clip
+              <div className="dash-empty">
+                <div className="dash-empty-icon">🎬</div>
+                <div className="dash-empty-title">No Clips Yet</div>
+                <p className="dash-empty-text">
+                  Paste a YouTube or Twitch link and PeakClip will automatically find the best moments and create viral-ready shorts.
+                </p>
+                <button onClick={() => setActiveTab('generate')} className="dash-empty-btn">
+                  Generate Your First Clip
                 </button>
               </div>
             ) : (
-              <div className="clips-list">
-                {clips.map(clip => (
-                  <div key={clip.id} className="clip-item" style={{
-                    borderLeft: `3px solid ${clip.status === 'done' ? brand : clip.status === 'processing' ? '#FFBD2E' : '#555'}`
-                  }}>
-                    <div className="clip-left">
-                      {clip.thumbnail_url ? (
-                        <img
-                          src={clip.thumbnail_url}
-                          alt=""
-                          style={{
-                            width: '64px', height: '114px', borderRadius: '6px',
-                            objectFit: 'cover', flexShrink: 0, background: 'var(--card)'
-                          }}
-                          onError={e => { e.target.style.display = 'none' }}
-                        />
-                      ) : (
-                        <div className="clip-icon">🎬</div>
-                      )}
-                      <div>
-                        <div className="clip-title">{clip.title?.slice(0, 60)}</div>
-                        <div className="clip-date">
-                          {new Date(clip.created_at).toLocaleDateString('en-US', {
-                            day: 'numeric', month: 'long', year: 'numeric',
-                            hour: '2-digit', minute: '2-digit'
-                          })}
-                        </div>
-                        {clip.duration && (
-                          <div style={{ fontSize: '10px', color: brand, marginTop: '4px' }}>
-                            {clip.duration}s
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="clip-actions">
-                      {clip.status === 'processing' && (
-                        <span className="clip-status processing">Processing...</span>
-                      )}
-                      {clip.status === 'done' && (
-                        <>
-                          <button
-                            onClick={() => window.location.href = `/editor?id=${clip.id}`}
-                            className="clip-action-btn"
-                          >
-                            Edit
-                          </button>
-                          {clip.video_url && (
-                            <a href={clip.video_url} target="_blank" rel="noopener noreferrer" className="clip-action-btn">
-                              View
-                            </a>
-                          )}
-                        </>
-                      )}
-                      {clip.status === 'failed' && (
-                        <span className="clip-status" style={{
-                          background: 'rgba(239,68,68,0.08)', color: '#ef4444',
-                          border: '1px solid rgba(239,68,68,0.13)'
-                        }}>
-                          Failed
-                        </span>
-                      )}
-                      <span className={`clip-status ${clip.status === 'done' ? 'done' : clip.status === 'failed' ? '' : 'processing'}`}>
-                        {clip.status === 'done' ? 'Ready' : clip.status === 'failed' ? 'Error' : 'Processing'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+              <div className="dash-clip-grid">
+                {clips.map(clip => renderClipCard(clip))}
               </div>
             )}
-          </div>
+          </>
         )}
 
         {activeTab === 'upgrade' && (
@@ -352,10 +299,10 @@ export default function Dashboard() {
             {plans.map((p, i) => (
               <div key={i} className={`plan-card${p.popular ? ' popular' : ''}`}>
                 {p.popular && <div className="plan-popular-badge">MOST POPULAR</div>}
-                <div className="plan-name" style={{ color: p.color, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '1px' }}>
+                <div className="plan-name" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '1px' }}>
                   {p.name.toUpperCase()}
                 </div>
-                <div className="plan-price" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0px' }}>
+                <div className="plan-price" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
                   {p.price}<span className="plan-price-period">/month</span>
                 </div>
                 <div className="plan-clips">{p.clips}</div>
@@ -385,4 +332,64 @@ export default function Dashboard() {
       </main>
     </div>
   )
+
+  function renderClipCard(clip) {
+    return (
+      <div key={clip.id} className="dash-clip-card">
+        <div className="dash-clip-thumb">
+          {clip.thumbnail_url ? (
+            <img src={clip.thumbnail_url} alt="" onError={e => { e.target.style.display = 'none' }} />
+          ) : (
+            <div className="dash-clip-thumb-placeholder">
+              <div className="dash-clip-thumb-icon">🎬</div>
+              <span className="dash-clip-thumb-label">{clip.status === 'processing' ? 'Processing...' : 'No preview'}</span>
+            </div>
+          )}
+          <span className={`dash-clip-status-badge ${clip.status === 'done' ? 'done' : clip.status === 'processing' ? 'processing' : 'error'}`}>
+            {clip.status === 'done' ? 'Ready' : clip.status === 'processing' ? 'Processing' : 'Failed'}
+          </span>
+        </div>
+        <div className="dash-clip-info">
+          <div className="dash-clip-title">{clip.title?.slice(0, 60) || 'Untitled Clip'}</div>
+          <div className="dash-clip-meta">
+            {clip.duration && (
+              <span className="dash-clip-duration">◆ {clip.duration}s</span>
+            )}
+            <span className="dash-clip-date">
+              {new Date(clip.created_at).toLocaleDateString('en-US', {
+                month: 'short', day: 'numeric'
+              })}
+            </span>
+          </div>
+          <div className="dash-clip-actions">
+            {clip.status === 'done' && (
+              <>
+                <button
+                  onClick={() => window.location.href = `/editor?id=${clip.id}`}
+                  className="dash-clip-action-btn primary"
+                >
+                  Edit
+                </button>
+                {clip.video_url && (
+                  <a href={clip.video_url} target="_blank" rel="noopener noreferrer" className="dash-clip-action-btn secondary">
+                    View
+                  </a>
+                )}
+              </>
+            )}
+            {clip.status === 'processing' && (
+              <button className="dash-clip-action-btn primary" disabled style={{ opacity: 0.6 }}>
+                Processing...
+              </button>
+            )}
+            {clip.status === 'failed' && (
+              <button className="dash-clip-action-btn secondary" disabled>
+                Failed
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 }

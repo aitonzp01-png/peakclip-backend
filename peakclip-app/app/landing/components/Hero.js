@@ -35,8 +35,8 @@ export default function Hero() {
             <a href="/login?signup=true" className="hero-cta">
               Start Clipping Free
             </a>
-            <a href="#showcase" className="hero-cta-secondary">
-              Watch Dashboard Demo
+            <a href="#how-it-works" className="hero-cta-secondary">
+              See How It Works
             </a>
           </motion.div>
         </div>
