@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PeakClip — Turn Any Video Into Viral Shorts</title>
+<meta name="description" content="AI-powered clipping tool. Paste any YouTube link, PeakClip finds the best moments and creates viral Shorts & Reels in seconds."/>
+<link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --peak:#00F0A8;
+  --peak-light:#50F8C0;
+  --peak-dim:rgba(0,240,168,0.08);
+  --peak-border:rgba(0,240,168,0.25);
+  --bg:#0A0A0A;
+  --surface:#121212;
+  --card:#1A1A1A;
+  --card-hover:#222;
+  --border:#2A2A2A;
+  --text:#F0F0F0;
+  --text-muted:#999;
+  --text-dim:#555;
+  --font-display:'Teko',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;}
+}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);overflow-x:hidden;}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:var(--surface);}
+::-webkit-scrollbar-thumb{background:var(--text-dim);border-radius:3px;}
+
+/* ── NAV ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:200;display:flex;align-items:center;justify-content:space-between;padding:1rem 4rem;background:rgba(9,9,9,0.92);backdrop-filter:blur(16px);border-bottom:1px solid rgba(201,168,76,0.12);}
+.nav-logo{font-family:var(--font-display);font-size:1.9rem;letter-spacing:3px;color:var(--peak);text-decoration:none;display:flex;align-items:center;gap:6px;}
+.nav-logo span{color:var(--text);}
+.nav-links{display:flex;gap:0;list-style:none;}
+.nav-links a{color:var(--text-muted);text-decoration:none;font-size:0.88rem;font-weight:500;letter-spacing:0.5px;transition:color 0.2s;padding:0.5rem 1.2rem;border-radius:6px;}
+.nav-links a:hover{color:var(--peak);background:var(--peak-dim);}
+.nav-right{display:flex;align-items:center;gap:1rem;}
+.nav-login{color:var(--text-muted);text-decoration:none;font-size:0.88rem;font-weight:500;transition:color 0.2s;}
+.nav-login:hover{color:var(--text);}
+.nav-cta{background:var(--peak);color:var(--bg);padding:0.55rem 1.4rem;border-radius:6px;font-weight:700;text-decoration:none;font-size:0.88rem;letter-spacing:0.5px;transition:all 0.2s;}
+.nav-cta:hover{background:var(--peak-light);transform:translateY(-1px);}
+
+/* ── BUTTONS ── */
+.btn-primary{background:var(--peak);color:var(--bg);padding:0.9rem 2.4rem;border-radius:8px;font-weight:700;text-decoration:none;font-size:1rem;letter-spacing:0.5px;transition:all 0.25s;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;}
+.btn-primary:hover{background:var(--peak-light);transform:translateY(-2px);}
+.btn-secondary{background:transparent;color:var(--text);padding:0.9rem 2.4rem;border-radius:8px;font-weight:500;text-decoration:none;font-size:1rem;border:1px solid rgba(255,255,255,0.18);transition:all 0.25s;cursor:pointer;display:inline-flex;align-items:center;gap:8px;}
+.btn-secondary:hover{border-color:var(--peak);color:var(--peak);}
+
+/* ── HERO ── */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:9rem 2rem 5rem;position:relative;overflow:hidden;}
+.hero-glow{position:absolute;top:-10%;left:50%;transform:translateX(-50%);width:900px;height:500px;background:radial-gradient(ellipse,rgba(201,168,76,0.07) 0%,transparent 70%);pointer-events:none;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(201,168,76,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.03) 1px,transparent 1px);background-size:60px 60px;pointer-events:none;}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.25);border-radius:999px;padding:0.4rem 1.2rem;font-size:0.78rem;font-weight:600;color:var(--peak);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:2rem;animation:fadeUp 0.6s ease both;}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:var(--peak);animation:pulse 1.8s infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.8);}}
+.hero h1{font-family:var(--font-display);font-size:clamp(4.5rem,11vw,10rem);line-height:0.9;letter-spacing:3px;animation:fadeUp 0.6s 0.1s ease both;}
+.hero h1 .accent{color:var(--peak);}
+.hero h1 .outline{-webkit-text-stroke:2px var(--peak);color:transparent;}
+.hero-sub{font-size:clamp(1rem,2vw,1.25rem);color:var(--text-muted);max-width:580px;margin:1.8rem auto 0;font-weight:300;line-height:1.65;animation:fadeUp 0.6s 0.2s ease both;}
+.hero-actions{display:flex;gap:1rem;margin-top:2.8rem;justify-content:center;flex-wrap:wrap;animation:fadeUp 0.6s 0.3s ease both;}
+.hero-trust{display:flex;align-items:center;gap:1rem;margin-top:2rem;animation:fadeUp 0.6s 0.35s ease both;font-size:0.82rem;color:var(--text-muted);}
+.hero-trust-avatars{display:flex;}
+.avatar-mini{width:28px;height:28px;border-radius:50%;border:2px solid var(--bg);background:var(--text-dim);margin-left:-8px;first-child{margin-left:0};}
+.avatar-mini:first-child{margin-left:0;}
+.hero-stats{display:flex;gap:0;margin-top:4rem;animation:fadeUp 0.6s 0.4s ease both;border:1px solid rgba(201,168,76,0.12);border-radius:16px;overflow:hidden;background:rgba(255,255,255,0.02);}
+.stat{text-align:center;padding:1.5rem 3rem;position:relative;}
+.stat::after{content:'';position:absolute;right:0;top:20%;bottom:20%;width:1px;background:rgba(201,168,76,0.12);}
+.stat:last-child::after{display:none;}
+.stat-num{font-family:var(--font-display);font-size:2.6rem;color:var(--peak);letter-spacing:2px;line-height:1;}
+.stat-label{font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-top:4px;}
+
+/* ── INCOME PROOF SECTION ── */
+.income-section{padding:5rem 2rem;background:var(--surface);position:relative;overflow:hidden;}
+.income-section::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--peak),transparent);}
+.income-inner{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:center;}
+.income-text .section-tag{margin-bottom:1rem;}
+.income-text h2{font-family:var(--font-display);font-size:clamp(2.5rem,5vw,4.5rem);line-height:0.95;letter-spacing:2px;margin-bottom:1.2rem;}
+.income-text h2 span{color:var(--peak);}
+.income-text p{color:var(--text-muted);font-size:1rem;line-height:1.7;margin-bottom:1.5rem;}
+.income-proof-cards{display:flex;flex-direction:column;gap:1rem;}
+.proof-card{background:var(--card);border:1px solid rgba(201,168,76,0.12);border-radius:12px;padding:1.2rem 1.5rem;display:flex;align-items:center;gap:1rem;}
+.proof-icon{font-size:1.8rem;flex-shrink:0;}
+.proof-info .proof-title{font-size:0.85rem;font-weight:600;color:var(--text);}
+.proof-info .proof-sub{font-size:0.78rem;color:var(--text-muted);}
+.proof-amount{font-family:var(--font-display);font-size:1.8rem;color:var(--peak);letter-spacing:1px;margin-left:auto;}
+.income-video-mock{background:var(--card);border:1px solid rgba(201,168,76,0.15);border-radius:20px;padding:1.5rem;position:relative;}
+.phone-mock{width:200px;margin:0 auto;background:var(--card-hover);border-radius:32px;border:2px solid rgba(255,255,255,0.08);overflow:hidden;aspect-ratio:9/16;display:flex;align-items:center;justify-content:center;position:relative;}
+.phone-content{width:100%;height:100%;background:linear-gradient(180deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);display:flex;flex-direction:column;justify-content:flex-end;padding:1rem;}
+.phone-views{position:absolute;top:1rem;right:0.75rem;background:rgba(0,0,0,0.7);border-radius:20px;padding:3px 10px;font-size:0.7rem;font-weight:700;color:var(--peak);}
+.phone-bar{height:3px;background:rgba(255,255,255,0.1);border-radius:2px;margin-bottom:0.75rem;}
+.phone-bar-fill{height:100%;background:var(--peak);border-radius:2px;width:65%;animation:barGrow 3s ease infinite;}
+@keyframes barGrow{0%,100%{width:20%;}50%{width:80%;}}
+.phone-caption{font-size:0.65rem;color:rgba(255,255,255,0.8);font-weight:700;margin-bottom:0.3rem;}
+.phone-stats{display:flex;gap:0.75rem;}
+.phone-stat{font-size:0.6rem;color:rgba(255,255,255,0.5);}
+.phone-stat span{color:var(--text);font-weight:600;}
+.income-badges{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:1rem;}
+.income-badge{background:var(--peak-dim);border:1px solid rgba(201,168,76,0.2);border-radius:10px;padding:0.75rem;text-align:center;}
+.income-badge-num{font-family:var(--font-display);font-size:1.5rem;color:var(--peak);}
+.income-badge-label{font-size:0.7rem;color:var(--text-muted);}
+
+/* ── HOW IT WORKS ── */
+.steps-section{padding:6rem 2rem;position:relative;}
+.steps-section::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 50% 60% at 50% 50%,rgba(201,168,76,0.03) 0%,transparent 70%);pointer-events:none;}
+.steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:4rem;position:relative;}
+.steps-connector{position:absolute;top:3.5rem;left:16.6%;right:16.6%;height:1px;background:linear-gradient(90deg,transparent,rgba(201,168,76,0.3),rgba(201,168,76,0.3),transparent);z-index:0;}
+.step-card{background:var(--surface);border:1px solid rgba(201,168,76,0.1);border-radius:20px;padding:2.5rem 2rem;transition:all 0.35s;position:relative;z-index:1;}
+.step-card:hover{border-color:rgba(201,168,76,0.4);transform:translateY(-6px);background:var(--card);}
+.step-num-wrap{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;}
+.step-num{font-family:var(--font-display);font-size:3rem;color:var(--peak);letter-spacing:2px;line-height:1;}
+.step-icon-wrap{width:44px;height:44px;background:var(--peak-dim);border:1px solid rgba(201,168,76,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;}
+.step-title{font-size:1.1rem;font-weight:700;margin-bottom:0.6rem;color:var(--text);}
+.step-desc{font-size:0.9rem;color:var(--text-muted);line-height:1.65;}
+
+/* ── FEATURES ── */
+.features-section{padding:6rem 2rem;background:var(--surface);}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;margin-top:4rem;}
+.feat{background:var(--card);border:1px solid rgba(255,255,255,0.05);border-radius:18px;padding:2rem;transition:all 0.3s;cursor:default;}
+.feat:hover{border-color:rgba(201,168,76,0.28);transform:translateY(-4px);}
+.feat.wide{grid-column:span 2;}
+.feat.tall{grid-row:span 2;}
+.feat-emoji{font-size:2rem;margin-bottom:1rem;display:block;}
+.feat-title{font-size:1.05rem;font-weight:700;margin-bottom:0.5rem;}
+.feat-desc{font-size:0.88rem;color:var(--text-muted);line-height:1.65;}
+.feat-tags{display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:1rem;}
+.ftag{background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.18);color:var(--peak);font-size:0.72rem;padding:3px 10px;border-radius:4px;font-weight:500;}
+
+/* ── EDITOR SHOWCASE ── */
+.editor-section{padding:6rem 2rem;}
+.editor-mock{max-width:960px;margin:4rem auto 0;background:var(--card);border:1px solid rgba(201,168,76,0.18);border-radius:20px;overflow:hidden;}
+.editor-topbar{background:var(--card-hover);padding:0.9rem 1.5rem;display:flex;align-items:center;gap:1rem;border-bottom:1px solid rgba(255,255,255,0.05);}
+.e-dot{width:12px;height:12px;border-radius:50%;}
+.editor-tabs{display:flex;gap:0.25rem;margin-left:1rem;}
+.e-tab{padding:0.3rem 1rem;border-radius:6px;font-size:0.8rem;color:var(--text-muted);cursor:pointer;transition:all 0.2s;}
+.e-tab.active{background:var(--peak-dim);color:var(--peak);font-weight:600;}
+.e-tab:hover:not(.active){color:var(--text);}
+.editor-body{display:grid;grid-template-columns:280px 1fr 220px;min-height:420px;}
+.editor-panel{border-right:1px solid rgba(255,255,255,0.05);padding:1.2rem;}
+.editor-panel:last-child{border-right:none;}
+.ep-title{font-size:0.72rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--peak);font-weight:700;margin-bottom:1rem;}
+.clip-item{background:var(--surface);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:0.7rem;margin-bottom:0.5rem;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:0.7rem;}
+.clip-item:hover,.clip-item.sel{border-color:rgba(201,168,76,0.3);}
+.clip-thumb{width:40px;height:40px;border-radius:6px;background:linear-gradient(135deg,var(--text-dim),var(--card-hover));display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
+.clip-info .clip-name{font-size:0.78rem;font-weight:600;color:var(--text);}
+.clip-info .clip-dur{font-size:0.68rem;color:var(--text-muted);}
+.clip-score{font-size:0.68rem;font-weight:700;color:var(--peak);background:rgba(201,168,76,0.1);padding:2px 6px;border-radius:4px;margin-left:auto;flex-shrink:0;}
+.editor-canvas{background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1.5rem;}
+.canvas-phone{width:140px;height:250px;background:var(--card);border-radius:20px;border:2px solid rgba(255,255,255,0.1);overflow:hidden;position:relative;display:flex;align-items:flex-end;padding:0.75rem;}
+.canvas-vid-bg{position:absolute;inset:0;background:linear-gradient(160deg,#0d1117 0%,#1a2332 60%,#0f3460 100%);}
+.canvas-subtitles{position:relative;z-index:2;width:100%;text-align:center;}
+.sub-line{background:rgba(0,0,0,0.85);color:#fff;font-size:0.6rem;font-weight:700;padding:2px 6px;border-radius:3px;display:inline-block;margin-bottom:2px;}
+.sub-line.peak-sub{background:var(--peak);color:var(--bg);}
+.canvas-controls{display:flex;gap:0.5rem;align-items:center;}
+.ctrl-btn{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:0.4rem 0.8rem;font-size:0.75rem;color:var(--text);cursor:pointer;transition:all 0.2s;}
+.ctrl-btn:hover{background:rgba(201,168,76,0.15);border-color:var(--peak);color:var(--peak);}
+.ctrl-btn.active-ctrl{background:var(--peak);color:var(--bg);border-color:var(--peak);}
+.style-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;}
+.style-opt{background:var(--surface);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:0.5rem;text-align:center;cursor:pointer;transition:all 0.2s;}
+.style-opt:hover,.style-opt.sel{border-color:var(--peak);}
+.style-opt .s-name{font-size:0.7rem;font-weight:600;color:var(--text);}
+.style-opt .s-prev{font-size:0.6rem;color:var(--text-muted);}
+.side-section{margin-bottom:1.2rem;}
+.side-label{font-size:0.7rem;color:var(--text-muted);margin-bottom:0.4rem;}
+.side-slider{width:100%;height:3px;background:rgba(255,255,255,0.1);border-radius:2px;appearance:none;outline:none;cursor:pointer;}
+.side-slider::-webkit-slider-thumb{appearance:none;width:14px;height:14px;border-radius:50%;background:var(--peak);cursor:pointer;}
+.color-row{display:flex;gap:0.4rem;flex-wrap:wrap;}
+.color-dot{width:20px;height:20px;border-radius:50%;cursor:pointer;transition:transform 0.2s;border:2px solid transparent;}
+.color-dot:hover{transform:scale(1.2);}
+.color-dot.sel-color{border-color:var(--text);}
+
+/* ── EARNINGS CALCULATOR ── */
+.calc-section{padding:6rem 2rem;background:var(--surface);}
+.calc-box{max-width:760px;margin:4rem auto 0;background:var(--card);border:1px solid rgba(201,168,76,0.18);border-radius:24px;padding:3rem;}
+.calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem;}
+.calc-input-group{display:flex;flex-direction:column;gap:0.5rem;}
+.calc-label{font-size:0.8rem;text-transform:uppercase;letter-spacing:1px;color:var(--peak);font-weight:700;}
+.calc-range{width:100%;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;appearance:none;outline:none;cursor:pointer;margin:0.25rem 0;}
+.calc-range::-webkit-slider-thumb{appearance:none;width:18px;height:18px;border-radius:50%;background:var(--peak);cursor:pointer;border:2px solid var(--bg);}
+.calc-val{font-family:var(--font-display);font-size:1.5rem;color:var(--text);letter-spacing:1px;}
+.calc-result{background:var(--card-hover);border-radius:16px;padding:2rem;text-align:center;border:1px solid rgba(201,168,76,0.2);}
+.calc-result-label{font-size:0.82rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:0.5rem;}
+.calc-result-num{font-family:var(--font-display);font-size:4rem;color:var(--peak);letter-spacing:2px;line-height:1;}
+.calc-result-sub{font-size:0.85rem;color:var(--text-muted);margin-top:0.5rem;}
+.calc-breakdown{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:1.5rem;}
+.calc-b-item{text-align:center;padding:1rem;background:var(--surface);border-radius:10px;}
+.calc-b-num{font-family:var(--font-display);font-size:1.6rem;color:var(--text);}
+.calc-b-label{font-size:0.72rem;color:var(--text-muted);}
+
+/* ── TESTIMONIALS ── */
+.testimonials-section{padding:6rem 2rem;}
+.testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;margin-top:4rem;}
+.testi-card{background:var(--surface);border:1px solid rgba(255,255,255,0.06);border-radius:18px;padding:1.8rem;transition:all 0.3s;}
+.testi-card:hover{border-color:rgba(201,168,76,0.22);transform:translateY(-3px);}
+.testi-card.featured{border-color:rgba(201,168,76,0.35);background:var(--card);}
+.stars{color:var(--peak);font-size:0.9rem;letter-spacing:3px;margin-bottom:1rem;}
+.testi-text{font-size:0.9rem;color:var(--text);line-height:1.65;margin-bottom:1.4rem;font-style:italic;}
+.testi-author{display:flex;align-items:center;gap:0.75rem;}
+.t-avatar{width:38px;height:38px;border-radius:50%;background:rgba(201,168,76,0.2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.82rem;color:var(--peak);flex-shrink:0;}
+.t-name{font-weight:600;font-size:0.88rem;}
+.t-handle{font-size:0.73rem;color:var(--text-muted);}
+.t-earnings{margin-left:auto;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.2);border-radius:8px;padding:4px 10px;font-size:0.72rem;font-weight:700;color:var(--peak);}
+
+/* ── PRICING ── */
+.pricing-section{padding:6rem 2rem;background:var(--surface);}
+.pricing-toggle{display:flex;align-items:center;justify-content:center;gap:1rem;margin:2rem 0;}
+.toggle-label{font-size:0.88rem;color:var(--text-muted);}
+.toggle-label.active{color:var(--text);font-weight:600;}
+.toggle-wrap{width:48px;height:26px;background:rgba(255,255,255,0.1);border-radius:999px;cursor:pointer;position:relative;transition:background 0.3s;}
+.toggle-wrap.on{background:var(--peak);}
+.toggle-ball{width:20px;height:20px;background:var(--text);border-radius:50%;position:absolute;top:3px;left:3px;transition:left 0.3s;}
+.toggle-wrap.on .toggle-ball{left:25px;}
+.save-badge{background:rgba(201,168,76,0.15);color:var(--peak);font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:999px;border:1px solid rgba(201,168,76,0.25);}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;max-width:960px;margin:0 auto;}
+.price-card{background:var(--card);border:1px solid rgba(255,255,255,0.07);border-radius:22px;padding:2.2rem;transition:all 0.3s;position:relative;}
+.price-card:hover{transform:translateY(-4px);}
+.price-card.featured{border:1.5px solid var(--peak);background:linear-gradient(160deg,rgba(201,168,76,0.06),var(--card));}
+.price-popular{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:var(--peak);color:var(--bg);font-size:0.72rem;font-weight:800;padding:4px 18px;border-radius:999px;letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;}
+.price-name{font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--text-muted);margin-bottom:0.5rem;}
+.price-amount{display:flex;align-items:flex-end;gap:4px;margin-bottom:0.25rem;}
+.price-cur{font-size:1.2rem;font-weight:600;color:var(--peak);line-height:2;}
+.price-num{font-family:var(--font-display);font-size:3.8rem;color:var(--text);letter-spacing:1px;line-height:1;}
+.price-period{font-size:0.85rem;color:var(--text-muted);line-height:2.5;}
+.price-desc{font-size:0.84rem;color:var(--text-muted);margin:0.75rem 0 1.5rem;line-height:1.5;min-height:48px;}
+.price-feats{list-style:none;display:flex;flex-direction:column;gap:0.55rem;margin-bottom:1.8rem;}
+.price-feats li{font-size:0.86rem;color:var(--text);display:flex;align-items:flex-start;gap:0.6rem;line-height:1.4;}
+.price-feats li::before{content:'✦';color:var(--peak);font-size:0.55rem;margin-top:4px;flex-shrink:0;}
+.price-feats li.muted-feat{color:var(--text-dim);}
+.price-feats li.muted-feat::before{color:var(--text-dim);}
+.btn-plan{width:100%;padding:0.9rem;border-radius:10px;font-weight:700;font-size:0.95rem;cursor:pointer;transition:all 0.25s;font-family:var(--font-body);letter-spacing:0.5px;}
+.btn-plan-outline{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,0.18);}
+.btn-plan-outline:hover{border-color:var(--peak);color:var(--peak);}
+.btn-plan-primary{background:var(--peak);color:var(--bg);border:none;}
+.btn-plan-primary:hover{background:var(--peak-light);}
+.price-guarantee{text-align:center;margin-top:2rem;font-size:0.82rem;color:var(--text-muted);}
+.price-guarantee span{color:var(--peak);}
+
+/* ── FAQ ── */
+.faq-section{padding:6rem 2rem;}
+.faq-list{max-width:740px;margin:4rem auto 0;display:flex;flex-direction:column;gap:0.75rem;}
+.faq-item{background:var(--surface);border:1px solid rgba(255,255,255,0.06);border-radius:14px;overflow:hidden;transition:border-color 0.3s;}
+.faq-item.open{border-color:rgba(201,168,76,0.25);}
+.faq-q{width:100%;background:none;border:none;padding:1.3rem 1.6rem;display:flex;justify-content:space-between;align-items:center;color:var(--text);font-family:var(--font-body);font-size:0.95rem;font-weight:600;cursor:pointer;text-align:left;gap:1rem;}
+.faq-q:hover{color:var(--peak);}
+.faq-arrow{color:var(--peak);font-size:1.4rem;transition:transform 0.35s;flex-shrink:0;line-height:1;}
+.faq-a{max-height:0;overflow:hidden;transition:max-height 0.4s ease;}
+.faq-a-inner{padding:0 1.6rem 1.3rem;color:var(--text-muted);font-size:0.9rem;line-height:1.75;}
+.faq-item.open .faq-arrow{transform:rotate(45deg);}
+.faq-item.open .faq-a{max-height:300px;}
+
+/* ── CTA ── */
+.cta-section{padding:8rem 2rem;text-align:center;position:relative;overflow:hidden;}
+.cta-section::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 80% at 50% 50%,rgba(201,168,76,0.06) 0%,transparent 65%);pointer-events:none;}
+.cta-section h2{font-family:var(--font-display);font-size:clamp(3.5rem,9vw,8rem);line-height:0.92;letter-spacing:3px;margin-bottom:1.5rem;}
+.cta-section h2 span{color:var(--peak);}
+.cta-section p{color:var(--text-muted);font-size:1.1rem;margin-bottom:2.5rem;max-width:500px;margin-left:auto;margin-right:auto;}
+.cta-actions{display:flex;justify-content:center;gap:1rem;flex-wrap:wrap;}
+
+/* ── FOOTER ── */
+footer{background:var(--surface);border-top:1px solid rgba(201,168,76,0.08);padding:4rem 2rem 2rem;}
+.footer-inner{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr;gap:3rem;margin-bottom:3rem;}
+.footer-logo{font-family:var(--font-display);font-size:2rem;color:var(--peak);letter-spacing:3px;margin-bottom:0.75rem;}
+.footer-brand p{font-size:0.84rem;color:var(--text-muted);line-height:1.65;max-width:260px;}
+.footer-social{display:flex;gap:0.75rem;margin-top:1.2rem;}
+.social-btn{width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem;text-decoration:none;transition:all 0.2s;font-weight:700;}
+.social-btn:hover{border-color:var(--peak);color:var(--peak);}
+.footer-col h4{font-size:0.76rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--peak);margin-bottom:1.2rem;}
+.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:0.6rem;}
+.footer-col a{color:var(--text-muted);text-decoration:none;font-size:0.85rem;transition:color 0.2s;}
+.footer-col a:hover{color:var(--text);}
+.footer-bottom{max-width:1100px;margin:0 auto;padding-top:2rem;border-top:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;font-size:0.8rem;color:var(--text-muted);flex-wrap:wrap;gap:1rem;}
+.footer-bottom-right{color:var(--peak);font-weight:500;}
+
+/* ── SECTION COMMONS ── */
+.container{max-width:1100px;margin:0 auto;}
+.section-tag{font-size:0.73rem;font-weight:700;text-transform:uppercase;letter-spacing:2.5px;color:var(--peak);margin-bottom:0.75rem;display:block;}
+.section-header{margin-bottom:1rem;}
+.section-title{font-family:var(--font-display);font-size:clamp(2.8rem,6vw,5.5rem);line-height:0.95;letter-spacing:2px;}
+.section-title span{color:var(--peak);}
+.section-sub{color:var(--text-muted);font-size:1rem;max-width:520px;line-height:1.65;margin-top:1rem;}
+.text-center{text-align:center;}
+.text-center .section-sub{margin:1rem auto 0;}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(28px);}to{opacity:1;transform:translateY(0);}}
+.reveal{opacity:0;transform:translateY(32px);transition:all 0.75s cubic-bezier(0.16,1,0.3,1);}
+.reveal.visible{opacity:1;transform:translateY(0);}
+
+/* ── REDUCED MOTION ── */
+@media (prefers-reduced-motion: reduce){*{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;}}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+  nav{padding:1rem 1.5rem;}
+  .nav-links{display:none;}
+  .hero h1{font-size:clamp(3.5rem,14vw,6rem);}
+  .hero-stats{flex-direction:column;}
+  .stat::after{display:none;}
+  .income-inner,.steps-grid,.features-grid,.testi-grid,.pricing-grid,.footer-inner{grid-template-columns:1fr;}
+  .feat.wide,.feat.tall{grid-column:span 1;grid-row:span 1;}
+  .editor-body{grid-template-columns:1fr;}
+  .calc-grid,.calc-breakdown{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ NAV ══ -->
+<nav>
+  <a href="#" class="nav-logo">PEAK<span>CLIP</span></a>
+  <ul class="nav-links">
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#editor">Editor</a></li>
+    <li><a href="#earnings">Earnings</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <div class="nav-right">
+    <a href="#" class="nav-login">Log in</a>
+    <a href="#pricing" class="nav-cta">Start Free →</a>
+  </div>
+</nav>
+
+<!-- ══ HERO ══ -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-badge"><div class="badge-dot"></div>AI-Powered Clipping Platform</div>
+  <h1>PASTE. CLIP.<br/><span class="accent">GO</span> <span class="outline">VIRAL.</span></h1>
+  <p class="hero-sub">Drop any YouTube link — MrBeast, IShowSpeed, any creator. PeakClip's AI finds the best moments and builds viral Shorts & Reels in seconds.</p>
+  <div class="hero-actions">
+    <a href="#pricing" class="btn-primary">🚀 Start Clipping Free</a>
+    <a href="#how" class="btn-secondary">See how it works ↓</a>
+  </div>
+  <div class="hero-trust">
+    <div class="hero-trust-avatars">
+      <div class="avatar-mini" style="background:var(--peak);"></div>
+      <div class="avatar-mini" style="background:var(--text-dim);"></div>
+      <div class="avatar-mini" style="background:var(--peak-light);"></div>
+      <div class="avatar-mini" style="background:var(--peak);"></div>
+      <div class="avatar-mini" style="background:var(--text-dim);"></div>
+    </div>
+    <span>Trusted by <strong style="color:var(--text)">10,000+</strong> creators worldwide</span>
+  </div>
+  <div class="hero-stats">
+    <div class="stat"><div class="stat-num">50M+</div><div class="stat-label">Clips Generated</div></div>
+    <div class="stat"><div class="stat-num">4.9★</div><div class="stat-label">User Rating</div></div>
+    <div class="stat"><div class="stat-num">$2.4M</div><div class="stat-label">Earned by Creators</div></div>
+    <div class="stat"><div class="stat-num">30+</div><div class="stat-label">Languages</div></div>
+  </div>
+</section>
+
+<!-- ══ INCOME PROOF ══ -->
+<section class="income-section" id="earnings">
+  <div class="income-inner container">
+    <div class="income-text reveal">
+      <span class="section-tag">Real earnings · Real creators</span>
+      <h2>YOUTUBE SHORTS<br/>PAYS <span>REAL MONEY</span></h2>
+      <p>Creators using PeakClip are posting 5-10 viral clips per day with zero editing skills. YouTube Shorts pays $0.03–$0.08 per 1,000 views — and a single viral clip can hit 10M+ views overnight.</p>
+      <p>You don't need to create original content. You need the right moments, the right format, and the right tool.</p>
+      <a href="#pricing" class="btn-primary" style="margin-top:1rem;">Start Earning Today →</a>
+    </div>
+    <div class="reveal">
+      <div class="income-video-mock">
+        <div style="display:flex;justify-content:center;margin-bottom:1.5rem;">
+          <div class="phone-mock">
+            <div class="canvas-vid-bg"></div>
+            <div class="phone-views">👁 2.4M views</div>
+            <div style="position:relative;z-index:2;width:100%;padding:0 0.5rem 0.5rem;">
+              <div class="phone-bar"><div class="phone-bar-fill"></div></div>
+              <div class="phone-caption">MRBEAST NEVER EXPECTED THIS 😱</div>
+              <div class="phone-stats">
+                <div class="phone-stat">❤️ <span>142K</span></div>
+                <div class="phone-stat">💬 <span>8.2K</span></div>
+                <div class="phone-stat">🔁 <span>31K</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="income-badges">
+          <div class="income-badge"><div class="income-badge-num">$320</div><div class="income-badge-label">Avg monthly (Starter)</div></div>
+          <div class="income-badge"><div class="income-badge-num">$1.8K</div><div class="income-badge-label">Avg monthly (Creator)</div></div>
+          <div class="income-badge"><div class="income-badge-num">$6K+</div><div class="income-badge-label">Top earners / month</div></div>
+          <div class="income-badge"><div class="income-badge-num">48h</div><div class="income-badge-label">Time to first viral clip</div></div>
+        </div>
+      </div>
+      <div class="income-proof-cards" style="margin-top:1rem;">
+        <div class="proof-card">
+          <div class="proof-icon">📱</div>
+          <div class="proof-info"><div class="proof-title">@jorgeviralES — 1 clip</div><div class="proof-sub">Posted 3 days ago · YouTube Shorts</div></div>
+          <div class="proof-amount">$847</div>
+        </div>
+        <div class="proof-card">
+          <div class="proof-icon">🔥</div>
+          <div class="proof-info"><div class="proof-title">@alexclips — Last 30 days</div><div class="proof-sub">89 clips posted · 14.2M total views</div></div>
+          <div class="proof-amount">$2,140</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ HOW IT WORKS ══ -->
+<section class="steps-section" id="how">
+  <div class="container">
+    <div class="text-center reveal">
+      <span class="section-tag">How it works</span>
+      <div class="section-title">3 STEPS TO YOUR<br/><span>NEXT VIRAL CLIP</span></div>
+      <p class="section-sub">From any video on the internet to a ready-to-post Short in under 60 seconds.</p>
+    </div>
+    <div class="steps-grid reveal">
+      <div class="steps-connector"></div>
+      <div class="step-card">
+        <div class="step-num-wrap"><div class="step-num">01</div><div class="step-icon-wrap">🔗</div></div>
+        <div class="step-title">Paste any video link</div>
+        <p class="step-desc">YouTube, TikTok, Twitch, Instagram — paste the URL of any public video. MrBeast, IShowSpeed, sports, podcasts, cooking — any niche works.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num-wrap"><div class="step-num">02</div><div class="step-icon-wrap">🧠</div></div>
+        <div class="step-title">AI detects peak moments</div>
+        <p class="step-desc">Our AI analyzes the entire video — emotional peaks, hype moments, funny reactions, quotable lines — and scores each moment's viral potential from 0 to 100.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num-wrap"><div class="step-num">03</div><div class="step-icon-wrap">🚀</div></div>
+        <div class="step-title">Edit, style & export</div>
+        <p class="step-desc">Customize subtitles, add your style, reframe the clip in our editor — then export ready-to-post for YouTube Shorts, TikTok or Instagram Reels.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ FEATURES ══ -->
+<section class="features-section" id="features">
+  <div class="container">
+    <div class="text-center reveal">
+      <span class="section-tag">Features</span>
+      <div class="section-title">EVERYTHING YOU NEED<br/>TO <span>DOMINATE</span> SHORTS</div>
+    </div>
+    <div class="features-grid reveal">
+      <div class="feat wide">
+        <span class="feat-emoji">🤖</span>
+        <div class="feat-title">AI Peak Detection — Viral Score</div>
+        <p class="feat-desc">Trained on 50M+ viral clips, our AI identifies the moments that make people stop scrolling. Every moment gets a Viral Score from 0–100. You only post the peaks.</p>
+        <div class="feat-tags"><span class="ftag">Emotion Analysis</span><span class="ftag">Hype Detection</span><span class="ftag">Auto-Trim</span><span class="ftag">Multi-Language</span><span class="ftag">Real-time Score</span></div>
+      </div>
+      <div class="feat">
+        <span class="feat-emoji">💬</span>
+        <div class="feat-title">Auto Subtitles</div>
+        <p class="feat-desc">Word-level animated subtitles with 20+ viral styles. Auto-translated in 30+ languages. Emoji reactions, highlight words, custom fonts.</p>
+        <div class="feat-tags"><span class="ftag">30+ Languages</span><span class="ftag">20+ Styles</span></div>
+      </div>
+      <div class="feat">
+        <span class="feat-emoji">✂️</span>
+        <div class="feat-title">Full Web Editor</div>
+        <p class="feat-desc">Trim, reframe, add overlays, change subtitles, add music — all in the browser. No downloads, no Premiere, no skills needed.</p>
+        <div class="feat-tags"><span class="ftag">No Install</span><span class="ftag">Templates</span></div>
+      </div>
+      <div class="feat">
+        <span class="feat-emoji">🎙️</span>
+        <div class="feat-title">AI Voiceover & Dubbing</div>
+        <p class="feat-desc">Replace or add voiceovers with 50+ ultra-realistic AI voices. Dub any clip into Spanish, English, French and more.</p>
+        <div class="feat-tags"><span class="ftag">50+ Voices</span><span class="ftag">Auto-Dub</span></div>
+      </div>
+      <div class="feat">
+        <span class="feat-emoji">⬇️</span>
+        <div class="feat-title">Social Downloader</div>
+        <p class="feat-desc">Download from YouTube, TikTok, Instagram, Twitter, Twitch — no watermark, full HD quality, instant.</p>
+        <div class="feat-tags"><span class="ftag">HD Quality</span><span class="ftag">No Watermark</span></div>
+      </div>
+      <div class="feat">
+        <span class="feat-emoji">🎮</span>
+        <div class="feat-title">Gameplay Overlay</div>
+        <p class="feat-desc">Automatically add Subway Surfers, Minecraft or GTA gameplay below your clip. Proven to 3x watch time and retention.</p>
+        <div class="feat-tags"><span class="ftag">Split Screen</span><span class="ftag">3x Retention</span></div>
+      </div>
+      <div class="feat">
+        <span class="feat-emoji">🖼️</span>
+        <div class="feat-title">Background Remover</div>
+        <p class="feat-desc">Remove backgrounds from video and images in one click. Add custom colors, blur effects, or branded backgrounds.</p>
+        <div class="feat-tags"><span class="ftag">Video & Image</span><span class="ftag">AI-Powered</span></div>
+      </div>
+      <div class="feat">
+        <span class="feat-emoji">📅</span>
+        <div class="feat-title">Auto-Scheduler</div>
+        <p class="feat-desc">Schedule your clips to post automatically at peak hours on YouTube Shorts, TikTok and Instagram. Post while you sleep.</p>
+        <div class="feat-tags"><span class="ftag">Multi-Platform</span><span class="ftag">Peak Hours AI</span></div>
+      </div>
+      <div class="feat">
+        <span class="feat-emoji">🏷️</span>
+        <div class="feat-title">AI Title & Hashtag Generator</div>
+        <p class="feat-desc">Get 10 viral title options and optimized hashtags for every clip. Generated based on what's trending right now in your niche.</p>
+        <div class="feat-tags"><span class="ftag">Trending Data</span><span class="ftag">SEO Optimized</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ EDITOR SHOWCASE ══ -->
+<section class="editor-section" id="editor">
+  <div class="container">
+    <div class="text-center reveal">
+      <span class="section-tag">Web Editor</span>
+      <div class="section-title">FULL CONTROL.<br/><span>ZERO SKILLS NEEDED.</span></div>
+      <p class="section-sub">Edit every detail of your clip — subtitles, styles, overlays, music — all from your browser.</p>
+    </div>
+    <div class="editor-mock reveal">
+      <div class="editor-topbar">
+        <div class="e-dot" style="background:#ff5f57;"></div>
+        <div class="e-dot" style="background:#febc2e;"></div>
+        <div class="e-dot" style="background:#28c840;"></div>
+        <div class="editor-tabs">
+          <div class="e-tab active" onclick="switchTab(this,'clips')">My Clips</div>
+          <div class="e-tab" onclick="switchTab(this,'editor')">Editor</div>
+          <div class="e-tab" onclick="switchTab(this,'export')">Export</div>
+        </div>
+        <div style="margin-left:auto;font-size:0.78rem;color:var(--text-muted);">app.peakclip.io/editor</div>
+      </div>
+      <div class="editor-body">
+        <!-- Left: clips list -->
+        <div class="editor-panel">
+          <div class="ep-title">AI Top Picks</div>
+          <div class="clip-item sel">
+            <div class="clip-thumb">▶</div>
+            <div class="clip-info"><div class="clip-name">Epic reaction</div><div class="clip-dur">0:42 — 1:18</div></div>
+            <div class="clip-score">98</div>
+          </div>
+          <div class="clip-item">
+            <div class="clip-thumb">▶</div>
+            <div class="clip-info"><div class="clip-name">Plot twist moment</div><div class="clip-dur">4:12 — 4:55</div></div>
+            <div class="clip-score">95</div>
+          </div>
+          <div class="clip-item">
+            <div class="clip-thumb">▶</div>
+            <div class="clip-info"><div class="clip-name">Best quote</div><div class="clip-dur">7:31 — 8:02</div></div>
+            <div class="clip-score">91</div>
+          </div>
+          <div class="clip-item">
+            <div class="clip-thumb">▶</div>
+            <div class="clip-info"><div class="clip-name">Funny reaction</div><div class="clip-dur">11:04 — 11:39</div></div>
+            <div class="clip-score">88</div>
+          </div>
+          <div style="margin-top:1rem;">
+            <div class="ep-title">Subtitle Style</div>
+            <div class="style-grid">
+              <div class="style-opt sel" onclick="selectStyle(this)"><div class="s-name">🔥 Viral</div><div class="s-prev">Bold yellow</div></div>
+              <div class="style-opt" onclick="selectStyle(this)"><div class="s-name">⚡ Neon</div><div class="s-prev">Glow white</div></div>
+              <div class="style-opt" onclick="selectStyle(this)"><div class="s-name">🎬 Cinema</div><div class="s-prev">Black bar</div></div>
+              <div class="style-opt" onclick="selectStyle(this)"><div class="s-name">💎 Gold</div><div class="s-prev">Premium</div></div>
+            </div>
+          </div>
+        </div>
+        <!-- Center: canvas -->
+        <div class="editor-canvas">
+          <div class="canvas-phone">
+            <div class="canvas-vid-bg"></div>
+            <div class="canvas-subtitles">
+              <div class="sub-line peak-sub">NOBODY EXPECTED</div>
+              <div class="sub-line">this to actually work 😱</div>
+            </div>
+          </div>
+          <div class="canvas-controls">
+            <button class="ctrl-btn">⟨ Trim</button>
+            <button class="ctrl-btn active-ctrl">▶ Play</button>
+            <button class="ctrl-btn">Reframe ⟩</button>
+            <button class="ctrl-btn">🎵 Music</button>
+          </div>
+        </div>
+        <!-- Right: style options -->
+        <div class="editor-panel">
+          <div class="ep-title">Customize</div>
+          <div class="side-section">
+            <div class="side-label">Font size</div>
+            <input type="range" class="side-slider" min="10" max="30" value="18"/>
+          </div>
+          <div class="side-section">
+            <div class="side-label">Text color</div>
+            <div class="color-row">
+              <div class="color-dot sel-color" style="background:var(--peak);" onclick="selectColor(this)"></div>
+              <div class="color-dot" style="background:#ffffff;" onclick="selectColor(this)"></div>
+              <div class="color-dot" style="background:#ff4444;" onclick="selectColor(this)"></div>
+              <div class="color-dot" style="background:#00ff88;" onclick="selectColor(this)"></div>
+              <div class="color-dot" style="background:#4488ff;" onclick="selectColor(this)"></div>
+              <div class="color-dot" style="background:#ff44ff;" onclick="selectColor(this)"></div>
+            </div>
+          </div>
+          <div class="side-section">
+            <div class="side-label">Overlay opacity</div>
+            <input type="range" class="side-slider" min="0" max="100" value="70"/>
+          </div>
+          <div class="side-section">
+            <div class="side-label">Gameplay BG</div>
+            <div class="style-grid">
+              <div class="style-opt sel" onclick="selectStyle(this)"><div class="s-name">🏃 Subway</div></div>
+              <div class="style-opt" onclick="selectStyle(this)"><div class="s-name">⛏️ Minecraft</div></div>
+              <div class="style-opt" onclick="selectStyle(this)"><div class="s-name">🚗 GTA</div></div>
+              <div class="style-opt" onclick="selectStyle(this)"><div class="s-name">❌ None</div></div>
+            </div>
+          </div>
+          <div class="side-section">
+            <div class="side-label">Export format</div>
+            <div class="style-grid">
+              <div class="style-opt sel" onclick="selectStyle(this)"><div class="s-name">📱 9:16</div></div>
+              <div class="style-opt" onclick="selectStyle(this)"><div class="s-name">▪ 1:1</div></div>
+            </div>
+          </div>
+          <button class="btn-primary" style="width:100%;margin-top:1rem;font-size:0.85rem;padding:0.75rem;justify-content:center;">Export Clip ↓</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ EARNINGS CALCULATOR ══ -->
+<section class="calc-section">
+  <div class="container">
+    <div class="text-center reveal">
+      <span class="section-tag">Earnings Calculator</span>
+      <div class="section-title">HOW MUCH COULD<br/>YOU <span>EARN?</span></div>
+      <p class="section-sub">Estimate your monthly YouTube Shorts income based on your posting frequency.</p>
+    </div>
+    <div class="calc-box reveal">
+      <div class="calc-grid">
+        <div class="calc-input-group">
+          <div class="calc-label">Clips per day</div>
+          <input type="range" class="calc-range" min="1" max="20" value="5" id="clips-day" oninput="calcEarnings()"/>
+          <div class="calc-val" id="clips-day-val">5 clips/day</div>
+        </div>
+        <div class="calc-input-group">
+          <div class="calc-label">Avg views per clip</div>
+          <input type="range" class="calc-range" min="1000" max="500000" step="1000" value="50000" id="avg-views" oninput="calcEarnings()"/>
+          <div class="calc-val" id="avg-views-val">50,000 views</div>
+        </div>
+      </div>
+      <div class="calc-result">
+        <div class="calc-result-label">Estimated monthly earnings</div>
+        <div class="calc-result-num" id="calc-total">$225</div>
+        <div class="calc-result-sub">Based on YouTube Shorts RPM of $0.03–$0.08 per 1,000 views</div>
+        <div class="calc-breakdown">
+          <div class="calc-b-item"><div class="calc-b-num" id="calc-clips">150</div><div class="calc-b-label">clips/month</div></div>
+          <div class="calc-b-item"><div class="calc-b-num" id="calc-views">7.5M</div><div class="calc-b-label">total views</div></div>
+          <div class="calc-b-item"><div class="calc-b-num" id="calc-low">$225</div><div class="calc-b-label">conservative est.</div></div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:1.5rem;">
+        <a href="#pricing" class="btn-primary">Start Earning with PeakClip →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ TESTIMONIALS ══ -->
+<section class="testimonials-section">
+  <div class="container">
+    <div class="text-center reveal">
+      <span class="section-tag">Creator stories</span>
+      <div class="section-title">REAL CREATORS.<br/><span>REAL RESULTS.</span></div>
+    </div>
+    <div class="testi-grid reveal">
+      <div class="testi-card featured">
+        <div class="stars">★★★★★</div>
+        <p class="testi-text">"I went from 0 to 180K subscribers in 4 months just clipping MrBeast videos. PeakClip found moments I never would have noticed. One clip hit 8M views."</p>
+        <div class="testi-author">
+          <div class="t-avatar">AK</div>
+          <div><div class="t-name">Alex K.</div><div class="t-handle">@alexclips · 180K subs</div></div>
+          <div class="t-earnings">+$2,140/mo</div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="stars">★★★★★</div>
+        <p class="testi-text">"I clip IShowSpeed for my channel. PeakClip saves me 5+ hours a day. The viral score is almost always right — it's scary accurate."</p>
+        <div class="testi-author">
+          <div class="t-avatar">MR</div>
+          <div><div class="t-name">Maria R.</div><div class="t-handle">@mariaclips · 420K subs</div></div>
+          <div class="t-earnings">+$1,800/mo</div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="stars">★★★★★</div>
+        <p class="testi-text">"The auto-subtitle feature alone is worth 10x the price. My Spanish clips now reach a global audience with perfect English subs automatically."</p>
+        <div class="testi-author">
+          <div class="t-avatar">JL</div>
+          <div><div class="t-name">Jorge L.</div><div class="t-handle">@jorgeviralES · 1.2M subs</div></div>
+          <div class="t-earnings">+$4,600/mo</div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="stars">★★★★★</div>
+        <p class="testi-text">"The gameplay overlay + AI clipping combo is a cheat code. My retention went from 22% to 61% after switching to PeakClip. Insane difference."</p>
+        <div class="testi-author">
+          <div class="t-avatar">TW</div>
+          <div><div class="t-name">Tom W.</div><div class="t-handle">@tomwvibes · 102K subs</div></div>
+          <div class="t-earnings">+$890/mo</div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="stars">★★★★★</div>
+        <p class="testi-text">"I manage 5 YouTube channels for clients. PeakClip pays for itself with the first channel. The batch processing and scheduler are game changers."</p>
+        <div class="testi-author">
+          <div class="t-avatar">DM</div>
+          <div><div class="t-name">Dan M.</div><div class="t-handle">Agency owner · 5 channels</div></div>
+          <div class="t-earnings">+$6,200/mo</div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="stars">★★★★★</div>
+        <p class="testi-text">"Started with zero experience. First week I posted 30 clips. By week 3, one clip hit 4.2M views. PeakClip is the reason I quit my job."</p>
+        <div class="testi-author">
+          <div class="t-avatar">SN</div>
+          <div><div class="t-name">Sofia N.</div><div class="t-handle">@sofiashorts · 670K subs</div></div>
+          <div class="t-earnings">+$3,100/mo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ PRICING ══ -->
+<section class="pricing-section" id="pricing">
+  <div class="container">
+    <div class="text-center reveal">
+      <span class="section-tag">Pricing</span>
+      <div class="section-title">START FREE.<br/><span>SCALE FAST.</span></div>
+      <p class="section-sub">No credit card required. Cancel anytime. Upgrade when you're ready.</p>
+    </div>
+    <div class="pricing-toggle reveal">
+      <span class="toggle-label active" id="label-monthly">Monthly</span>
+      <div class="toggle-wrap" id="billing-toggle" onclick="toggleBilling()"><div class="toggle-ball"></div></div>
+      <span class="toggle-label" id="label-annual">Annual</span>
+      <span class="save-badge">Save 35%</span>
+    </div>
+    <div class="pricing-grid reveal">
+      <!-- FREE -->
+      <div class="price-card">
+        <div class="price-name">Free</div>
+        <div class="price-amount"><span class="price-cur">$</span><span class="price-num">0</span><span class="price-period">/mo</span></div>
+        <p class="price-desc">Try PeakClip and feel the magic. No card needed.</p>
+        <ul class="price-feats">
+          <li><strong>3 clips per month</strong></li>
+          <li>AI Peak Detection</li>
+          <li>Auto Subtitles (3 styles)</li>
+          <li>720p export quality</li>
+          <li>Social Downloader</li>
+          <li class="muted-feat">Web Editor</li>
+          <li class="muted-feat">AI Voiceover</li>
+          <li class="muted-feat">Gameplay Overlay</li>
+          <li class="muted-feat">Auto-Scheduler</li>
+        </ul>
+        <!-- STRIPE PAYMENT LINK: replace href with your Stripe Free signup link -->
+        <a href="YOUR_STRIPE_FREE_LINK" class="btn-plan btn-plan-outline">Get Started Free</a>
+      </div>
+      <!-- CREATOR -->
+      <div class="price-card featured">
+        <div class="price-popular">Most Popular</div>
+        <div class="price-name">Creator</div>
+        <div class="price-amount"><span class="price-cur">$</span><span class="price-num" id="creator-price">26</span><span class="price-period" id="creator-period">.99/mo</span></div>
+        <p class="price-desc">For creators serious about growing their channel and income fast.</p>
+        <ul class="price-feats">
+          <li><strong>200 clips per month</strong></li>
+          <li>AI Peak Detection + Viral Score</li>
+          <li>Auto Subtitles (20+ styles)</li>
+          <li>1080p HD export quality</li>
+          <li>AI Voiceover (50+ voices)</li>
+          <li>Full Web Editor</li>
+          <li>Background Remover</li>
+          <li>Gameplay Overlay (3 games)</li>
+          <li>AI Title & Hashtag Generator</li>
+          <li>Auto-Scheduler (3 platforms)</li>
+        </ul>
+        <!-- STRIPE PAYMENT LINK: replace href with your Stripe Creator monthly/annual link -->
+        <a href="YOUR_STRIPE_CREATOR_LINK" class="btn-plan btn-plan-primary" id="creator-btn">Start Creator Plan →</a>
+      </div>
+      <!-- PRO -->
+      <div class="price-card">
+        <div class="price-name">Pro</div>
+        <div class="price-amount"><span class="price-cur">$</span><span class="price-num" id="pro-price">69</span><span class="price-period" id="pro-period">.99/mo</span></div>
+        <p class="price-desc">For agencies and power creators running multiple channels at scale.</p>
+        <ul class="price-feats">
+          <li><strong>Unlimited clips</strong></li>
+          <li>Everything in Creator</li>
+          <li>4K Ultra HD export</li>
+          <li>Batch processing (up to 10 videos)</li>
+          <li>5 team seats included</li>
+          <li>Priority 24/7 support</li>
+          <li>API Access</li>
+          <li>Custom branding & watermark</li>
+          <li>Analytics dashboard</li>
+        </ul>
+        <!-- STRIPE PAYMENT LINK: replace href with your Stripe Pro monthly/annual link -->
+        <a href="YOUR_STRIPE_PRO_LINK" class="btn-plan btn-plan-outline" id="pro-btn">Start Pro Plan →</a>
+      </div>
+    </div>
+    <p class="price-guarantee reveal">🔒 <span>30-day money-back guarantee.</span> If you're not satisfied, we refund you — no questions asked.</p>
+  </div>
+</section>
+
+<!-- ══ FAQ ══ -->
+<section class="faq-section" id="faq">
+  <div class="container">
+    <div class="text-center reveal">
+      <span class="section-tag">FAQ</span>
+      <div class="section-title">GOT <span>QUESTIONS?</span></div>
+    </div>
+    <div class="faq-list reveal">
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Can I use PeakClip with any YouTube channel? <span class="faq-arrow">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Yes! You can paste any public YouTube URL — MrBeast, IShowSpeed, gaming, podcasts, sports, cooking — any niche. PeakClip works with all public content regardless of language or topic.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">How does the AI know which moments will go viral? <span class="faq-arrow">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Our AI has been trained on 50M+ viral clips across TikTok, YouTube Shorts and Instagram Reels. It analyzes audio energy, emotional peaks, speech patterns, pacing and viewer retention signals to give each moment a Viral Score from 0 to 100.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">How much can I realistically earn with YouTube Shorts? <span class="faq-arrow">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">YouTube Shorts pays $0.03–$0.08 per 1,000 views through the YouTube Partner Program. Creators posting 5–10 clips per day typically earn $500–$3,000/month within 3 months. Top creators using PeakClip earn $6,000+/month. Use our calculator above to estimate your income.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">What platforms does PeakClip support? <span class="faq-arrow">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">For input: YouTube, TikTok, Instagram, Twitter/X, Twitch and Facebook. For export/scheduling: YouTube Shorts, TikTok and Instagram Reels. We're constantly adding new platforms.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Can I generate clips in multiple languages? <span class="faq-arrow">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Absolutely. PeakClip supports auto-subtitles and AI voiceover in 30+ languages. Clip a Spanish video and get perfect English subtitles automatically, or dub it in French, German, Portuguese and more.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Is there a free trial? <span class="faq-arrow">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Yes — the Free plan gives you 3 clips per month forever, no credit card required. You can upgrade anytime and cancel with one click from your dashboard.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Can I monetize clips made with PeakClip? <span class="faq-arrow">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">PeakClip is a tool — monetization depends on the original content's copyright and YouTube's policies. Many creators use clips under fair use. We recommend posting clips from channels that allow reuse, or your own content. We're not responsible for copyright claims on third-party content.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" onclick="toggleFaq(this)">Is there a refund policy? <span class="faq-arrow">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Yes. We offer a 30-day money-back guarantee on all paid plans. If you're not happy for any reason, contact support and we'll refund you — no questions asked.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ FINAL CTA ══ -->
+<section class="cta-section">
+  <div class="reveal">
+    <h2>YOUR NEXT CLIP<br/>IS GOING <span>VIRAL.</span></h2>
+    <p>Join 10,000+ creators already earning with PeakClip. Start free — no card needed.</p>
+    <div class="cta-actions">
+      <a href="#pricing" class="btn-primary">🚀 Start Clipping Free</a>
+      <a href="#how" class="btn-secondary">See how it works →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ══ FOOTER ══ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="footer-logo">PEAKCLIP</div>
+      <p>The #1 AI clipping tool for creators who want to turn any video into viral Shorts & Reels — and earn real money doing it.</p>
+      <div class="footer-social">
+        <a href="#" class="social-btn">X</a>
+        <a href="#" class="social-btn">IG</a>
+        <a href="#" class="social-btn">YT</a>
+        <a href="#" class="social-btn">TK</a>
+      </div>
+    </div>
+    <div class="footer-col">
+      <h4>Product</h4>
+      <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#editor">Editor</a></li>
+        <li><a href="#">Changelog</a></li>
+        <li><a href="#">Affiliates</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Tools</h4>
+      <ul>
+        <li><a href="#">AI Clipping</a></li>
+        <li><a href="#">Auto Subtitles</a></li>
+        <li><a href="#">Voiceover AI</a></li>
+        <li><a href="#">Downloader</a></li>
+        <li><a href="#">Scheduler</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Legal</h4>
+      <ul>
+        <li><a href="#">Terms of Service</a></li>
+        <li><a href="#">Privacy Policy</a></li>
+        <li><a href="#">Refund Policy</a></li>
+        <li><a href="#">Cookie Policy</a></li>
+        <li><a href="#">Contact</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 PeakClip. All rights reserved.</span>
+    <span class="footer-bottom-right">Made for creators. Built to go viral. 🔥</span>
+  </div>
+</footer>
+
+<script>
+/* ── NAV SCROLL ── */
+window.addEventListener('scroll',()=>{
+  const nav=document.querySelector('nav');
+  nav.style.background=window.scrollY>50?'rgba(9,9,9,0.97)':'rgba(9,9,9,0.92)';
+});
+
+/* ── SCROLL REVEAL ── */
+const observer=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');}});
+},{threshold:0.08});
+document.querySelectorAll('.reveal').forEach(el=>observer.observe(el));
+
+/* ── FAQ ── */
+function toggleFaq(btn){
+  const item=btn.closest('.faq-item');
+  const isOpen=item.classList.contains('open');
+  document.querySelectorAll('.faq-item').forEach(i=>i.classList.remove('open'));
+  if(!isOpen)item.classList.add('open');
+}
+
+/* ── EDITOR TABS ── */
+function switchTab(tab,name){
+  document.querySelectorAll('.e-tab').forEach(t=>t.classList.remove('active'));
+  tab.classList.add('active');
+}
+
+/* ── STYLE SELECT ── */
+function selectStyle(el){
+  const siblings=[...el.parentElement.children];
+  siblings.forEach(s=>s.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+/* ── COLOR SELECT ── */
+function selectColor(el){
+  document.querySelectorAll('.color-dot').forEach(d=>d.classList.remove('sel-color'));
+  el.classList.add('sel-color');
+}
+
+/* ── BILLING TOGGLE ── */
+let annual=false;
+const prices={creator:{monthly:'26<span style="font-size:1rem">.99</span>',annual:'17<span style="font-size:1rem">.99</span>'},pro:{monthly:'69<span style="font-size:1rem">.99</span>',annual:'44<span style="font-size:1rem">.99</span>'}};
+function toggleBilling(){
+  annual=!annual;
+  const tog=document.getElementById('billing-toggle');
+  tog.classList.toggle('on',annual);
+  document.getElementById('label-monthly').classList.toggle('active',!annual);
+  document.getElementById('label-annual').classList.toggle('active',annual);
+  const period=annual?'/mo (billed annually)':'/mo';
+  document.getElementById('creator-price').innerHTML=annual?prices.creator.annual:prices.creator.monthly;
+  document.getElementById('pro-price').innerHTML=annual?prices.pro.annual:prices.pro.monthly;
+  ['creator-period','pro-period'].forEach(id=>{document.getElementById(id).textContent=period;});
+}
+
+/* ── EARNINGS CALCULATOR ── */
+function calcEarnings(){
+  const clipsDay=parseInt(document.getElementById('clips-day').value);
+  const avgViews=parseInt(document.getElementById('avg-views').value);
+  const clipsMonth=clipsDay*30;
+  const totalViews=clipsMonth*avgViews;
+  const earn=Math.round((totalViews/1000)*0.05);
+  const earnLow=Math.round((totalViews/1000)*0.03);
+  document.getElementById('clips-day-val').textContent=clipsDay+' clips/day';
+  document.getElementById('avg-views-val').textContent=avgViews>=1000000?(avgViews/1000000).toFixed(1)+'M views':avgViews>=1000?(avgViews/1000).toFixed(0)+'K views':avgViews+' views';
+  document.getElementById('calc-total').textContent='$'+earn.toLocaleString();
+  document.getElementById('calc-clips').textContent=clipsMonth;
+  document.getElementById('calc-views').textContent=totalViews>=1000000?(totalViews/1000000).toFixed(1)+'M':totalViews>=1000?(totalViews/1000).toFixed(0)+'K':totalViews;
+  document.getElementById('calc-low').textContent='$'+earnLow.toLocaleString();
+}
+calcEarnings();
+
+/* ── SMOOTH SCROLL ── */
+document.querySelectorAll('a[href^="#"]').forEach(a=>{
+  a.addEventListener('click',e=>{
+    const target=document.querySelector(a.getAttribute('href'));
+    if(target){e.preventDefault();target.scrollIntoView({behavior:'smooth',block:'start'});}
+  });
+});
+</script>
+</body>
+</html>

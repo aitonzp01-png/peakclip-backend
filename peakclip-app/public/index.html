@@ -1,0 +1,833 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PeakClip — From long video to viral clip in seconds</title>
+<meta name="description" content="AI-powered clipping tool. Paste any link, PeakClip finds the best moments and creates viral Shorts & Reels."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{--bg:#000;--surface:#0a0a0a;--card:#111;--border:#1c1c1c;--border-hover:#2a2a2a;--gold:#d4a843;--gold-light:#e8c068;--gold-dim:#8b6e2e;--white:#f0f0f0;--text:#b0b0b0;--muted:#555;--font-display:'Space Grotesk',sans-serif;--font-body:'Inter',sans-serif;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);overflow-x:hidden;-webkit-font-smoothing:antialiased;}
+::selection{background:rgba(212,168,67,0.3);color:var(--white);}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;}}
+
+/* NAV */
+.nav-wrap{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100;width:calc(100% - 48px);max-width:1080px;}
+nav{display:flex;align-items:center;justify-content:space-between;padding:10px 10px 10px 24px;background:rgba(10,10,10,0.85);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.06);border-radius:999px;}
+.nav-logo{display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--white);font-family:var(--font-display);font-weight:700;font-size:0.9rem;letter-spacing:1.5px;flex-shrink:0;}
+.nav-logo svg{width:18px;height:18px;}
+.nav-links{display:flex;gap:0;list-style:none;}
+.nav-links a{color:var(--muted);text-decoration:none;font-size:0.78rem;font-weight:500;padding:8px 16px;border-radius:999px;transition:color 0.25s;}
+.nav-links a:hover{color:var(--white);}
+.nav-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.nav-login{color:var(--muted);text-decoration:none;font-size:0.78rem;font-weight:500;padding:8px 16px;border-radius:999px;transition:color 0.25s;}
+.nav-login:hover{color:var(--white);}
+.nav-cta{background:var(--gold);color:#000;padding:9px 22px;border-radius:999px;font-weight:600;text-decoration:none;font-size:0.78rem;transition:all 0.3s;}
+.nav-cta:hover{background:var(--gold-light);box-shadow:0 4px 24px rgba(212,168,67,0.3);}
+
+/* BUTTONS */
+.btn-gold{background:var(--gold);color:#000;padding:14px 32px;border-radius:10px;font-weight:600;font-size:0.88rem;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:all 0.3s;border:none;cursor:pointer;font-family:var(--font-body);}
+.btn-gold:hover{background:var(--gold-light);transform:translateY(-2px);box-shadow:0 8px 32px rgba(212,168,67,0.25);}
+.btn-outline{background:transparent;color:var(--white);padding:14px 32px;border-radius:10px;font-weight:500;font-size:0.88rem;text-decoration:none;display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,0.12);transition:all 0.3s;cursor:pointer;font-family:var(--font-body);}
+.btn-outline:hover{border-color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.03);}
+
+/* HERO */
+.hero{min-height:100vh;display:flex;align-items:center;padding:120px 24px 60px;max-width:1200px;margin:0 auto;gap:80px;}
+.hero-left{flex:1;min-width:0;}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(212,168,67,0.2);border-radius:999px;padding:6px 16px;font-size:0.65rem;font-weight:600;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:28px;opacity:0;animation:fadeUp 0.6s 0.1s forwards;}
+.hero-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);}
+@media(prefers-reduced-motion:no-preference){.hero-badge-dot{animation:pulse 2s infinite;}}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+.hero h1{font-family:var(--font-display);font-size:clamp(3rem,5.5vw,4.8rem);line-height:1.05;color:var(--white);margin-bottom:24px;font-weight:700;letter-spacing:-1px;opacity:0;animation:fadeUp 0.6s 0.2s forwards;}
+.hero h1 em{font-style:italic;color:var(--gold);font-weight:700;}
+.hero-sub{font-size:0.95rem;color:var(--muted);line-height:1.75;max-width:460px;margin-bottom:36px;opacity:0;animation:fadeUp 0.6s 0.3s forwards;}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:48px;opacity:0;animation:fadeUp 0.6s 0.4s forwards;}
+.hero-trust{display:flex;align-items:center;gap:8px;font-size:0.72rem;color:var(--muted);opacity:0;animation:fadeUp 0.6s 0.5s forwards;}
+.hero-trust span{color:var(--text);font-weight:500;}
+.hero-platforms{display:flex;align-items:center;gap:20px;margin-top:16px;opacity:0;animation:fadeUp 0.6s 0.6s forwards;}
+.hero-platform{font-size:0.78rem;color:var(--muted);font-weight:500;}
+
+/* HERO PIPELINE */
+.hero-right{flex:0 0 480px;position:relative;opacity:0;animation:fadeLeft 0.8s 0.3s forwards;}
+@keyframes fadeLeft{from{opacity:0;transform:translateX(40px);}to{opacity:1;transform:translateX(0);}}
+.pipeline{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,0.6);}
+.pipeline-top{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);}
+.pipeline-dots{display:flex;gap:6px;}
+.pipeline-dot{width:10px;height:10px;border-radius:50%;}
+.pipeline-title{font-size:0.68rem;color:var(--muted);letter-spacing:0.5px;}
+.pipeline-body{padding:8px 0;}
+.pipeline-step{display:flex;gap:14px;padding:18px 24px;border-bottom:1px solid rgba(255,255,255,0.03);transition:all 0.5s cubic-bezier(0.16,1,0.3,1);opacity:0;transform:translateY(12px);}
+.pipeline-step.active{opacity:1;transform:translateY(0);}
+.pipeline-step.completed{opacity:1;transform:translateY(0);}
+.pipeline-step:last-child{border-bottom:none;}
+.pipeline-num{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;flex-shrink:0;transition:all 0.5s cubic-bezier(0.34,1.56,0.64,1);opacity:0;transform:scale(0.6);}
+.pipeline-step.active .pipeline-num{opacity:1;transform:scale(1);background:var(--gold);color:#000;}
+.pipeline-step.completed .pipeline-num{opacity:1;transform:scale(1);background:var(--gold-dim);color:var(--white);}
+.pipeline-content{flex:1;min-width:0;}
+.pipeline-label{font-size:0.82rem;font-weight:600;color:var(--white);margin-bottom:6px;opacity:0;transition:all 0.4s 0.1s;}
+.pipeline-step.active .pipeline-label{opacity:1;}
+.pipeline-step.completed .pipeline-label{opacity:0.5;}
+.pipeline-status{font-size:0.7rem;color:var(--muted);font-style:italic;opacity:0;transition:opacity 0.4s 0.2s;}
+.pipeline-step.active .pipeline-status{opacity:1;}
+.pipeline-status.scanning{color:var(--gold);}
+.pipeline-input-wrap{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;opacity:0;transition:all 0.5s 0.15s;overflow:hidden;}
+.pipeline-step.active .pipeline-input-wrap{opacity:1;border-color:rgba(212,168,67,0.2);}
+.pipeline-step.completed .pipeline-input-wrap{opacity:0.5;}
+.pipeline-input{font-size:0.72rem;color:var(--gold);font-family:var(--font-body);width:100%;background:none;border:none;outline:none;}
+.pipeline-clips{display:flex;gap:6px;margin-top:8px;}
+.pipeline-clip{width:44px;height:30px;background:var(--surface);border:1px solid var(--border);border-radius:4px;opacity:0;transform:scale(0.6);transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);}
+.pipeline-step.active .pipeline-clip{opacity:1;transform:scale(1);}
+.pipeline-step.completed .pipeline-clip{opacity:0.5;transform:scale(1);}
+.pipeline-step.active .pipeline-clip:nth-child(1){transition-delay:0.1s;}
+.pipeline-step.active .pipeline-clip:nth-child(2){transition-delay:0.2s;}
+.pipeline-step.active .pipeline-clip:nth-child(3){transition-delay:0.3s;}
+.pipeline-step.active .pipeline-clip:nth-child(4){transition-delay:0.4s;}
+.pipeline-scan-bar{height:6px;background:var(--border);border-radius:3px;margin-top:10px;overflow:hidden;opacity:0;transition:opacity 0.3s;}
+.pipeline-step.active .pipeline-scan-bar{opacity:1;}
+.pipeline-scan-bar-fill{height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--gold-light));border-radius:3px;transition:width 0.1s linear;}
+.pipeline-step.active .pipeline-scan-bar-fill{animation:scanProgress 2s ease forwards;}
+@keyframes scanProgress{0%{width:0%;}20%{width:15%;}40%{width:35%;}60%{width:55%;}80%{width:80%;}100%{width:100%;}}
+.pipeline-score{display:flex;align-items:center;gap:14px;margin-top:10px;opacity:0;transform:translateY(10px);transition:all 0.5s 0.2s;}
+.pipeline-step.active .pipeline-score{opacity:1;transform:translateY(0);}
+.pipeline-score-ring{position:relative;width:56px;height:56px;flex-shrink:0;}
+.pipeline-score-ring svg{transform:rotate(-90deg);}
+.pipeline-score-ring circle{fill:none;stroke-width:3.5;}
+.pipeline-score-ring .bg{stroke:var(--border);opacity:0.5;}
+.pipeline-score-ring .fill{stroke:var(--gold);stroke-dasharray:151;stroke-dashoffset:151;stroke-linecap:round;transition:stroke-dashoffset 2s cubic-bezier(0.16,1,0.3,1);}
+.pipeline-step.active .pipeline-score-ring .fill{stroke-dashoffset:15;}
+.pipeline-score-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:1rem;color:var(--gold);font-weight:700;opacity:0;transform:scale(0.8);transition:all 0.4s 0.8s;}
+.pipeline-step.active .pipeline-score-num{opacity:1;transform:scale(1);}
+.pipeline-score-text{font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+.pipeline-video-preview{width:60px;height:84px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-shrink:0;opacity:0;transform:scale(0.85);transition:all 0.5s 0.4s;position:relative;}
+.pipeline-step.active .pipeline-video-preview{opacity:1;transform:scale(1);}
+.pipeline-video-preview-content{position:absolute;inset:0;background:linear-gradient(135deg,#1a1500,#2a1f00);display:flex;flex-direction:column;justify-content:flex-end;padding:7px;}
+.pipeline-video-preview-badge{position:absolute;top:5px;right:5px;font-size:0.38rem;color:var(--muted);background:rgba(0,0,0,0.6);padding:2px 4px;border-radius:3px;}
+.pipeline-video-preview-sub{font-size:0.48rem;color:var(--white);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;line-height:1.3;}
+.pipeline-video-preview-sub .gold{color:var(--gold);}
+.pipeline-video-preview-bar{height:2px;background:rgba(255,255,255,0.08);border-radius:1px;margin:5px 0 3px;overflow:hidden;}
+.pipeline-video-preview-bar-fill{height:100%;width:0;background:var(--gold);border-radius:1px;transition:width 1s ease 0.8s;}
+.pipeline-step.active .pipeline-video-preview-bar-fill{width:45%;}
+.pipeline-video-preview-time{font-size:0.38rem;color:var(--muted);display:flex;justify-content:space-between;}
+.typing-cursor{display:inline-block;width:1.5px;height:13px;background:var(--gold);margin-left:2px;animation:blink 1s infinite;vertical-align:middle;}
+@keyframes blink{0%,50%{opacity:1;}51%,100%{opacity:0;}}
+
+/* SECTION COMMON */
+.section{padding:100px 24px;max-width:1200px;margin:0 auto;}
+.section-center{text-align:center;}
+.section-tag{font-size:0.68rem;font-weight:600;text-transform:uppercase;letter-spacing:2.5px;color:var(--muted);margin-bottom:16px;display:block;}
+.section-title{font-family:var(--font-display);font-size:clamp(2rem,4vw,3.2rem);color:var(--white);line-height:1.15;margin-bottom:16px;font-weight:700;letter-spacing:-0.5px;}
+.section-title em{font-style:italic;color:var(--gold);font-weight:700;}
+.section-sub{color:var(--muted);font-size:0.92rem;max-width:520px;line-height:1.75;}
+.section-center .section-sub{margin:0 auto;}
+
+/* BENTO */
+.bento{display:grid;grid-template-columns:repeat(12,1fr);grid-auto-rows:minmax(180px,auto);gap:14px;margin-top:48px;}
+.bento-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px;display:flex;flex-direction:column;transition:all 0.3s cubic-bezier(0.16,1,0.3,1);overflow:hidden;}
+.bento-card:hover{border-color:var(--border-hover);transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,0.3);}
+.b-1{grid-column:span 7;grid-row:span 2;}
+.b-2{grid-column:span 5;}
+.b-3{grid-column:span 5;}
+.b-4{grid-column:span 4;}
+.b-5{grid-column:span 5;}
+.b-6{grid-column:span 3;}
+.b-7{grid-column:span 4;}
+.b-8{grid-column:span 4;}
+.bento-icon{width:40px;height:40px;border-radius:10px;background:rgba(212,168,67,0.07);border:1px solid rgba(212,168,67,0.12);display:flex;align-items:center;justify-content:center;margin-bottom:16px;flex-shrink:0;}
+.bento-icon svg{width:18px;height:18px;stroke:var(--gold);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+.bento-title{font-family:var(--font-display);font-size:1.1rem;font-weight:600;color:var(--white);margin-bottom:8px;}
+.bento-desc{font-size:0.8rem;color:var(--muted);line-height:1.7;flex:1;}
+.bento-visual{margin-top:auto;padding-top:16px;}
+.waveform{display:flex;align-items:flex-end;gap:3px;height:64px;}
+.waveform-bar{flex:1;border-radius:2px;background:var(--gold);opacity:0;animation:waveBar 0.6s ease forwards;}
+@keyframes waveBar{from{opacity:0;transform:scaleY(0);}to{opacity:var(--op);transform:scaleY(1);}}
+.waveform-label{display:flex;justify-content:space-between;margin-top:6px;}
+.waveform-label span{font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-weight:600;}
+.waveform-label .gold{color:var(--gold);}
+.score-vis{display:flex;align-items:center;justify-content:flex-end;gap:16px;}
+.score-ring{position:relative;width:80px;height:80px;}
+.score-ring svg{transform:rotate(-90deg);}
+.score-ring circle{fill:none;stroke-width:3;}
+.score-ring .bg{stroke:var(--border);}
+.score-ring .fill{stroke:var(--gold);stroke-dasharray:220;stroke-dashoffset:220;stroke-linecap:round;transition:stroke-dashoffset 1.5s cubic-bezier(0.16,1,0.3,1);}
+.score-ring.animate .fill{stroke-dashoffset:22;}
+.score-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:1.5rem;color:var(--gold);font-weight:600;}
+.subtitle-vis{background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:10px;padding:14px 18px;text-align:right;}
+.subtitle-vis p{font-size:0.88rem;font-weight:700;color:var(--white);text-transform:uppercase;letter-spacing:1px;line-height:1.5;}
+.reframe-vis{display:flex;align-items:center;justify-content:center;gap:16px;padding:8px 0;}
+.reframe-phone{width:48px;height:84px;border:2px solid var(--border);border-radius:8px;position:relative;transition:all 0.3s;}
+.reframe-phone.active{border-color:var(--gold);box-shadow:0 0 16px rgba(212,168,67,0.15);}
+.reframe-dot{width:10px;height:10px;border-radius:50%;background:var(--border);}
+
+/* EDITOR SHOWCASE */
+.showcase{padding:100px 24px;max-width:1200px;margin:0 auto;}
+.showcase-sub{font-size:0.85rem;color:var(--muted);text-align:center;max-width:600px;margin:-8px auto 0;line-height:1.65;}
+.editor-mock{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:48px;box-shadow:0 24px 80px rgba(0,0,0,0.5);}
+.editor-topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:rgba(0,0,0,0.3);}
+.editor-topbar-left{display:flex;align-items:center;gap:16px;}
+.editor-file{display:flex;align-items:center;gap:10px;font-size:0.78rem;color:var(--white);font-weight:500;}
+.editor-badge{background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.15);color:var(--gold);font-size:0.62rem;padding:3px 10px;border-radius:999px;font-weight:600;}
+.editor-topbar-right{display:flex;align-items:center;gap:12px;}
+.editor-export{background:var(--gold);color:#000;font-size:0.75rem;font-weight:600;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-family:var(--font-body);display:flex;align-items:center;gap:6px;transition:all 0.25s;}
+.editor-export:hover{background:var(--gold-light);transform:translateY(-1px);}
+.editor-body{display:grid;grid-template-columns:260px 1fr 280px;min-height:400px;}
+.editor-left{border-right:1px solid var(--border);padding:20px;}
+.editor-panel-title{font-size:0.62rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:700;margin-bottom:14px;}
+.editor-clip{padding:14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;transition:all 0.2s;}
+.editor-clip.active{border-color:rgba(212,168,67,0.25);background:rgba(212,168,67,0.03);}
+.editor-clip:hover{border-color:var(--border-hover);}
+.editor-clip-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.editor-clip-name{font-size:0.78rem;font-weight:600;color:var(--white);}
+.editor-clip-score{font-size:0.65rem;font-weight:700;color:var(--gold);background:rgba(212,168,67,0.08);padding:2px 8px;border-radius:4px;}
+.editor-clip-meta{font-size:0.68rem;color:var(--muted);}
+.editor-center{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,0.15);}
+.editor-preview{position:relative;width:190px;height:330px;background:var(--surface);border-radius:16px;border:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:16px;}
+.editor-preview-bg{position:absolute;inset:0;background:linear-gradient(160deg,#1a1500 0%,#2a1f00 40%,#1a1200 100%);z-index:0;}
+.editor-preview-badge{position:absolute;top:12px;right:12px;background:rgba(0,0,0,0.5);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:0.5rem;color:var(--muted);z-index:2;}
+.editor-preview-sub{position:relative;z-index:2;text-align:center;margin-bottom:12px;}
+.editor-preview-sub p{font-size:0.72rem;font-weight:700;color:var(--white);text-transform:uppercase;letter-spacing:0.8px;line-height:1.5;}
+.editor-preview-sub .gold{color:var(--gold);}
+.editor-preview-bar{position:relative;z-index:2;height:2px;background:rgba(255,255,255,0.06);border-radius:2px;margin-bottom:8px;overflow:hidden;}
+.editor-preview-bar-fill{height:100%;width:45%;background:var(--gold);border-radius:2px;}
+@media(prefers-reduced-motion:no-preference){.editor-preview-bar-fill{animation:barPulse 3s ease infinite;}}
+@keyframes barPulse{0%,100%{width:20%;}50%{width:60%;}}
+.editor-preview-time{position:relative;z-index:2;font-size:0.55rem;color:var(--muted);display:flex;justify-content:space-between;}
+.editor-play{display:flex;align-items:center;gap:12px;margin-top:16px;}
+.editor-play-btn{width:30px;height:30px;border-radius:50%;background:var(--white);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform 0.2s;}
+.editor-play-btn:hover{transform:scale(1.08);}
+.editor-play-btn svg{width:11px;height:11px;fill:#000;margin-left:2px;}
+.editor-play-track{width:80px;height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+.editor-play-track-fill{height:100%;width:45%;background:var(--gold);border-radius:2px;}
+.editor-right{border-left:1px solid var(--border);padding:20px;}
+.editor-right-title{font-size:0.62rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:700;margin-bottom:14px;}
+.editor-preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px;}
+.editor-preset{padding:10px;border:1px solid var(--border);border-radius:8px;text-align:center;font-size:0.72rem;color:var(--muted);cursor:pointer;transition:all 0.2s;}
+.editor-preset.active{border-color:var(--gold);color:var(--gold);background:rgba(212,168,67,0.05);}
+.editor-preset:hover{border-color:var(--border-hover);}
+.editor-transcript{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.7rem;color:var(--text);line-height:1.6;margin-bottom:18px;}
+.editor-toggles{display:flex;flex-direction:column;gap:10px;}
+.editor-toggle{display:flex;align-items:center;justify-content:space-between;}
+.editor-toggle-label{font-size:0.75rem;color:var(--text);}
+.toggle-switch{width:36px;height:20px;background:var(--border);border-radius:999px;position:relative;cursor:pointer;transition:background 0.25s;}
+.toggle-switch.on{background:var(--gold);}
+.toggle-switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:var(--white);border-radius:50%;transition:left 0.25s;}
+.toggle-switch.on::after{left:18px;}
+.editor-timeline{border-top:1px solid var(--border);padding:12px 24px;display:flex;flex-direction:column;gap:6px;}
+.timeline-row{display:flex;align-items:center;gap:12px;}
+.timeline-label{font-size:0.55rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);width:60px;flex-shrink:0;font-weight:700;line-height:1.3;}
+.timeline-track{flex:1;height:22px;background:var(--surface);border-radius:4px;position:relative;overflow:hidden;}
+.timeline-score{position:absolute;top:50%;transform:translateY(-50%);background:var(--gold);color:#000;font-size:0.52rem;font-weight:700;padding:1px 5px;border-radius:3px;}
+
+/* PRICING */
+.pricing{padding:100px 24px;max-width:1200px;margin:0 auto;}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+.price-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:32px;display:flex;flex-direction:column;transition:all 0.3s cubic-bezier(0.16,1,0.3,1);position:relative;}
+.price-card:hover{border-color:var(--border-hover);transform:translateY(-4px);}
+.price-card.featured{border-color:rgba(212,168,67,0.25);box-shadow:0 0 60px rgba(212,168,67,0.05);}
+.price-badge{position:absolute;top:-10px;right:24px;background:var(--gold);color:#000;font-size:0.58rem;font-weight:700;padding:4px 12px;border-radius:999px;letter-spacing:1.5px;text-transform:uppercase;}
+.price-name{font-family:var(--font-display);font-size:1.3rem;color:var(--white);margin-bottom:4px;font-weight:600;}
+.price-desc{font-size:0.75rem;color:var(--muted);line-height:1.55;margin-bottom:20px;min-height:36px;}
+.price-amount{display:flex;align-items:flex-end;gap:2px;margin-bottom:24px;}
+.price-dollar{font-size:1.1rem;font-weight:600;color:var(--white);line-height:2;}
+.price-num{font-family:var(--font-display);font-size:3rem;color:var(--white);line-height:1;font-weight:600;}
+.price-period{font-size:0.82rem;color:var(--muted);line-height:2.5;}
+.price-features{list-style:none;display:flex;flex-direction:column;gap:10px;flex:1;margin-bottom:24px;}
+.price-features li{font-size:0.8rem;color:var(--text);display:flex;align-items:flex-start;gap:10px;line-height:1.4;}
+.price-features li svg{width:16px;height:16px;stroke:var(--gold);fill:none;stroke-width:2;flex-shrink:0;margin-top:2px;}
+.price-features li strong{color:var(--white);font-weight:600;}
+.price-btn{width:100%;padding:12px;border-radius:8px;font-weight:600;font-size:0.82rem;cursor:pointer;transition:all 0.3s;font-family:var(--font-body);text-align:center;text-decoration:none;display:block;}
+.price-btn-outline{background:transparent;color:var(--white);border:1px solid rgba(255,255,255,0.1);}
+.price-btn-outline:hover{border-color:rgba(255,255,255,0.25);background:rgba(255,255,255,0.02);}
+.price-btn-gold{background:var(--gold);color:#000;border:none;}
+.price-btn-gold:hover{background:var(--gold-light);box-shadow:0 4px 16px rgba(212,168,67,0.2);}
+
+/* FAQ */
+.faq{padding:100px 24px;max-width:760px;margin:0 auto;}
+.faq-list{margin-top:48px;}
+.faq-item{border:1px solid var(--border);border-radius:12px;margin-bottom:8px;overflow:hidden;transition:border-color 0.25s;}
+.faq-item:hover{border-color:var(--border-hover);}
+.faq-q{width:100%;background:none;border:none;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;color:var(--white);font-family:var(--font-body);font-size:0.88rem;font-weight:500;cursor:pointer;text-align:left;gap:16px;transition:color 0.2s;}
+.faq-q:hover{color:var(--gold);}
+.faq-arrow{color:var(--muted);transition:transform 0.3s;flex-shrink:0;}
+.faq-item.open .faq-arrow{transform:rotate(180deg);}
+.faq-a{max-height:0;overflow:hidden;transition:max-height 0.4s ease;}
+.faq-a-inner{padding:0 24px 18px;color:var(--muted);font-size:0.82rem;line-height:1.75;}
+.faq-item.open .faq-a{max-height:200px;}
+
+/* CTA */
+.cta{padding:100px 24px;max-width:900px;margin:0 auto;text-align:center;}
+.cta-input-wrap{display:flex;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px;margin:40px auto 0;max-width:540px;transition:border-color 0.25s;}
+.cta-input-wrap:focus-within{border-color:rgba(212,168,67,0.25);}
+.cta-input-icon{padding:0 12px;color:var(--muted);flex-shrink:0;}
+.cta-input{flex:1;background:none;border:none;color:var(--white);font-size:0.82rem;font-family:var(--font-body);outline:none;padding:12px 0;}
+.cta-input::placeholder{color:var(--muted);}
+.cta-input-btn{background:var(--gold);color:#000;padding:12px 22px;border-radius:8px;font-weight:600;font-size:0.82rem;border:none;cursor:pointer;font-family:var(--font-body);white-space:nowrap;display:flex;align-items:center;gap:6px;transition:all 0.25s;}
+.cta-input-btn:hover{background:var(--gold-light);transform:translateY(-1px);}
+.cta-trust{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:20px;font-size:0.72rem;color:var(--muted);}
+.cta-trust span{color:var(--text);font-weight:500;}
+.cta-trust-dot{width:3px;height:3px;border-radius:50%;background:var(--muted);}
+
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:48px 24px 32px;max-width:1200px;margin:0 auto;}
+.footer-inner{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;margin-bottom:32px;}
+.footer-brand p{font-size:0.8rem;color:var(--muted);line-height:1.65;max-width:260px;margin-top:12px;}
+.footer-col h4{font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--gold);margin-bottom:16px;}
+.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:8px;}
+.footer-col a{color:var(--muted);text-decoration:none;font-size:0.8rem;transition:color 0.2s;}
+.footer-col a:hover{color:var(--white);}
+.footer-bottom{border-top:1px solid var(--border);padding-top:20px;display:flex;justify-content:space-between;align-items:center;font-size:0.72rem;color:var(--muted);}
+
+/* RESPONSIVE */
+@media(max-width:1024px){
+  .hero{flex-direction:column;text-align:center;padding-top:100px;gap:40px;}
+  .hero-left{display:flex;flex-direction:column;align-items:center;}
+  .hero-right{flex:none;width:100%;max-width:480px;}
+  .hero-sub{margin-left:auto;margin-right:auto;}
+  .hero-actions{justify-content:center;}
+  .hero-trust{justify-content:center;}
+  .hero-platforms{justify-content:center;}
+  .bento{grid-template-columns:repeat(6,1fr);}
+  .b-1{grid-column:span 6;grid-row:span 1;}
+  .b-2,.b-3,.b-4,.b-5,.b-6,.b-7,.b-8{grid-column:span 3;}
+  .editor-body{grid-template-columns:1fr;}
+  .editor-left,.editor-right{border:none;border-top:1px solid var(--border);}
+  .pricing-grid{grid-template-columns:1fr;max-width:380px;margin:0 auto;}
+  .footer-inner{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:640px){
+  nav{padding:8px 8px 8px 16px;}
+  .nav-links{display:none;}
+  .bento{grid-template-columns:1fr;}
+  .b-1,.b-2,.b-3,.b-4,.b-5,.b-6,.b-7,.b-8{grid-column:span 1;}
+  .footer-inner{grid-template-columns:1fr;}
+  .footer-bottom{flex-direction:column;gap:8px;text-align:center;}
+}
+
+/* ANIMATIONS */
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
+.reveal{opacity:0;transform:translateY(30px);transition:all 0.7s cubic-bezier(0.16,1,0.3,1);}
+.reveal.visible{opacity:1;transform:translateY(0);}
+.reveal-delay-1{transition-delay:0.1s;}
+.reveal-delay-2{transition-delay:0.2s;}
+.reveal-delay-3{transition-delay:0.3s;}
+.reveal-delay-4{transition-delay:0.4s;}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<div class="nav-wrap">
+  <nav>
+    <a href="#" class="nav-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20L10 8L14 16L20 4"/></svg>
+      PEAKCLIP
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#showcase">Editor</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#faq">FAQ</a></li>
+    </ul>
+    <div class="nav-right">
+      <a href="/login" class="nav-login">Log in</a>
+      <a href="/login" class="nav-cta">Start Free</a>
+    </div>
+  </nav>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-left">
+    <div class="hero-badge"><div class="hero-badge-dot"></div>AI-POWERED VIRAL ENGINE</div>
+    <h1>TURN LONG VIDEOS<br/>INTO <em>VIRAL SHORTS</em></h1>
+    <p class="hero-sub">Extract high-scoring clips, generate animated captions, and auto-crop horizontal videos into high-impact vertical format in one click.</p>
+    <div class="hero-actions">
+      <a href="/login" class="btn-gold">Start Clipping Free</a>
+      <a href="#showcase" class="btn-outline">Watch Dashboard Demo</a>
+    </div>
+    <div class="hero-trust">Trusted by over <span>10,000+ active creators</span></div>
+    <div class="hero-platforms">
+      <span class="hero-platform">YouTube</span>
+      <span class="hero-platform">Twitch</span>
+      <span class="hero-platform">TikTok</span>
+      <span class="hero-platform">Spotify</span>
+    </div>
+  </div>
+  <div class="hero-right">
+    <div class="pipeline" id="pipeline">
+      <div class="pipeline-top">
+        <div class="pipeline-dots">
+          <div class="pipeline-dot" style="background:#ff5f57;"></div>
+          <div class="pipeline-dot" style="background:#febc2e;"></div>
+          <div class="pipeline-dot" style="background:#28c840;"></div>
+        </div>
+        <div class="pipeline-title">PeakClip Pipeline v2.6</div>
+      </div>
+      <div class="pipeline-body">
+        <div class="pipeline-step" data-step="1">
+          <div class="pipeline-num">1</div>
+          <div class="pipeline-content">
+            <div class="pipeline-label">Paste Video URL</div>
+            <div class="pipeline-input-wrap">
+              <input class="pipeline-input" id="pipelineUrl" value="" readonly/>
+              <span class="typing-cursor" id="typingCursor"></span>
+            </div>
+          </div>
+        </div>
+        <div class="pipeline-step" data-step="2">
+          <div class="pipeline-num">2</div>
+          <div class="pipeline-content">
+            <div class="pipeline-label">AI Audio & Visual Scan</div>
+            <div class="pipeline-status">Initializing AI...</div>
+            <div class="pipeline-scan-bar"><div class="pipeline-scan-bar-fill"></div></div>
+          </div>
+        </div>
+        <div class="pipeline-step" data-step="3">
+          <div class="pipeline-num">3</div>
+          <div class="pipeline-content">
+            <div class="pipeline-label">Peak Moments Detected</div>
+            <div class="pipeline-clips">
+              <div class="pipeline-clip"></div>
+              <div class="pipeline-clip"></div>
+              <div class="pipeline-clip"></div>
+              <div class="pipeline-clip"></div>
+            </div>
+          </div>
+        </div>
+        <div class="pipeline-step" data-step="4">
+          <div class="pipeline-num">4</div>
+          <div class="pipeline-content">
+            <div class="pipeline-label">Viral Score & Export</div>
+            <div class="pipeline-score">
+              <div class="pipeline-score-ring">
+                <svg width="56" height="56" viewBox="0 0 56 56"><circle class="bg" cx="28" cy="28" r="24"/><circle class="fill" cx="28" cy="28" r="24"/></svg>
+                <div class="pipeline-score-num">98</div>
+              </div>
+              <div class="pipeline-score-text">Viral Potential</div>
+              <div class="pipeline-video-preview">
+                <div class="pipeline-video-preview-content">
+                  <div class="pipeline-video-preview-badge">SRC 16:9</div>
+                  <div class="pipeline-video-preview-sub">"IDEAS ON THE<br/><span class="gold">RISE"</span></div>
+                  <div class="pipeline-video-preview-bar"><div class="pipeline-video-preview-bar-fill"></div></div>
+                  <div class="pipeline-video-preview-time"><span>00:15</span><span>/ 00:34</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES BENTO -->
+<section class="section section-center" id="features">
+  <span class="section-tag reveal">Features</span>
+  <div class="section-title reveal reveal-delay-1">THE <em>FEATURE SUITE</em></div>
+  <p class="section-sub reveal reveal-delay-2">Ditch manual timeline scrubbing. Harness professional toolsets designed to automate engagement loops.</p>
+  <div class="bento">
+    <div class="bento-card b-1 reveal">
+      <div class="bento-icon"><svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="4" y2="16"/><line x1="8" y1="4" x2="8" y2="20"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="16" y1="4" x2="16" y2="20"/><line x1="20" y1="8" x2="20" y2="16"/></svg></div>
+      <div class="bento-title">AI Peak Detection</div>
+      <p class="bento-desc">Scans audio transcripts, tone spikes, and visual changes to automatically segment video highlights with the highest viral retention.</p>
+      <div class="bento-visual">
+        <div class="waveform" id="waveform"></div>
+        <div class="waveform-label"><span class="gold">Hook</span><span class="gold">Climax</span></div>
+      </div>
+    </div>
+    <div class="bento-card b-2 reveal reveal-delay-1">
+      <div class="bento-icon"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+      <div class="bento-title">Viral Score System</div>
+      <p class="bento-desc">Predict performance before posting. Receive insights based on hook pacing, keyword strength, and trending structure comparisons.</p>
+      <div class="bento-visual">
+        <div class="score-vis">
+          <div class="score-ring" id="scoreRing">
+            <svg width="80" height="80" viewBox="0 0 80 80"><circle class="bg" cx="40" cy="40" r="35"/><circle class="fill" cx="40" cy="40" r="35"/></svg>
+            <div class="score-num">98</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="bento-card b-3 reveal reveal-delay-2">
+      <div class="bento-icon"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="6" y1="16" x2="14" y2="16"/></svg></div>
+      <div class="bento-title">Dynamic Auto Captions</div>
+      <p class="bento-desc">90% of mobile shorts are watched on mute. Get 99.4% accurate subtitles styled with premium kinetic presets.</p>
+      <div class="bento-visual">
+        <div class="subtitle-vis"><p>"That is why you<br/>must focus"</p></div>
+      </div>
+    </div>
+    <div class="bento-card b-4 reveal reveal-delay-1">
+      <div class="bento-icon"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
+      <div class="bento-title">AI Voiceover</div>
+      <p class="bento-desc">Generate studio-grade narration in 10+ natural voices.</p>
+    </div>
+    <div class="bento-card b-5 reveal reveal-delay-2">
+      <div class="bento-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg></div>
+      <div class="bento-title">Auto Reframe</div>
+      <p class="bento-desc">Intelligent head-tracking detects speakers in landscape layouts and reframes the composition dynamically.</p>
+      <div class="bento-visual">
+        <div class="reframe-vis">
+          <div class="reframe-dot"></div>
+          <div class="reframe-phone"></div>
+          <div class="reframe-phone active"></div>
+          <div class="reframe-phone"></div>
+          <div class="reframe-dot"></div>
+        </div>
+      </div>
+    </div>
+    <div class="bento-card b-6 reveal reveal-delay-3">
+      <div class="bento-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+      <div class="bento-title">Social Scheduler</div>
+      <p class="bento-desc">Queue exports to TikTok, YouTube, and Reels directly.</p>
+    </div>
+    <div class="bento-card b-7 reveal reveal-delay-3">
+      <div class="bento-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
+      <div class="bento-title">Instant Downloader</div>
+      <p class="bento-desc">Bulk export raw videos from YT/Twitch without quality loss.</p>
+    </div>
+    <div class="bento-card b-8 reveal reveal-delay-4">
+      <div class="bento-icon"><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="16" y2="12"/><line x1="4" y1="17" x2="12" y2="17"/></svg></div>
+      <div class="bento-title">Multi-Language</div>
+      <p class="bento-desc">Localize content instantly with AI translations in 24+ languages.</p>
+    </div>
+  </div>
+</section>
+
+<!-- EDITOR SHOWCASE -->
+<section class="showcase" id="showcase">
+  <div class="section-center">
+    <span class="section-tag reveal">Editor</span>
+    <div class="section-title reveal reveal-delay-1">THE PEAK <em>EDITOR</em></div>
+    <p class="showcase-sub reveal reveal-delay-2">Trim, style, and export from your browser. No install needed.</p>
+  </div>
+  <div class="editor-mock reveal">
+    <div class="editor-topbar">
+      <div class="editor-topbar-left">
+        <div class="pipeline-dots">
+          <div class="pipeline-dot" style="background:#ff5f57;"></div>
+          <div class="pipeline-dot" style="background:#febc2e;"></div>
+          <div class="pipeline-dot" style="background:#28c840;"></div>
+        </div>
+        <div class="editor-file">Clip_Moment_#1_Score98.mp4 <span class="editor-badge">AI Analysis Complete</span></div>
+      </div>
+      <div class="editor-topbar-right">
+        <button class="editor-export">Export Video <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></button>
+      </div>
+    </div>
+    <div class="editor-body">
+      <div class="editor-left">
+        <div class="editor-panel-title">PEAK CLIPS DETECTED (4)</div>
+        <div class="editor-clip active">
+          <div class="editor-clip-header"><div class="editor-clip-name">Clip #1: The Pacing Loop</div><div class="editor-clip-score">98</div></div>
+          <div class="editor-clip-meta">Duration: 34s | 01:23 — 01:57</div>
+        </div>
+        <div class="editor-clip">
+          <div class="editor-clip-header"><div class="editor-clip-name">Clip #2: Creative Burnout</div><div class="editor-clip-score">94</div></div>
+          <div class="editor-clip-meta">Duration: 28s | 05:40 — 06:08</div>
+        </div>
+        <div class="editor-clip">
+          <div class="editor-clip-header"><div class="editor-clip-name">Clip #3: Scaling Systems</div><div class="editor-clip-score">91</div></div>
+          <div class="editor-clip-meta">Duration: 41s | 12:15 — 12:56</div>
+        </div>
+        <div class="editor-clip">
+          <div class="editor-clip-header"><div class="editor-clip-name">Clip #4: The Perfect Hook</div><div class="editor-clip-score">89</div></div>
+          <div class="editor-clip-meta">Duration: 30s | 18:02 — 18:32</div>
+        </div>
+      </div>
+      <div class="editor-center">
+        <div class="editor-preview">
+          <div class="editor-preview-bg"></div>
+          <div class="editor-preview-badge">SOURCE 16:9 TRACKING</div>
+          <div class="editor-preview-sub"><p>"If you want to <span class="gold">grow</span><br/>a channels audience,<br/>you need <span class="gold">pacing.</span>"</p></div>
+          <div class="editor-preview-bar"><div class="editor-preview-bar-fill"></div></div>
+          <div class="editor-preview-time"><span>00:15</span><span>/ 00:34</span></div>
+        </div>
+        <div class="editor-play">
+          <div class="editor-play-btn"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+          <div class="editor-play-track"><div class="editor-play-track-fill"></div></div>
+        </div>
+      </div>
+      <div class="editor-right">
+        <div class="editor-right-title">CUSTOMIZE CLIP</div>
+        <div class="editor-panel-title">CAPTIONS PRESET</div>
+        <div class="editor-preset-grid">
+          <div class="editor-preset active">Glow Bold</div>
+          <div class="editor-preset">Minimalist</div>
+          <div class="editor-preset">Karaoke</div>
+          <div class="editor-preset">Gold Tint</div>
+        </div>
+        <div class="editor-panel-title">TRANSCRIPT</div>
+        <div class="editor-transcript">"If you want to grow a channels audience, you need pacing."</div>
+        <div class="editor-toggles">
+          <div class="editor-toggle"><span class="editor-toggle-label">Auto Head-Tracking</span><div class="toggle-switch on"></div></div>
+          <div class="editor-toggle"><span class="editor-toggle-label">Highlight Keywords</span><div class="toggle-switch on"></div></div>
+          <div class="editor-toggle"><span class="editor-toggle-label">Export to 60 FPS</span><div class="toggle-switch"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="editor-timeline">
+      <div class="timeline-row">
+        <div class="timeline-label">VIDEO<br/>TRACK</div>
+        <div class="timeline-track">
+          <div class="timeline-score" style="left:8%;">98</div>
+          <div class="timeline-score" style="left:35%;">94</div>
+          <div class="timeline-score" style="left:62%;">91</div>
+          <div class="timeline-score" style="left:88%;">89</div>
+        </div>
+      </div>
+      <div class="timeline-row">
+        <div class="timeline-label">AUDIO<br/>TRACK</div>
+        <div class="timeline-track">
+          <div style="position:absolute;inset:0;display:flex;gap:2px;padding:4px;">
+            <div style="flex:1;background:var(--gold);opacity:0.25;border-radius:2px;"></div>
+            <div style="flex:1;background:var(--gold);opacity:0.45;border-radius:2px;"></div>
+            <div style="flex:1;background:var(--gold);opacity:0.35;border-radius:2px;"></div>
+            <div style="flex:1;background:var(--gold);opacity:0.55;border-radius:2px;"></div>
+            <div style="flex:1;background:var(--gold);opacity:0.25;border-radius:2px;"></div>
+            <div style="flex:1;background:var(--gold);opacity:0.6;border-radius:2px;"></div>
+            <div style="flex:1;background:var(--gold);opacity:0.3;border-radius:2px;"></div>
+            <div style="flex:1;background:var(--gold);opacity:0.5;border-radius:2px;"></div>
+            <div style="flex:1;background:var(--gold);opacity:0.2;border-radius:2px;"></div>
+            <div style="flex:1;background:var(--gold);opacity:0.5;border-radius:2px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing section-center" id="pricing">
+  <span class="section-tag reveal">Pricing</span>
+  <div class="section-title reveal reveal-delay-1">UPGRADE YOUR <em>REACH SPEED</em></div>
+  <p class="section-sub reveal reveal-delay-2">Start for free and select the tier that matches your production throughput.</p>
+  <div class="pricing-grid">
+    <div class="price-card reveal reveal-delay-1">
+      <div class="price-name">Starter</div>
+      <p class="price-desc">For hobbyists starting their vertical content journey.</p>
+      <div class="price-amount"><span class="price-dollar">$</span><span class="price-num">0</span><span class="price-period">/mo</span></div>
+      <ul class="price-features">
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>120 mins upload credit / month</li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>AI Peak Detection (Basic)</li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Standard Caption Presets</li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>720p Export Resolution</li>
+      </ul>
+      <a href="/login" class="price-btn price-btn-outline">Get Started</a>
+    </div>
+    <div class="price-card featured reveal reveal-delay-2">
+      <div class="price-badge">MOST POPULAR</div>
+      <div class="price-name">Pro Clip</div>
+      <p class="price-desc">For serious creators and agencies scaling output.</p>
+      <div class="price-amount"><span class="price-dollar">$</span><span class="price-num">29</span><span class="price-period">/mo</span></div>
+      <ul class="price-features">
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><strong>Unlimited</strong> upload credits / month</li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><strong>Advanced</strong> Peak Score System</li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><strong>Premium</strong> Kinetic Caption Styling</li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>1080p Ultra-HD 60FPS exports</li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Smart Auto Head-Tracking Reframer</li>
+      </ul>
+      <a href="/login?plan=creator" class="price-btn price-btn-gold">Start Pro</a>
+    </div>
+    <div class="price-card reveal reveal-delay-3">
+      <div class="price-name">Studio</div>
+      <p class="price-desc">For production networks, brands, and large teams.</p>
+      <div class="price-amount"><span class="price-dollar">$</span><span class="price-num">99</span><span class="price-period">/mo</span></div>
+      <ul class="price-features">
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Everything in Pro Plan</li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>10 Creator Workspaces</li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Custom Brand Captions Presets</li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Dedicated Account Manager & API access</li>
+      </ul>
+      <a href="/login?plan=pro" class="price-btn price-btn-outline">Contact Sales</a>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq section-center" id="faq">
+  <span class="section-tag reveal">FAQ</span>
+  <div class="section-title reveal reveal-delay-1">FREQUENTLY ASKED <em>QUESTIONS</em></div>
+  <p class="section-sub reveal reveal-delay-2">Everything you need to know about the AI viral clipping pipeline.</p>
+  <div class="faq-list">
+    <div class="faq-item reveal reveal-delay-1">
+      <button class="faq-q">How does PeakClip determine which moments will go viral? <svg class="faq-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <div class="faq-a"><div class="faq-a-inner">Our AI analyzes audio energy, emotional peaks, speech patterns, pacing, and viewer retention signals from millions of viral clips. Each moment receives a Viral Score from 0-100 based on its likelihood of high engagement.</div></div>
+    </div>
+    <div class="faq-item reveal reveal-delay-2">
+      <button class="faq-q">Is the auto-reframing accurate for multi-person layouts? <svg class="faq-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <div class="faq-a"><div class="faq-a-inner">Yes. Our head-tracking algorithm detects and follows active speakers in real-time, dynamically adjusting the frame to keep them centered even in multi-person scenes.</div></div>
+    </div>
+    <div class="faq-item reveal reveal-delay-3">
+      <button class="faq-q">What source platforms do you support? <svg class="faq-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <div class="faq-a"><div class="faq-a-inner">We support YouTube, TikTok, Instagram, Twitch, Twitter/X, and Facebook for input. Exports can be scheduled directly to YouTube Shorts, TikTok, and Instagram Reels.</div></div>
+    </div>
+    <div class="faq-item reveal reveal-delay-4">
+      <button class="faq-q">How do the kinetic auto-captions work? <svg class="faq-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <div class="faq-a"><div class="faq-a-inner">Our engine transcribes audio with 99.4% accuracy, then applies animated caption presets that highlight keywords, adjust timing to speech rhythm, and match your chosen visual style.</div></div>
+    </div>
+    <div class="faq-item reveal">
+      <button class="faq-q">Can I cancel my subscription at any time? <svg class="faq-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <div class="faq-a"><div class="faq-a-inner">Absolutely. You can cancel or downgrade your plan at any time from your dashboard. No questions asked, no cancellation fees.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta section-center">
+  <div class="section-title reveal">READY TO MULTIPLY YOUR<br/><em>VIEWS?</em></div>
+  <p class="section-sub reveal reveal-delay-1">Paste a video link below and let PeakClip extract viral clips instantly.</p>
+  <div class="cta-input-wrap reveal reveal-delay-2">
+    <div class="cta-input-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+    <input type="text" class="cta-input" placeholder="https://www.youtube.com/watch?v=..."/>
+    <button class="cta-input-btn">Clip Now <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></button>
+  </div>
+  <div class="cta-trust reveal reveal-delay-3">
+    <span>No credit card required</span><div class="cta-trust-dot"></div><span>3 Free Exports Monthly</span><div class="cta-trust-dot"></div><span>Full Feature Access</span>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <a href="#" class="nav-logo" style="margin-bottom:0;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M4 20L10 8L14 16L20 4"/></svg>
+        PEAKCLIP
+      </a>
+      <p>AI-powered viral clipping and dynamic captions platform built for modern streaming channels and content studios.</p>
+    </div>
+    <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#showcase">Editor Lab</a></li><li><a href="#pricing">Pricing</a></li></ul></div>
+    <div class="footer-col"><h4>Resources</h4><ul><li><a href="#">Docs & Guides</a></li><li><a href="#">Help & Support</a></li><li><a href="#">API Reference</a></li></ul></div>
+    <div class="footer-col"><h4>Legal</h4><ul><li><a href="#">Terms of Service</a></li><li><a href="#">Privacy Policy</a></li><li><a href="#">Cookie Policy</a></li></ul></div>
+  </div>
+  <div class="footer-bottom">
+    <span>&copy; 2025 PeakClip. All rights reserved.</span>
+    <span>Made for creators. Built to go viral.</span>
+  </div>
+</footer>
+
+<script>
+/* SCROLL REVEAL */
+const obs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');if(e.target.id==='scoreRing')e.target.classList.add('animate');}});},{threshold:0.15});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+
+/* PIPELINE ANIMATION */
+(function(){
+  const pipeline=document.getElementById('pipeline');
+  if(!pipeline)return;
+  const steps=pipeline.querySelectorAll('.pipeline-step');
+  const urlInput=document.getElementById('pipelineUrl');
+  const typingCursor=document.getElementById('typingCursor');
+  const scanStatus=steps[1].querySelector('.pipeline-status');
+  const scanBarFill=steps[1].querySelector('.pipeline-scan-bar-fill');
+  const targetUrl='https://youtube.com/watch?v=k98u2a_v25x';
+  let chain=[];
+
+  function clearAll(){chain.forEach(t=>clearTimeout(t));chain=[];}
+  function delay(fn,ms){const t=setTimeout(fn,ms);chain.push(t);return t;}
+
+  function resetPipeline(){
+    clearAll();
+    steps.forEach(s=>s.classList.remove('active','completed'));
+    urlInput.value='';
+    typingCursor.style.display='inline-block';
+    scanStatus.textContent='Initializing AI...';
+    scanStatus.classList.remove('scanning');
+    if(scanBarFill){scanBarFill.style.transition='none';scanBarFill.style.width='0%';}
+    steps[2].querySelectorAll('.pipeline-clip').forEach(c=>{c.style.transition='none';c.style.opacity='0';c.style.transform='scale(0.6)';});
+    const ring=steps[3].querySelector('.pipeline-score-ring .fill');
+    if(ring){ring.style.transition='none';ring.style.strokeDashoffset='151';}
+    const num=steps[3].querySelector('.pipeline-score-num');
+    if(num){num.style.transition='none';num.style.opacity='0';}
+    const vid=steps[3].querySelector('.pipeline-video-preview');
+    if(vid){vid.style.transition='none';vid.style.opacity='0';}
+  }
+
+  function typeUrl(cb){
+    let i=0;
+    (function next(){
+      if(i<targetUrl.length){
+        urlInput.value=targetUrl.substring(0,i+1);i++;
+        delay(next,i===1?250:20+Math.random()*25);
+      }else{typingCursor.style.display='none';delay(cb,400);}
+    })();
+  }
+
+  function step1(cb){
+    steps[0].classList.add('active');
+    delay(()=>typeUrl(cb),300);
+  }
+
+  function step2(cb){
+    steps[0].classList.remove('active');steps[0].classList.add('completed');
+    steps[1].classList.add('active');
+    scanStatus.classList.add('scanning');
+    scanStatus.textContent='Scanning audio waves...';
+    delay(()=>{scanBarFill.style.transition='width 0.6s ease';scanBarFill.style.width='25%';},150);
+    delay(()=>{scanStatus.textContent='Analyzing visual peaks...';scanBarFill.style.width='50%';},800);
+    delay(()=>{scanStatus.textContent='Detecting emotion spikes...';scanBarFill.style.width='75%';},1500);
+    delay(()=>{scanStatus.textContent='Mapping viral patterns...';scanBarFill.style.transition='width 0.4s ease';scanBarFill.style.width='100%';},2000);
+    delay(cb,2500);
+  }
+
+  function step3(cb){
+    steps[1].classList.remove('active');steps[1].classList.add('completed');
+    steps[2].classList.add('active');
+    steps[2].querySelectorAll('.pipeline-clip').forEach((c,i)=>{
+      delay(()=>{c.style.transition='all 0.4s cubic-bezier(0.34,1.56,0.64,1)';c.style.opacity='1';c.style.transform='scale(1)';},150+i*180);
+    });
+    delay(cb,1200);
+  }
+
+  function step4(cb){
+    steps[2].classList.remove('active');steps[2].classList.add('completed');
+    steps[3].classList.add('active');
+    const ring=steps[3].querySelector('.pipeline-score-ring .fill');
+    const num=steps[3].querySelector('.pipeline-score-num');
+    const vid=steps[3].querySelector('.pipeline-video-preview');
+    delay(()=>{if(ring){ring.style.transition='stroke-dashoffset 2s cubic-bezier(0.16,1,0.3,1)';ring.style.strokeDashoffset='15';}},200);
+    delay(()=>{if(num){num.style.transition='all 0.4s cubic-bezier(0.34,1.56,0.64,1)';num.style.opacity='1';}},1200);
+    delay(()=>{if(vid){vid.style.transition='all 0.5s cubic-bezier(0.16,1,0.3,1)';vid.style.opacity='1';}},1600);
+    delay(cb,4000);
+  }
+
+  function start(){resetPipeline();delay(()=>step1(()=>step2(()=>step3(()=>step4(()=>delay(start,1500))))),600);}
+  delay(start,800);
+})();
+
+/* WAVEFORM (feature card) */
+(function(){
+  const w=document.getElementById('waveform');if(!w)return;
+  [30,55,40,70,50,85,35,65,45,80,60,75,40,90,50,70,35,55,65,80,45,60].forEach((h,i)=>{
+    const d=document.createElement('div');d.className='waveform-bar';d.style.height=h+'%';d.style.setProperty('--op',0.3+Math.random()*0.5);d.style.animationDelay=i*0.05+'s';w.appendChild(d);
+  });
+})();
+
+/* TOGGLE SWITCHES */
+document.querySelectorAll('.toggle-switch').forEach(t=>{t.addEventListener('click',()=>t.classList.toggle('on'));});
+
+/* FAQ */
+document.querySelectorAll('.faq-q').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const item=btn.closest('.faq-item');
+    const wasOpen=item.classList.contains('open');
+    document.querySelectorAll('.faq-item').forEach(i=>i.classList.remove('open'));
+    if(!wasOpen)item.classList.add('open');
+  });
+});
+
+/* SMOOTH SCROLL */
+document.querySelectorAll('a[href^="#"]').forEach(a=>{
+  a.addEventListener('click',e=>{
+    const t=document.querySelector(a.getAttribute('href'));
+    if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth',block:'start'});}
+  });
+});
+</script>
+</body>
+</html>
