@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { supabase } from '../../lib/supabase'
+import { getSupabaseClient } from '../../lib/supabase'
 import { brand, brandHover, brandGrad, brandDim, brandGlow, brandBorder, bgPrimary, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../lib/tokens'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
@@ -61,7 +61,7 @@ export default function Editor() {
       setClipId(id)
       loadClip(id)
     }
-    supabase.auth.getUser().then(({ data }) => {
+    getSupabaseClient().auth.getUser().then(({ data }) => {
       if (data?.user) setUser(data.user)
     })
     if (subtitleText) {
@@ -92,7 +92,7 @@ export default function Editor() {
   }, [music])
 
   const loadClip = async (id) => {
-    const { data } = await supabase.from('clips').select('*').eq('id', id).single()
+    const { data } = await getSupabaseClient().from('clips').select('*').eq('id', id).single()
     if (data) {
       setClip(data)
       setSubtitleText(data.title || '')
@@ -208,7 +208,7 @@ export default function Editor() {
     setExportStatus('Processing video...')
     setExportUrl('')
 
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session } } = await getSupabaseClient().auth.getSession()
 
     try {
       const response = await fetch(`${BACKEND_URL}/export`, {

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase } from '../../lib/supabase'
+import { getSupabaseClient } from '../../lib/supabase'
 import { brand, brandDim, brandBorder, bgPrimary, brandGrad } from '../../lib/tokens'
 
 export default function Login() {
@@ -21,7 +21,7 @@ export default function Login() {
   const dashboardUrl = () => planParam ? `/dashboard?plan=${planParam}` : '/dashboard'
 
   const handleGoogleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
+    await getSupabaseClient().auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${window.location.origin}${dashboardUrl()}` }
     })
@@ -37,7 +37,7 @@ export default function Login() {
       return
     }
     if (isSignUp) {
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}${dashboardUrl()}` } })
+      const { data, error } = await getSupabaseClient().auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}${dashboardUrl()}` } })
       if (error) {
         setMessage({ type: 'error', text: error.message })
         return
@@ -53,14 +53,14 @@ export default function Login() {
         } catch {}
       }
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+      const { error: signInError } = await getSupabaseClient().auth.signInWithPassword({ email, password })
       if (signInError) {
         setMessage({ type: 'success', text: 'Account created! Check your email to confirm, then sign in.' })
       } else {
         window.location.href = dashboardUrl()
       }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { error } = await getSupabaseClient().auth.signInWithPassword({ email, password })
       if (error) setMessage({ type: 'error', text: error.message })
       else window.location.href = dashboardUrl()
     }
@@ -71,7 +71,7 @@ export default function Login() {
       setMessage({ type: 'error', text: 'Enter your email address first' })
       return
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await getSupabaseClient().auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/login`
     })
     if (error) setMessage({ type: 'error', text: error.message })

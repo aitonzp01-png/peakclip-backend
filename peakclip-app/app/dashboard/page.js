@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { getSupabaseClient } from '../../lib/supabase'
 import { motion } from 'framer-motion'
 import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong } from '../../lib/tokens'
 
@@ -30,10 +30,10 @@ export default function Dashboard() {
     if (p === 'creator' || p === 'pro') setActiveTab('upgrade')
 
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await getSupabaseClient().auth.getUser()
       if (!user) { window.location.href = '/login'; return }
       setUser(user)
-      const { data } = await supabase.from('users').select('*').eq('id', user.id).single()
+      const { data } = await getSupabaseClient().from('users').select('*').eq('id', user.id).single()
       if (data) { setCredits(data.credits); setPlan(data.plan) }
       loadClips(user.id)
     }
@@ -41,7 +41,7 @@ export default function Dashboard() {
   }, [])
 
   const loadClips = async (userId) => {
-    const { data } = await supabase.from('clips').select('*').eq('user_id', userId).order('created_at', { ascending: false })
+    const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).order('created_at', { ascending: false })
     if (data) setClips(data)
   }
 
@@ -49,7 +49,7 @@ export default function Dashboard() {
     let attempts = 0
     const poll = setInterval(async () => {
       attempts++
-      const { data } = await supabase.from('clips').select('*').eq('id', clipId).single()
+      const { data } = await getSupabaseClient().from('clips').select('*').eq('id', clipId).single()
       if (data?.video_url || attempts > 30) {
         clearInterval(poll)
         loadClips(userId)
@@ -58,7 +58,7 @@ export default function Dashboard() {
   }
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    await getSupabaseClient().auth.signOut()
     window.location.href = '/login'
   }
 
@@ -68,7 +68,7 @@ export default function Dashboard() {
     setLoading(true)
     setStatus('Processing video with AI...')
 
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session } } = await getSupabaseClient().auth.getSession()
 
     try {
       const response = await fetch(`${BACKEND_URL}/process`, {
@@ -101,7 +101,7 @@ export default function Dashboard() {
   const handleCheckout = async (priceId) => {
     if (!user) return
     setCheckoutLoading(true)
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session } } = await getSupabaseClient().auth.getSession()
     try {
       const response = await fetch(`${BACKEND_URL}/create-checkout-session`, {
         method: 'POST',
