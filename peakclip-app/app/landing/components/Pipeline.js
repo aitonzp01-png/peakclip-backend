@@ -46,8 +46,9 @@ export default function Pipeline() {
       width: '100%',
       duration: 1.4,
       ease: 'power2.out',
-      onComplete: () => { setProgress(100); setActiveStep(3) },
+      onComplete: () => { setProgress(100); setActiveStep(4) },
     })
+    .to({}, { duration: 0.5 })
     .to(barRef.current, { width: '0%', duration: 0.01, onComplete: () => { setProgress(0); setActiveStep(-1) } })
 
     return () => tl.kill()
