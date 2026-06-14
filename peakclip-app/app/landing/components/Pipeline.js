@@ -19,37 +19,35 @@ export default function Pipeline() {
   useEffect(() => {
     if (!barRef.current) return
 
-    const tl = gsap.timeline({ repeat: -1, repeatDelay: 4 })
+    const tl = gsap.timeline({ repeat: -1, repeatDelay: 1 })
 
     tl.to(barRef.current, {
       width: '25%',
-      duration: 0.8,
+      duration: 1.4,
       ease: 'power2.out',
       onComplete: () => { setProgress(25); setActiveStep(0) },
     })
-    .to({}, { duration: 0.6 })
+    .to({}, { duration: 0.3 })
     .to(barRef.current, {
       width: '50%',
-      duration: 0.8,
+      duration: 1.4,
       ease: 'power2.out',
       onComplete: () => { setProgress(50); setActiveStep(1) },
     })
-    .to({}, { duration: 0.6 })
+    .to({}, { duration: 0.3 })
     .to(barRef.current, {
       width: '75%',
-      duration: 0.8,
+      duration: 1.4,
       ease: 'power2.out',
       onComplete: () => { setProgress(75); setActiveStep(2) },
     })
-    .to({}, { duration: 0.6 })
+    .to({}, { duration: 0.3 })
     .to(barRef.current, {
       width: '100%',
-      duration: 0.8,
+      duration: 1.4,
       ease: 'power2.out',
       onComplete: () => { setProgress(100); setActiveStep(3) },
     })
-    .to(barRef.current, { duration: 0.5, opacity: 0.4 })
-    .to(barRef.current, { duration: 0.3, opacity: 1 })
     .to(barRef.current, { width: '0%', duration: 0.01, onComplete: () => { setProgress(0); setActiveStep(-1) } })
 
     return () => tl.kill()
