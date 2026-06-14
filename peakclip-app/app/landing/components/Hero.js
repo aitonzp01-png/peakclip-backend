@@ -3,8 +3,6 @@
 import { motion } from 'framer-motion'
 import Pipeline from './Pipeline'
 
-const stagger = 0.12
-
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 40 },
   animate: { opacity: 1, y: 0 },
@@ -13,9 +11,9 @@ const fadeUp = (delay = 0) => ({
 
 export default function Hero() {
   return (
-    <section className="hero-section">
-      <div className="hero-grid">
-        <div>
+    <section className="hero">
+      <div className="hero-container">
+        <div className="hero-left">
           <motion.div {...fadeUp(0)}>
             <span className="hero-badge">AI-POWERED VIRAL ENGINE</span>
           </motion.div>
@@ -42,6 +40,7 @@ export default function Hero() {
         </div>
 
         <motion.div
+          className="hero-right"
           initial={{ opacity: 0, x: 60 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 1, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}

@@ -4,38 +4,53 @@ import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 
 const steps = [
-  { num: 1, label: 'Paste Video URL', desc: 'Paste any YouTube, TikTok, or file link', status: 'Completed' },
-  { num: 2, label: 'AI Audio & Visual Scan', desc: 'Whisper transcription + GPT scene detection', status: 'Completed' },
-  { num: 3, label: 'Peak Moments Detected', desc: 'Identify viral moments by engagement scoring', status: 'Processing' },
-  { num: 4, label: 'Viral Score & Export', desc: 'Auto-crop vertical 9:16 with captions', status: 'Queued' },
+  { num: 1, label: 'Paste Video URL', desc: 'Paste any YouTube, TikTok, or file link' },
+  { num: 2, label: 'AI Audio & Visual Scan', desc: 'Whisper transcription + GPT scene detection' },
+  { num: 3, label: 'Peak Moments Detected', desc: 'Identify viral moments by engagement scoring' },
+  { num: 4, label: 'Viral Score & Export', desc: 'Auto-crop vertical 9:16 with captions' },
 ]
 
 export default function Pipeline() {
   const containerRef = useRef(null)
   const barRef = useRef(null)
-  const [activeStep, setActiveStep] = useState(2)
-  const [progress, setProgress] = useState(65)
+  const [activeStep, setActiveStep] = useState(-1)
+  const [progress, setProgress] = useState(0)
 
   useEffect(() => {
     if (!barRef.current) return
 
-    const tl = gsap.timeline({ repeat: -1, repeatDelay: 3 })
+    const tl = gsap.timeline({ repeat: -1, repeatDelay: 4 })
 
     tl.to(barRef.current, {
-      width: '100%',
-      duration: 2.4,
-      ease: 'power2.inOut',
-      onUpdate: function () {
-        const w = gsap.getProperty(barRef.current, 'width')
-        const pct = Math.round((parseFloat(w) / parseFloat(barRef.current.parentElement.offsetWidth)) * 100)
-        setProgress(Math.min(pct, 100))
-        const stepIdx = Math.min(Math.floor(pct / 25), 3)
-        setActiveStep(stepIdx)
-      },
+      width: '25%',
+      duration: 0.8,
+      ease: 'power2.out',
+      onComplete: () => { setProgress(25); setActiveStep(0) },
     })
-      .to(barRef.current, { duration: 0.5, opacity: 0.6 })
-      .to(barRef.current, { duration: 0.5, opacity: 1 })
-      .to(barRef.current, { width: '0%', duration: 0.01 })
+    .to({}, { duration: 0.6 })
+    .to(barRef.current, {
+      width: '50%',
+      duration: 0.8,
+      ease: 'power2.out',
+      onComplete: () => { setProgress(50); setActiveStep(1) },
+    })
+    .to({}, { duration: 0.6 })
+    .to(barRef.current, {
+      width: '75%',
+      duration: 0.8,
+      ease: 'power2.out',
+      onComplete: () => { setProgress(75); setActiveStep(2) },
+    })
+    .to({}, { duration: 0.6 })
+    .to(barRef.current, {
+      width: '100%',
+      duration: 0.8,
+      ease: 'power2.out',
+      onComplete: () => { setProgress(100); setActiveStep(3) },
+    })
+    .to(barRef.current, { duration: 0.5, opacity: 0.4 })
+    .to(barRef.current, { duration: 0.3, opacity: 1 })
+    .to(barRef.current, { width: '0%', duration: 0.01, onComplete: () => { setProgress(0); setActiveStep(-1) } })
 
     return () => tl.kill()
   }, [])
@@ -65,7 +80,7 @@ export default function Pipeline() {
               <div className="pipeline-step-desc">{step.desc}</div>
             </div>
             <div className="pipeline-step-status">
-              {i === activeStep ? 'Processing...' : step.status === 'Completed' ? 'Done' : 'Pending'}
+              {i < activeStep ? 'Done' : i === activeStep ? 'Processing...' : 'Pending'}
             </div>
           </div>
         ))}
