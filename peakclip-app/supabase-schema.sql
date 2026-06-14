@@ -1,5 +1,5 @@
 -- Run this SQL in your Supabase SQL Editor (Dashboard > SQL Editor)
--- after creating your Supabase project.
+-- CORREGIDO: incluye ALTER TABLE ADD COLUMN IF NOT EXISTS para tablas existentes
 
 -- Users table: mirrors auth.users with app-level fields
 CREATE TABLE IF NOT EXISTS users (
@@ -17,8 +17,14 @@ CREATE TABLE IF NOT EXISTS clips (
   title TEXT,
   status TEXT NOT NULL DEFAULT 'processing',
   video_url TEXT,
+  thumbnail_url TEXT,
+  duration NUMERIC,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Add missing columns if table already existed without them
+ALTER TABLE clips ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
+ALTER TABLE clips ADD COLUMN IF NOT EXISTS duration NUMERIC;
 
 -- Index for fast user-scoped queries
 CREATE INDEX IF NOT EXISTS idx_clips_user_id ON clips(user_id);
@@ -50,18 +56,47 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clips ENABLE ROW LEVEL SECURITY;
 
 -- RLS: users can only read/update their own row
+DROP POLICY IF EXISTS user_read_own ON users;
 CREATE POLICY user_read_own ON users
   FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS user_update_own ON users;
 CREATE POLICY user_update_own ON users
   FOR UPDATE USING (auth.uid() = id);
 
 -- RLS: clips are scoped to the owning user
+DROP POLICY IF EXISTS clips_select_own ON clips;
 CREATE POLICY clips_select_own ON clips
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS clips_insert_own ON clips;
 CREATE POLICY clips_insert_own ON clips
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS clips_update_own ON clips;
 CREATE POLICY clips_update_own ON clips
   FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS clips_delete_own ON clips;
+CREATE POLICY clips_delete_own ON clips
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Storage RLS: clips bucket
+-- RLS on storage.objects is enabled by default in Supabase
+DROP POLICY IF EXISTS "Users can read their own clips" ON storage.objects;
+CREATE POLICY "Users can read their own clips" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'clips' AND auth.role() = 'authenticated'
+  );
+
+DROP POLICY IF EXISTS "Users can upload their own clips" ON storage.objects;
+CREATE POLICY "Users can upload their own clips" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'clips' AND auth.role() = 'authenticated'
+  );
+
+DROP POLICY IF EXISTS "Users can update their own clips" ON storage.objects;
+CREATE POLICY "Users can update their own clips" ON storage.objects
+  FOR UPDATE USING (
+    bucket_id = 'clips' AND auth.role() = 'authenticated'
+  );

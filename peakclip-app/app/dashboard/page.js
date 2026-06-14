@@ -67,11 +67,13 @@ export default function Dashboard() {
     setLoading(true)
     setStatus('Processing video with AI...')
 
+    const { data: { session } } = await supabase.auth.getSession()
+
     try {
       const response = await fetch(`${BACKEND_URL}/process`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, user_id: user.id })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ url })
       })
 
       if (response.ok) {
@@ -98,13 +100,13 @@ export default function Dashboard() {
   const handleCheckout = async (priceId) => {
     if (!user) return
     setCheckoutLoading(true)
+    const { data: { session } } = await supabase.auth.getSession()
     try {
       const response = await fetch(`${BACKEND_URL}/create-checkout-session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({
           price_id: priceId,
-          user_id: user.id,
           return_url: window.location.origin + '/dashboard'
         })
       })

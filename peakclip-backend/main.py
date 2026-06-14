@@ -1,8 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from supabase import create_client
 import yt_dlp
@@ -12,22 +11,67 @@ import os
 import uuid
 import json
 import stripe
+import tempfile
+import re
+import time
+from collections import defaultdict
+from urllib.parse import urlparse
+import jwt as pyjwt
+from jwt import PyJWKClient
 
 app = FastAPI()
 
+# In-memory rate limiter
+rate_store = defaultdict(list)
+RATE_LIMIT = 10
+RATE_WINDOW = 60
+
+def check_rate_limit(key: str):
+    now = time.time()
+    window_start = now - RATE_WINDOW
+    rate_store[key] = [t for t in rate_store[key] if t > window_start]
+    if len(rate_store[key]) >= RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+    rate_store[key].append(now)
+
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    os.getenv("FRONTEND_URL", ""),
+]
+ALLOWED_ORIGINS = [o for o in ALLOWED_ORIGINS if o]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS or ["http://localhost:3000"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "0"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    elapsed = time.time() - start
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {request.method} {request.url.path} -> {response.status_code} ({elapsed:.2f}s)")
+    return response
+
+
 os.makedirs("downloads", exist_ok=True)
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("thumbnails", exist_ok=True)
-
-app.mount("/files", StaticFiles(directory="outputs"), name="files")
-app.mount("/thumbnails", StaticFiles(directory="thumbnails"), name="thumbnails")
 
 supabase = create_client(
     os.getenv("SUPABASE_URL"),
@@ -37,15 +81,33 @@ supabase = create_client(
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
+# JWT verification
+supabase_url = os.getenv("SUPABASE_URL")
+jwks_client = PyJWKClient(f"{supabase_url}/.well-known/jwks.json")
+
+async def get_current_user(authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "")
+    try:
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        payload = pyjwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            options={"verify_exp": True, "verify_aud": False}
+        )
+        return payload
+    except pyjwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except pyjwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
 
 class VideoRequest(BaseModel):
     url: str
-    user_id: str
 
 
 class ExportRequest(BaseModel):
     clip_id: str
-    user_id: str
     video_url: str
     trim_start: float = 0
     trim_end: float = 100
@@ -81,12 +143,34 @@ def dedent_credits(user_id):
     return 0
 
 
+def validate_video_url(url: str):
+    parsed = urlparse(url)
+    if parsed.scheme not in ("https", "http"):
+        raise HTTPException(status_code=400, detail="URL must use http or https")
+    private_patterns = [
+        r"^localhost$", r"^127\.", r"^10\.", r"^172\.(1[6-9]|2\d|3[01])\.",
+        r"^192\.168\.", r"^0\.0\.0\.0$", r"^::1$", r"^metadata\.",
+    ]
+    hostname = parsed.hostname or ""
+    for pattern in private_patterns:
+        if re.match(pattern, hostname):
+            raise HTTPException(status_code=400, detail="URL pointing to private network not allowed")
+    return url
+
+
+def sanitize_drawtext(text: str) -> str:
+    return re.sub(r"[^\w\s@.,!?¿¡\-:;'\"()]", "", text)
+
+
 @app.post("/process")
-async def process_video(req: VideoRequest):
+async def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
+    check_rate_limit(f"process:{user['sub']}")
+    user_id = user["sub"]
     job_id = str(uuid.uuid4())
 
-    # Deduct credit server-side
-    user_result = supabase.table("users").select("credits,plan").eq("id", req.user_id).execute()
+    validate_video_url(req.url)
+
+    user_result = supabase.table("users").select("credits,plan").eq("id", user_id).execute()
     if not user_result.data:
         raise HTTPException(status_code=404, detail="User not found")
     user_data = user_result.data[0]
@@ -94,10 +178,11 @@ async def process_video(req: VideoRequest):
         raise HTTPException(status_code=402, detail="No credits remaining")
 
     if user_data["plan"] != "pro":
-        dedent_credits(req.user_id)
+        dedent_credits(user_id)
 
     video_path = f"downloads/{job_id}.mp4"
     audio_path = f"downloads/{job_id}.mp3"
+    local_files = [video_path, audio_path]
 
     try:
         ydl_opts = {
@@ -116,7 +201,7 @@ async def process_video(req: VideoRequest):
     # Generate a thumbnail for the source video
     thumb_path = f"thumbnails/{job_id}.jpg"
     generate_thumbnail(video_path, thumb_path)
-    thumb_url = f"{os.getenv('PUBLIC_URL', 'http://localhost:8000')}/thumbnails/{job_id}.jpg"
+    local_files.append(thumb_path)
 
     with open(audio_path, 'rb') as f:
         transcript = client.audio.transcriptions.create(
@@ -154,45 +239,66 @@ Return ONLY a JSON with this exact format:
     clips_data = json.loads(response.choices[0].message.content)
     output_clips = []
 
-    for i, clip in enumerate(clips_data["clips"]):
-        output_path = f"outputs/{job_id}_clip{i+1}.mp4"
-        duration = clip["end"] - clip["start"]
+    try:
+        for i, clip in enumerate(clips_data["clips"]):
+            output_path = f"outputs/{job_id}_clip{i+1}.mp4"
+            duration = clip["end"] - clip["start"]
 
-        subprocess.run([
-            'ffmpeg',
-            '-ss', str(clip["start"]),
-            '-i', video_path,
-            '-t', str(duration),
-            '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1',
-            '-c:v', 'libx264',
-            '-c:a', 'aac',
-            '-y', output_path
-        ], capture_output=True)
+            subprocess.run([
+                'ffmpeg',
+                '-ss', str(clip["start"]),
+                '-i', video_path,
+                '-t', str(duration),
+                '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1',
+                '-c:v', 'libx264',
+                '-c:a', 'aac',
+                '-y', output_path
+            ], capture_output=True)
 
-        clip_url = f"{os.getenv('PUBLIC_URL', 'http://localhost:8000')}/files/{job_id}_clip{i+1}.mp4"
+            local_files.append(output_path)
 
-        # Insert each clip into Supabase
-        supabase.table("clips").insert({
-            "user_id": req.user_id,
-            "title": clip["title"],
-            "status": "done",
-            "video_url": clip_url,
-            "thumbnail_url": thumb_url,
-            "duration": round(duration, 1)
-        }).execute()
+            # Upload to Supabase Storage
+            clip_storage_url = ""
+            try:
+                with open(output_path, 'rb') as f:
+                    storage_path = f"clips/{job_id}/{job_id}_clip{i+1}.mp4"
+                    supabase.storage.from_("clips").upload(storage_path, f)
+                    clip_storage_url = supabase.storage.from_("clips").get_public_url(storage_path)
+            except Exception as e:
+                print(f"Storage upload failed: {e}")
 
-        output_clips.append({
-            "clip": i + 1,
-            "title": clip["title"],
-            "reason": clip["reason"],
-            "start": clip["start"],
-            "end": clip["end"],
-            "file": clip_url,
-            "thumbnail_url": thumb_url
-        })
+            # Upload thumbnail to Supabase Storage
+            thumb_storage_url = ""
+            try:
+                with open(thumb_path, 'rb') as f:
+                    thumb_storage_path = f"thumbnails/{job_id}.jpg"
+                    supabase.storage.from_("clips").upload(thumb_storage_path, f)
+                    thumb_storage_url = supabase.storage.from_("clips").get_public_url(thumb_storage_path)
+            except Exception as e:
+                print(f"Thumbnail storage upload failed: {e}")
 
-    os.remove(video_path)
-    os.remove(audio_path)
+            supabase.table("clips").insert({
+                "user_id": user_id,
+                "title": clip["title"],
+                "status": "done",
+                "video_url": clip_storage_url,
+                "thumbnail_url": thumb_storage_url,
+                "duration": round(duration, 1)
+            }).execute()
+
+            output_clips.append({
+                "clip": i + 1,
+                "title": clip["title"],
+                "reason": clip["reason"],
+                "start": clip["start"],
+                "end": clip["end"],
+                "file": clip_storage_url,
+                "thumbnail_url": thumb_storage_url
+            })
+    finally:
+        for f in local_files:
+            try: os.unlink(f)
+            except OSError: pass
 
     return {
         "job_id": job_id,
@@ -202,10 +308,13 @@ Return ONLY a JSON with this exact format:
 
 
 @app.post("/export")
-async def export_clip(req: ExportRequest):
+async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)):
+    check_rate_limit(f"export:{user['sub']}")
+    user_id = user["sub"]
     job_id = str(uuid.uuid4())
     output_filename = f"{job_id}_export.mp4"
     output_path = f"outputs/{output_filename}"
+    local_files = []
 
     source_path = f"downloads/{job_id}_source.mp4"
     subprocess.run([
@@ -214,6 +323,7 @@ async def export_clip(req: ExportRequest):
 
     if not os.path.exists(source_path):
         raise HTTPException(status_code=400, detail="Could not download source video")
+    local_files.append(source_path)
 
     probe = subprocess.run([
         'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
@@ -225,105 +335,120 @@ async def export_clip(req: ExportRequest):
     trim_d = (req.trim_end - req.trim_start) / 100 * total_duration
     trim_d = max(trim_d, 2)
 
-    filter_chains = []
+    temp_files = []
 
-    # Build the filter chain step by step
-    # 1. Always scale to 9:16
-    vf = "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
-
-    # 2. Apply visual filter
-    if req.filter_style == "vivid":
-        vf = f"{vf},eq=saturation=1.5:contrast=1.1"
-    elif req.filter_style == "cinema":
-        vf = f"{vf},eq=contrast=1.2:brightness=-0.1,colorchannelmixer=.3:.4:.3:0:.3:.4:.3:0:.3:.4:.3"
-    elif req.filter_style == "bw":
-        vf = f"{vf},hue=s=0"
-    elif req.filter_style == "warm":
-        vf = f"{vf},colorbalance=rs=.3:gs=.1:bs=-.2"
-    elif req.filter_style == "cool":
-        vf = f"{vf},colorbalance=rs=-.2:gs=.1:bs=.3"
-
-    # 3. Subtitles
-    subtitle_text = req.subtitle_text or "PeakClip"
-    if req.subtitle_style != "none" and subtitle_text:
-        style_configs = {
-            "bold-yellow": "fontsize=h/18:fontcolor=yellow:borderw=3:bordercolor=black",
-            "white-outline": "fontsize=h/18:fontcolor=white:borderw=3:bordercolor=black",
-            "neon-green": "fontsize=h/18:fontcolor=#00ff88:borderw=2:bordercolor=#003322",
-            "minimal-white": "fontsize=h/16:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=8",
-            "tiktok-style": "fontsize=h/18:fontcolor=white:borderw=4:bordercolor=#fe2c55",
-        }
-        dt_params = style_configs.get(req.subtitle_style, style_configs["bold-yellow"])
-
-        pos_map = {"top": "y=20", "middle": "y=(h-text_h)/2", "bottom": "y=h-text_h-80"}
-        y_pos = pos_map.get(req.subtitle_position, pos_map["bottom"])
-
-        safe_text = subtitle_text.replace("'", "'\\\\\\''").replace(":", "\\:")
-        dt_filter = f"drawtext=text='{safe_text}':{dt_params}:{y_pos}:enable='between(t,0,{trim_d})'"
-        vf = f"{vf},{dt_filter}"
-
-    # 4. Watermark
-    if req.watermark_text:
-        pos_map_wm = {
-            "top-right": "x=w-tw-20:y=20",
-            "top-left": "x=20:y=20",
-            "bottom-right": "x=w-tw-20:y=h-th-20",
-            "bottom-left": "x=20:y=h-th-20",
-        }
-        wm_pos = pos_map_wm.get(req.watermark_position, pos_map_wm["top-right"])
-        safe_wm = req.watermark_text.replace("'", "'\\\\\\''").replace(":", "\\:")
-        wm_filter = f"drawtext=text='{safe_wm}':fontsize=h/28:fontcolor=white@0.8:borderw=2:bordercolor=black@0.5:{wm_pos}:enable='between(t,0,{trim_d})'"
-        vf = f"{vf},{wm_filter}"
-
-    cmd = [
-        'ffmpeg',
-        '-ss', str(trim_s),
-        '-i', source_path,
-        '-t', str(trim_d),
-        '-vf', vf,
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-c:a', 'aac',
-        '-y', output_path
-    ]
-
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise HTTPException(status_code=400, detail=f"Export error: {result.stderr[:500]}")
-
-    # Upload to Supabase Storage
-    public_url = ""
     try:
-        with open(output_path, 'rb') as f:
-            storage_path = f"exports/{job_id}_export.mp4"
-            supabase.storage.from_("clips").upload(storage_path, f)
-            public_url = supabase.storage.from_("clips").get_public_url(storage_path)
-    except Exception:
-        public_url = f"{os.getenv('PUBLIC_URL', 'http://localhost:8000')}/files/{output_filename}"
+        vf = "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
 
-    # Update clip record with the exported video URL
-    supabase.table("clips").update({
-        "video_url": public_url,
-        "status": "done"
-    }).eq("id", req.clip_id).execute()
+        if req.filter_style == "vivid":
+            vf = f"{vf},eq=saturation=1.5:contrast=1.1"
+        elif req.filter_style == "cinema":
+            vf = f"{vf},eq=contrast=1.2:brightness=-0.1,colorchannelmixer=.3:.4:.3:0:.3:.4:.3:0:.3:.4:.3"
+        elif req.filter_style == "bw":
+            vf = f"{vf},hue=s=0"
+        elif req.filter_style == "warm":
+            vf = f"{vf},colorbalance=rs=.3:gs=.1:bs=-.2"
+        elif req.filter_style == "cool":
+            vf = f"{vf},colorbalance=rs=-.2:gs=.1:bs=.3"
 
-    os.remove(source_path)
+        # 3. Subtitles via textfile to prevent injection
+        subtitle_text = req.subtitle_text or "PeakClip"
+        if req.subtitle_style != "none" and subtitle_text:
+            style_configs = {
+                "bold-yellow": "fontsize=h/18:fontcolor=yellow:borderw=3:bordercolor=black",
+                "white-outline": "fontsize=h/18:fontcolor=white:borderw=3:bordercolor=black",
+                "neon-green": "fontsize=h/18:fontcolor=#00ff88:borderw=2:bordercolor=#003322",
+                "minimal-white": "fontsize=h/16:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=8",
+                "tiktok-style": "fontsize=h/18:fontcolor=white:borderw=4:bordercolor=#fe2c55",
+            }
+            dt_params = style_configs.get(req.subtitle_style, style_configs["bold-yellow"])
 
-    return {
-        "success": True,
-        "video_url": public_url,
-        "message": "Clip exported successfully"
-    }
+            pos_map = {"top": "y=20", "middle": "y=(h-text_h)/2", "bottom": "y=h-text_h-80"}
+            y_pos = pos_map.get(req.subtitle_position, pos_map["bottom"])
+
+            safe_text = sanitize_drawtext(subtitle_text)
+            textfile = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+            textfile.write(safe_text)
+            textfile.close()
+            temp_files.append(textfile.name)
+            sub_path = textfile.name.replace("\\", "/")
+            dt_filter = f"drawtext=textfile='{sub_path}':{dt_params}:{y_pos}:enable='between(t,0,{trim_d})'"
+            vf = f"{vf},{dt_filter}"
+
+        # 4. Watermark via textfile
+        if req.watermark_text:
+            pos_map_wm = {
+                "top-right": "x=w-tw-20:y=20",
+                "top-left": "x=20:y=20",
+                "bottom-right": "x=w-tw-20:y=h-th-20",
+                "bottom-left": "x=20:y=h-th-20",
+            }
+            wm_pos = pos_map_wm.get(req.watermark_position, pos_map_wm["top-right"])
+            safe_wm = sanitize_drawtext(req.watermark_text)
+            wm_textfile = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+            wm_textfile.write(safe_wm)
+            wm_textfile.close()
+            temp_files.append(wm_textfile.name)
+            wm_sub_path = wm_textfile.name.replace("\\", "/")
+            wm_filter = f"drawtext=textfile='{wm_sub_path}':fontsize=h/28:fontcolor=white@0.8:borderw=2:bordercolor=black@0.5:{wm_pos}:enable='between(t,0,{trim_d})'"
+            vf = f"{vf},{wm_filter}"
+
+        cmd = [
+            'ffmpeg',
+            '-ss', str(trim_s),
+            '-i', source_path,
+            '-t', str(trim_d),
+            '-vf', vf,
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-c:a', 'aac',
+            '-y', output_path
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise HTTPException(status_code=400, detail=f"Export error: {result.stderr[:500]}")
+        local_files.append(output_path)
+
+        # Upload to Supabase Storage
+        public_url = ""
+        try:
+            with open(output_path, 'rb') as f:
+                storage_path = f"exports/{job_id}_export.mp4"
+                supabase.storage.from_("clips").upload(storage_path, f)
+                public_url = supabase.storage.from_("clips").get_public_url(storage_path)
+        except Exception as e:
+            print(f"Storage upload failed: {e}")
+
+        # Update clip record with the exported video URL
+        supabase.table("clips").update({
+            "video_url": public_url,
+            "status": "done"
+        }).eq("id", req.clip_id).eq("user_id", user_id).execute()
+
+        return {
+            "success": True,
+            "video_url": public_url,
+            "message": "Clip exported successfully"
+        }
+    finally:
+        for f in local_files:
+            try: os.unlink(f)
+            except OSError: pass
+        for f in temp_files:
+            try: os.unlink(f)
+            except OSError: pass
 
 
 @app.post("/create-checkout-session")
-async def create_checkout_session(data: dict):
+async def create_checkout_session(data: dict, user: dict = Depends(get_current_user)):
+    check_rate_limit(f"checkout:{user['sub']}")
+    user_id = user["sub"]
     price_id = data.get("price_id")
-    user_id = data.get("user_id")
     return_url = data.get("return_url", "http://localhost:3000/dashboard")
 
-    if not price_id or not user_id:
-        raise HTTPException(status_code=400, detail="Missing price_id or user_id")
+    if not price_id:
+        raise HTTPException(status_code=400, detail="Missing price_id")
 
     try:
         session = stripe.checkout.Session.create(
@@ -340,12 +465,26 @@ async def create_checkout_session(data: dict):
 
 
 @app.post("/stripe-webhook")
-async def stripe_webhook(payload: dict):
-    event = payload
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    if sig_header:
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, os.getenv("STRIPE_WEBHOOK_SECRET")
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid payload")
+        except stripe.error.SignatureVerificationError:
+            raise HTTPException(status_code=400, detail="Invalid signature")
+    else:
+        try:
+            event = json.loads(payload)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON")
     if event.get("type") == "checkout.session.completed":
         session = event["data"]["object"]
         user_id = session["metadata"]["user_id"]
-        # Determine plan from the price
         price_id = session.get("line_items", {}).get("data", [{}])[0].get("price", {}).get("id", "")
         plan_map = {
             "price_creator": "creator",
@@ -359,8 +498,9 @@ async def stripe_webhook(payload: dict):
     return {"received": True}
 
 
-@app.get("/clips/{user_id}")
-def get_user_clips(user_id: str):
+@app.get("/clips")
+def get_user_clips(user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
     result = supabase.table("clips").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
     return {"clips": result.data}
 

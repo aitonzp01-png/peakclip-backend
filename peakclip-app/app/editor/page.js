@@ -208,13 +208,14 @@ export default function Editor() {
     setExportStatus('Processing video...')
     setExportUrl('')
 
+    const { data: { session } } = await supabase.auth.getSession()
+
     try {
       const response = await fetch(`${BACKEND_URL}/export`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({
           clip_id: clipId,
-          user_id: user.id,
           video_url: clip?.video_url || '',
           trim_start: trimStart,
           trim_end: trimEnd,
