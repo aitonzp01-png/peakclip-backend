@@ -24,29 +24,29 @@ export default function Pipeline() {
     tl.to(barRef.current, {
       width: '25%',
       duration: 1.4,
-      ease: 'power2.out',
+      ease: 'power1.inOut',
       onComplete: () => { setProgress(25); setActiveStep(0) },
     })
-    .to({}, { duration: 0.3 })
+    .to({}, { duration: 0.2 })
     .to(barRef.current, {
       width: '50%',
       duration: 1.4,
-      ease: 'power2.out',
+      ease: 'power1.inOut',
       onComplete: () => { setProgress(50); setActiveStep(1) },
     })
-    .to({}, { duration: 0.3 })
+    .to({}, { duration: 0.2 })
     .to(barRef.current, {
       width: '75%',
       duration: 1.4,
-      ease: 'power2.out',
+      ease: 'power1.inOut',
       onComplete: () => { setProgress(75); setActiveStep(2) },
     })
-    .to({}, { duration: 0.3 })
+    .to({}, { duration: 0.2 })
     .to(barRef.current, {
       width: '100%',
       duration: 1.4,
-      ease: 'power2.out',
-      onComplete: () => { setProgress(100); setActiveStep(4) },
+      ease: 'power1.inOut',
+      onComplete: () => { setProgress(100); setActiveStep(3) },
     })
     .to({}, { duration: 0.5 })
     .to(barRef.current, { width: '0%', duration: 0.01, onComplete: () => { setProgress(0); setActiveStep(-1) } })
