@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { brand, brandGrad, brandDim, brandBorder } from '../../lib/tokens'
+import { motion } from 'framer-motion'
+import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong } from '../../lib/tokens'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
@@ -230,7 +231,12 @@ export default function Dashboard() {
         </div>
 
         {activeTab === 'generate' && (
-          <>
+          <motion.div
+            key="generate"
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          >
             <div className="process-card">
               <label className="process-label" htmlFor="video-url">VIDEO URL</label>
               <div className="process-row">
@@ -263,20 +269,33 @@ export default function Dashboard() {
             </div>
 
             {clips.length > 0 && (
-              <>
-                <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '20px', letterSpacing: '1px', marginBottom: '16px', color: '#fff' }}>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+              >
+                <h3 style={{
+                  fontFamily: "'Bebas Neue', sans-serif", fontSize: '20px',
+                  letterSpacing: '1px', marginBottom: '16px', color: '#fff',
+                  borderBottom: '1px solid var(--border-soft)', paddingBottom: '12px',
+                }}>
                   Recent Clips
                 </h3>
                 <div className="dash-clip-grid">
                   {clips.slice(0, 3).map(clip => renderClipCard(clip))}
                 </div>
-              </>
+              </motion.div>
             )}
-          </>
+          </motion.div>
         )}
 
         {activeTab === 'clips' && (
-          <>
+          <motion.div
+            key="clips"
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          >
             {clips.length === 0 ? (
               <div className="dash-empty">
                 <div className="dash-empty-icon">🎬</div>
@@ -289,47 +308,75 @@ export default function Dashboard() {
                 </button>
               </div>
             ) : (
-              <div className="dash-clip-grid">
-                {clips.map(clip => renderClipCard(clip))}
-              </div>
-            )}
-          </>
-        )}
-
-        {activeTab === 'upgrade' && (
-          <div className="plans-grid">
-            {plans.map((p, i) => (
-              <div key={i} className={`plan-card${p.popular ? ' popular' : ''}`}>
-                {p.popular && <div className="plan-popular-badge">MOST POPULAR</div>}
-                <div className="plan-name" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '1px' }}>
-                  {p.name.toUpperCase()}
+              <>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  marginBottom: '16px', borderBottom: '1px solid var(--border-soft)',
+                  paddingBottom: '12px',
+                }}>
+                  <h3 style={{
+                    fontFamily: "'Bebas Neue', sans-serif", fontSize: '20px',
+                    letterSpacing: '1px', color: '#fff', margin: 0,
+                  }}>
+                    Your Clips
+                  </h3>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: "'Poppins', sans-serif" }}>
+                    {clips.length} total
+                  </span>
                 </div>
-                <div className="plan-price" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-                  {p.price}<span className="plan-price-period">/month</span>
-                </div>
-                <div className="plan-clips">{p.clips}</div>
-                <div className="plan-features">
-                  {p.features.map((f, j) => (
-                    <div key={j} className="plan-feature">
-                      <span className="plan-feature-check" style={{ color: brand }}>✓</span> {f}
+                <div className="dash-clip-grid">
+                  {clips.map((clip, i) => (
+                    <div key={clip.id} style={{ animationDelay: `${i * 0.05}s` }}>
+                      {renderClipCard(clip)}
                     </div>
                   ))}
                 </div>
-                <button
-                  disabled={p.disabled || checkoutLoading}
-                  onClick={() => p.price_id && handleCheckout(p.price_id)}
-                  className="plan-btn"
-                  style={{
-                    background: p.disabled ? 'var(--card)' : p.popular ? brandGrad : `${brand}22`,
-                    color: p.disabled ? 'var(--text-dim)' : p.popular ? '#000' : brand,
-                    border: p.disabled ? '1px solid var(--border)' : p.popular ? 'none' : `1px solid ${brand}44`
-                  }}
-                >
-                  {checkoutLoading ? 'Redirecting...' : p.cta}
-                </button>
-              </div>
-            ))}
-          </div>
+              </>
+            )}
+          </motion.div>
+        )}
+
+        {activeTab === 'upgrade' && (
+          <motion.div
+            key="upgrade"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div className="plans-grid">
+              {plans.map((p, i) => (
+                <div key={i} className={`plan-card${p.popular ? ' popular' : ''}`}>
+                  {p.popular && <div className="plan-popular-badge">MOST POPULAR</div>}
+                  <div className="plan-name" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '1px' }}>
+                    {p.name.toUpperCase()}
+                  </div>
+                  <div className="plan-price" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                    {p.price}<span className="plan-price-period">/month</span>
+                  </div>
+                  <div className="plan-clips">{p.clips}</div>
+                  <div className="plan-features">
+                    {p.features.map((f, j) => (
+                      <div key={j} className="plan-feature">
+                        <span className="plan-feature-check" style={{ color: brand }}>✓</span> {f}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    disabled={p.disabled || checkoutLoading}
+                    onClick={() => p.price_id && handleCheckout(p.price_id)}
+                    className="plan-btn"
+                    style={{
+                      background: p.disabled ? 'var(--card)' : p.popular ? brandGrad : `${brand}22`,
+                      color: p.disabled ? 'var(--text-dim)' : p.popular ? '#000' : brand,
+                      border: p.disabled ? '1px solid var(--border)' : p.popular ? 'none' : `1px solid ${brand}44`
+                    }}
+                  >
+                    {checkoutLoading ? 'Redirecting...' : p.cta}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </motion.div>
         )}
       </main>
     </div>
@@ -337,7 +384,13 @@ export default function Dashboard() {
 
   function renderClipCard(clip) {
     return (
-      <div key={clip.id} className="dash-clip-card">
+      <motion.div
+        key={clip.id}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        className="dash-clip-card"
+      >
         <div className="dash-clip-thumb">
           {clip.thumbnail_url ? (
             <img src={clip.thumbnail_url} alt="" onError={e => { e.target.style.display = 'none' }} />
@@ -347,6 +400,7 @@ export default function Dashboard() {
               <span className="dash-clip-thumb-label">{clip.status === 'processing' ? 'Processing...' : 'No preview'}</span>
             </div>
           )}
+          <div className="dash-clip-thumb-overlay" />
           <span className={`dash-clip-status-badge ${clip.status === 'done' ? 'done' : clip.status === 'processing' ? 'processing' : 'error'}`}>
             {clip.status === 'done' ? 'Ready' : clip.status === 'processing' ? 'Processing' : 'Failed'}
           </span>
@@ -391,7 +445,7 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-      </div>
+      </motion.div>
     )
   }
 }

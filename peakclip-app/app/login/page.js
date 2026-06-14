@@ -37,9 +37,28 @@ export default function Login() {
       return
     }
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}${dashboardUrl()}` } })
-      if (error) setMessage({ type: 'error', text: error.message })
-      else setMessage({ type: 'success', text: 'Check your email to confirm your account' })
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}${dashboardUrl()}` } })
+      if (error) {
+        setMessage({ type: 'error', text: error.message })
+        return
+      }
+
+      if (data?.user?.id) {
+        try {
+          await fetch('/api/auth/auto-confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: data.user.id })
+          })
+        } catch {}
+      }
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+      if (signInError) {
+        setMessage({ type: 'success', text: 'Account created! Check your email to confirm, then sign in.' })
+      } else {
+        window.location.href = dashboardUrl()
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) setMessage({ type: 'error', text: error.message })

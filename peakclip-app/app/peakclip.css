@@ -1192,6 +1192,13 @@
   justify-content: center;
 }
 
+.dash-clip-thumb-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.6) 100%);
+  pointer-events: none;
+}
+
 .dash-clip-thumb video,
 .dash-clip-thumb img {
   width: 100%;
