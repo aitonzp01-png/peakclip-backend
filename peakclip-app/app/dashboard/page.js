@@ -286,17 +286,17 @@ export default function Dashboard() {
               <div style={{
                 fontSize: 'clamp(28px, 4vw, 42px)', color: textPrimary,
                 lineHeight: 1.2, marginBottom: '12px',
-                fontFamily: fonts.display, letterSpacing: '10px',
+                fontFamily: fonts.display, letterSpacing: '14px',
               }}>
                 TURN LONG VIDEOS INTO{' '}
                 <span style={{
                   background: 'linear-gradient(135deg, #D9B44A, #E8C766)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  letterSpacing: '10px',
+                  letterSpacing: '14px',
                 }}>VIRAL SHORTS</span>
               </div>
               <div style={{
-                fontFamily: fonts.body, fontSize: '11.5px', color: textSecondary,
+                fontFamily: fonts.body, fontSize: '10.5px', color: textSecondary,
                 maxWidth: '480px', margin: '0 auto', lineHeight: 1.7,
               }}>
                 Extract high-scoring clips, generate animated captions, and auto-crop horizontal videos into high-impact vertical format in one click.
