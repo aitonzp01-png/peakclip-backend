@@ -28,6 +28,20 @@ export async function exportClip(clipId, options) {
   return response
 }
 
+export async function createClip(userId, clipData) {
+  if (!userId) return null
+  const { data, error } = await getSupabaseClient().from('clips').insert({
+    user_id: userId,
+    title: clipData.title || 'Untitled Clip',
+    video_url: clipData.video_url || '',
+    thumbnail_url: clipData.thumbnail_url || '',
+    duration: clipData.duration || 0,
+    status: clipData.status || 'done',
+  }).select('id').single()
+  if (error) { console.error('createClip error:', error); return null }
+  return data
+}
+
 export async function loadClips(userId) {
   if (!userId) return []
   const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).order('created_at', { ascending: false })

@@ -40,6 +40,15 @@ export default function Dashboard() {
       loadClips(user.id)
     }
     getUser()
+
+    // Reload clips when returning to dashboard from editor
+    const onFocus = () => {
+      const params = new URLSearchParams(window.location.search)
+      const p = params.get('plan')
+      if (p === 'creator' || p === 'pro') setActiveTab('upgrade')
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
   }, [])
 
   const loadClips = async (userId) => {
@@ -454,8 +463,8 @@ export default function Dashboard() {
             </div>
           )}
           <div className="dash-clip-thumb-overlay" />
-          <span className={`dash-clip-status-badge ${clip.status === 'done' ? 'done' : clip.status === 'processing' ? 'processing' : 'error'}`}>
-            {clip.status === 'done' ? 'Ready' : clip.status === 'processing' ? 'Processing' : 'Failed'}
+          <span className={`dash-clip-status-badge ${clip.status === 'done' ? 'done' : clip.status === 'draft' ? 'draft' : clip.status === 'processing' ? 'processing' : 'error'}`}>
+            {clip.status === 'done' ? 'Ready' : clip.status === 'draft' ? 'Draft' : clip.status === 'processing' ? 'Processing' : 'Failed'}
           </span>
         </div>
         <div className="dash-clip-info">
@@ -474,7 +483,7 @@ export default function Dashboard() {
             </span>
           </div>
           <div className="dash-clip-actions">
-            {clip.status === 'done' && (
+            {(clip.status === 'done' || clip.status === 'draft') && (
               <>
                 <button
                   onClick={() => window.location.href = `/editor?id=${clip.id}`}

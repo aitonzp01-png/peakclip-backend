@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getSupabaseClient } from '../../lib/supabase'
+import { createClip } from '../../lib/api'
 import useEditorStore from './store/editorStore'
 import EditorTopBar from './components/EditorTopBar'
 import EditorSidebar from './components/EditorSidebar'
@@ -25,23 +26,44 @@ export default function EditorPage() {
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const id = params.get('id')
-    const urlParam = params.get('url')
+    const init = async () => {
+      const { data: { user } } = await getSupabaseClient().auth.getUser()
+      if (!user) { window.location.href = '/login'; return }
+      setUser(user)
 
-    if (id) {
-      setClipId(id)
-      loadClipData(id)
-    } else {
-      const demoId = 'demo_' + Date.now()
-      setClipId(demoId)
-      const store = useEditorStore.getState()
-      store.setSubtitleText('Drop a video or paste a URL to start')
-      store.setSubtitleStyle(0)
+      const params = new URLSearchParams(window.location.search)
+      const id = params.get('id')
+      const urlParam = params.get('url')
+
+      if (id) {
+        setClipId(id)
+        await loadClipData(id, user)
+      } else if (!urlParam) {
+        // Create a clip record in Supabase so it shows in dashboard
+        const saved = await createClip(user.id, { title: 'New Project', duration: 0, status: 'draft' })
+        if (saved?.id) {
+          window.history.replaceState(null, '', `/editor?id=${saved.id}`)
+          setClipId(saved.id)
+          setClip({ id: saved.id, title: 'New Project', video_url: null, duration: 0 })
+        } else {
+          const demoId = 'demo_' + Date.now()
+          setClipId(demoId)
+          const store = useEditorStore.getState()
+          store.setSubtitleText('Drop a video or paste a URL to start')
+          store.setSubtitleStyle(0)
+        }
+      } else {
+        const demoId = 'demo_' + Date.now()
+        setClipId(demoId)
+        const store = useEditorStore.getState()
+        store.setSubtitleText('Drop a video or paste a URL to start')
+        store.setSubtitleStyle(0)
+      }
+
       setLoading(false)
     }
 
-    loadUser()
+    init()
 
     // Safety timeout — force stop loading after 10s
     setTimeout(() => setLoading(false), 10000)
@@ -53,7 +75,8 @@ export default function EditorPage() {
     setUser(user)
   }
 
-  const loadClipData = async (id) => {
+  const loadClipData = async (id, currentUser) => {
+    const u = currentUser || (await getSupabaseClient().auth.getUser())?.data?.user
     try {
       const params = new URLSearchParams(window.location.search)
       const urlParam = params.get('url')
@@ -63,7 +86,14 @@ export default function EditorPage() {
         const store = useEditorStore.getState()
         if (urlParam) {
           const title = urlParam.split('/').pop()?.slice(0, 40) || 'Video Clip'
-          setClip({ id, title, video_url: urlParam, duration: 60, url: urlParam })
+          // Save to Supabase so it appears in dashboard
+          const saved = u?.id ? await createClip(u.id, { title, video_url: urlParam, duration: 60 }) : null
+          const realId = saved?.id || id
+          if (saved?.id) {
+            window.history.replaceState(null, '', `/editor?id=${saved.id}&url=${encodeURIComponent(urlParam)}`)
+          }
+          setClip({ id: realId, title, video_url: urlParam, duration: 60, url: urlParam })
+          setClipId(realId)
           store.setSubtitleText(title)
         } else {
           store.setSubtitleText('Demo clip loaded')
@@ -114,7 +144,13 @@ export default function EditorPage() {
       const urlParam = params.get('url')
       if (urlParam) {
         const title = urlParam.split('/').pop()?.slice(0, 40) || 'Video Clip'
-        setClip({ id, title, video_url: urlParam, duration: 60, url: urlParam })
+        const saved = u?.id ? await createClip(u.id, { title, video_url: urlParam, duration: 60 }) : null
+        const realId = saved?.id || id
+        if (saved?.id) {
+          window.history.replaceState(null, '', `/editor?id=${saved.id}&url=${encodeURIComponent(urlParam)}`)
+          setClipId(realId)
+        }
+        setClip({ id: realId, title, video_url: urlParam, duration: 60, url: urlParam })
         store.setSubtitleText(title)
       } else {
         store.setSubtitleText('Demo clip loaded')

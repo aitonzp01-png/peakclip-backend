@@ -2219,6 +2219,12 @@ body {
   border: 1px solid var(--peak-border);
 }
 
+.dash-clip-status-badge.draft {
+  background: rgba(217,180,74,0.08);
+  color: #D9B44A;
+  border: 1px solid rgba(217,180,74,0.2);
+}
+
 .dash-clip-status-badge.processing {
   background: rgba(59,130,246,0.15);
   color: #60a5fa;

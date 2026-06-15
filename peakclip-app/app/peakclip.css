@@ -1246,6 +1246,12 @@
   border: 1px solid rgba(34, 197, 94, 0.2);
 }
 
+.dash-clip-status-badge.draft {
+  background: rgba(217, 180, 74, 0.08);
+  color: var(--brand-primary);
+  border: 1px solid rgba(217, 180, 74, 0.2);
+}
+
 .dash-clip-status-badge.processing {
   background: var(--brand-dim);
   color: var(--brand-primary);
