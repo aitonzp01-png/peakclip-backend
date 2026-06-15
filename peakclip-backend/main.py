@@ -202,6 +202,9 @@ class ExportRequest(BaseModel):
     music_track: str = "none"
     music_volume: int = 30
     filter_style: str = "none"
+    resolution: str = "1080p"
+    format: str = "mp4"
+    fps: int = 30
 
 
 @app.get("/")
@@ -400,7 +403,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
     check_rate_limit(f"export:{user['sub']}")
     user_id = user["sub"]
     job_id = str(uuid.uuid4())
-    output_filename = f"{job_id}_export.mp4"
+    output_ext = req.format if req.format in ("mov", "webm") else "mp4"
+    output_filename = f"{job_id}_export.{output_ext}"
     output_path = f"outputs/{output_filename}"
     local_files = []
 
@@ -423,10 +427,15 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
     trim_d = (req.trim_end - req.trim_start) / 100 * total_duration
     trim_d = max(trim_d, 2)
 
+    # Resolution mapping
+    res_map = {"720p": "720:1280", "1080p": "1080:1920", "4k": "2160:3840"}
+    target_res = res_map.get(req.resolution, "1080:1920")
+
     temp_files = []
 
     try:
-        vf = "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
+        # Build filter chain
+        vf = f"scale={target_res}:force_original_aspect_ratio=decrease,pad={target_res}:(ow-iw)/2:(oh-ih)/2"
 
         if req.filter_style == "vivid":
             vf = f"{vf},eq=saturation=1.5:contrast=1.1"
@@ -439,7 +448,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         elif req.filter_style == "cool":
             vf = f"{vf},colorbalance=rs=-.2:gs=.1:bs=.3"
 
-        # 3. Subtitles via textfile to prevent injection
+        # Subtitles via textfile
         subtitle_text = req.subtitle_text or "PeakClip"
         if req.subtitle_style != "none" and subtitle_text:
             style_configs = {
@@ -450,10 +459,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                 "tiktok-style": "fontsize=h/18:fontcolor=white:borderw=4:bordercolor=#fe2c55",
             }
             dt_params = style_configs.get(req.subtitle_style, style_configs["bold-yellow"])
-
             pos_map = {"top": "y=20", "middle": "y=(h-text_h)/2", "bottom": "y=h-text_h-80"}
             y_pos = pos_map.get(req.subtitle_position, pos_map["bottom"])
-
             safe_text = sanitize_drawtext(subtitle_text)
             textfile = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
             textfile.write(safe_text)
@@ -463,7 +470,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             dt_filter = f"drawtext=textfile='{sub_path}':{dt_params}:{y_pos}:enable='between(t,0,{trim_d})'"
             vf = f"{vf},{dt_filter}"
 
-        # 4. Watermark via textfile
+        # Watermark via textfile
         if req.watermark_text:
             pos_map_wm = {
                 "top-right": "x=w-tw-20:y=20",
@@ -481,17 +488,69 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             wm_filter = f"drawtext=textfile='{wm_sub_path}':fontsize=h/28:fontcolor=white@0.8:borderw=2:bordercolor=black@0.5:{wm_pos}:enable='between(t,0,{trim_d})'"
             vf = f"{vf},{wm_filter}"
 
+        # Audio filter chain
+        af_parts = []
+
+        # Background music mixing
+        music_path = None
+        if req.music_track not in ("none", "", 0, "0", None):
+            music_path = f"downloads/{job_id}_music.mp3"
+            try:
+                # Map track IDs to SoundHelix free MP3 URLs
+                track_map = {
+                    "epic": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+                    "hype": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+                    "chill": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+                    "gaming": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+                    "viral": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+                }
+                music_url = track_map.get(str(req.music_track))
+                if music_url:
+                    subprocess.run([
+                        'ffmpeg', '-i', music_url, '-t', str(trim_d + 1),
+                        '-q:a', '0', music_path, '-y'
+                    ], capture_output=True)
+                    if os.path.exists(music_path):
+                        local_files.append(music_path)
+                        vol = max(0, min(req.music_volume, 100)) / 100.0
+                        af_parts.append(f"[1:a]volume={vol}[music]")
+                        af_parts.append("[0:a][music]amix=inputs=2:duration=first:dropout_transition=2")
+            except Exception as e:
+                print(f"Music mixing failed: {e}")
+
+        # Apply audio filter if any
+        af_filter = None
+        if af_parts:
+            af_filter = ";".join(af_parts)
+
+        # Video codec selection
+        vcodec = "libx264"
+        acodec = "aac"
+        if output_ext == "webm":
+            vcodec = "libvpx-vp9"
+            acodec = "libopus"
+        elif output_ext == "mov":
+            vcodec = "libx264"
+            acodec = "aac"
+
         cmd = [
             'ffmpeg',
             '-ss', str(trim_s),
             '-i', source_path,
+        ]
+        if music_path and os.path.exists(music_path):
+            cmd.extend(['-i', music_path])
+        cmd.extend([
             '-t', str(trim_d),
             '-vf', vf,
-            '-c:v', 'libx264',
+            '-r', str(req.fps),
+            '-c:v', vcodec,
             '-preset', 'fast',
-            '-c:a', 'aac',
-            '-y', output_path
-        ]
+            '-c:a', acodec,
+        ])
+        if af_filter:
+            cmd.extend(['-filter_complex', af_filter])
+        cmd.extend(['-y', output_path])
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
@@ -502,13 +561,13 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         public_url = ""
         try:
             with open(output_path, 'rb') as f:
-                storage_path = f"exports/{job_id}_export.mp4"
+                storage_path = f"exports/{output_filename}"
                 supabase.storage.from_("clips").upload(storage_path, f)
                 public_url = supabase.storage.from_("clips").get_public_url(storage_path)
         except Exception as e:
             print(f"Storage upload failed: {e}")
 
-        # Update clip record with the exported video URL
+        # Update clip record
         supabase.table("clips").update({
             "video_url": public_url,
             "status": "done"

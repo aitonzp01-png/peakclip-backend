@@ -50,14 +50,14 @@ export default function EditorPage() {
           setClipId(demoId)
           const store = useEditorStore.getState()
           store.setSubtitleText('Drop a video or paste a URL to start')
-          store.setSubtitleStyle(0)
+          store.setSubtitleStyle('bold-yellow')
         }
       } else {
         const demoId = 'demo_' + Date.now()
         setClipId(demoId)
         const store = useEditorStore.getState()
         store.setSubtitleText('Drop a video or paste a URL to start')
-        store.setSubtitleStyle(0)
+        store.setSubtitleStyle('bold-yellow')
       }
 
       setLoading(false)
@@ -98,9 +98,9 @@ export default function EditorPage() {
         } else {
           store.setSubtitleText('Demo clip loaded')
         }
-        store.setSubtitleStyle(0)
-        store.setMusic(1)
-        store.setMusicVolume(0.3)
+        store.setSubtitleStyle('bold-yellow')
+        store.setMusic('chill')
+        store.setMusicVolume(30)
         setLoading(false)
         return
       }
@@ -121,14 +121,14 @@ export default function EditorPage() {
       // Auto-generate AI subtitles after clip loads
       setTimeout(() => {
         store.setSubtitleText('AI subtitles generated automatically')
-        store.setSubtitleStyle(0)
+        store.setSubtitleStyle('bold-yellow')
         store.showHint('Auto-captions generated')
       }, 1200)
 
       // Auto-set background music
       setTimeout(() => {
-        store.setMusic(1)
-        store.setMusicVolume(0.3)
+        store.setMusic('chill')
+        store.setMusicVolume(30)
       }, 2000)
 
       // Auto-detect hook and set trim
@@ -154,10 +154,10 @@ export default function EditorPage() {
         store.setSubtitleText(title)
       } else {
         store.setSubtitleText('Demo clip loaded')
-        store.setSubtitleStyle(0)
+        store.setSubtitleStyle('bold-yellow')
       }
-      store.setMusic(1)
-      store.setMusicVolume(0.3)
+      store.setMusic('chill')
+      store.setMusicVolume(30)
     }
     setLoading(false)
   }

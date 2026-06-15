@@ -8,11 +8,10 @@ import { updateClip } from '../../../lib/api'
 
 export default function EditorTopBar({ videoRef }) {
   const {
-    clip, isPlaying, volume, playbackSpeed,
-    aspectRatio, saving, exportStatus, user,
-    setVolume, setPlaybackSpeed, setIsPlaying,
-    setAspectRatio, setShowExportModal, setSaving,
-    setExportStatus, setExportUrl, setKeyboardHint, showHint,
+    clip, volume, playbackSpeed,
+    aspectRatio, user,
+    setVolume, setPlaybackSpeed,
+    setAspectRatio, setShowExportModal, setKeyboardHint, showHint,
   } = useEditorStore()
 
   const [editingTitle, setEditingTitle] = useState(false)
@@ -67,48 +66,9 @@ export default function EditorTopBar({ videoRef }) {
     window.location.href = '/login'
   }
 
-  const handleExport = async () => {
+  const handleExport = () => {
     if (!clip?.id || !user) return
-    setSaving(true)
-    setExportStatus('Processing export...')
-    setExportUrl('')
-
-    const { getSupabaseClient } = await import('../../../lib/supabase')
-    const { data: { session } } = await getSupabaseClient().auth.getSession()
-
-    try {
-      const store = useEditorStore.getState()
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/export`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({
-          clip_id: clip.id,
-          video_url: clip.video_url || '',
-          trim_start: store.trimStart,
-          trim_end: store.trimEnd,
-          subtitle_text: store.subtitleText,
-          subtitle_style: store.subtitleStyle,
-          subtitle_position: store.subtitlePosition,
-          watermark_text: store.watermark,
-          watermark_position: store.watermarkPosition,
-          music_track: store.music,
-          music_volume: store.musicVolume,
-          filter_style: store.activeFilter,
-        })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setExportStatus('Clip exported successfully!')
-        setExportUrl(data.video_url)
-      } else {
-        const err = await response.text()
-        setExportStatus(`Export failed: ${err.slice(0, 100)}`)
-      }
-    } catch {
-      setExportStatus('Export server unavailable. Try again later.')
-    }
-    setSaving(false)
+    setShowExportModal(true)
   }
 
   const handleVolumeChange = (e) => {
@@ -246,21 +206,21 @@ export default function EditorTopBar({ videoRef }) {
         <div style={{ width: '1px', height: '24px', background: borderSoft }} />
 
         {/* Export button */}
-        <button onClick={handleExport} disabled={saving}
+        <button onClick={handleExport}
           style={{
             background: brandGrad, color: '#000', border: 'none',
             borderRadius: '10px', padding: '10px 24px', fontWeight: '700',
-            cursor: saving ? 'not-allowed' : 'pointer', fontSize: '13px',
-            fontFamily: fonts.body, opacity: saving ? 0.5 : 1,
+            cursor: 'pointer', fontSize: '13px',
+            fontFamily: fonts.body,
             display: 'flex', alignItems: 'center', gap: '8px',
             transition: 'all 0.2s', letterSpacing: '0.5px',
           }}
-          onMouseEnter={e => { if (!saving) e.currentTarget.style.boxShadow = `0 0 24px ${brandGlow}` }}
+          onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 0 24px ${brandGlow}` }}
           onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none' }}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M8 1L8 11M8 11L4 7M8 11L12 7M2 14H14" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          {saving ? 'Exporting...' : 'Export'}
+          Export
         </button>
 
         {/* Profile with dropdown */}

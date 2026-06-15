@@ -58,7 +58,7 @@ export default function AIPanel() {
       switch (toolId) {
         case 'auto-captions':
           s.setSubtitleText('AI-generated subtitles for maximum engagement')
-          s.setSubtitleStyle(0)
+          s.setSubtitleStyle('bold-yellow')
           s.showHint('Auto-captions applied')
           break
         case 'hook-detection':
