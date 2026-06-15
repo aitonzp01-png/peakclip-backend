@@ -42,6 +42,13 @@ export async function createClip(userId, clipData) {
   return data
 }
 
+export async function updateClip(clipId, updates) {
+  if (!clipId) return null
+  const { error } = await getSupabaseClient().from('clips').update(updates).eq('id', clipId)
+  if (error) { console.error('updateClip error:', error); return null }
+  return true
+}
+
 export async function loadClips(userId) {
   if (!userId) return []
   const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).order('created_at', { ascending: false })

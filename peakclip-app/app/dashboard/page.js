@@ -292,9 +292,9 @@ export default function Dashboard() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
           >
-            <div className="process-card">
-              <label className="process-label" htmlFor="video-url">VIDEO URL</label>
-              <div className="process-row">
+            <div className="process-card" style={{ textAlign: 'center' }}>
+              <label className="process-label" htmlFor="video-url" style={{ textAlign: 'center' }}>VIDEO URL</label>
+              <div className="process-row" style={{ justifyContent: 'center', maxWidth: '680px', margin: '0 auto' }}>
                 <input
                   id="video-url"
                   type="text"
@@ -304,22 +304,37 @@ export default function Dashboard() {
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                   className="process-input"
                 />
-                <button onClick={handleSubmit} disabled={loading} className="process-btn">
-                  {loading ? 'Processing...' : <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px', verticalAlign: 'middle' }}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Generate Clips</>}
+                <button onClick={handleSubmit} disabled={loading} className="process-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                  {loading ? 'Processing...' : <><span style={{ display: 'flex' }}>{icons.lightning}</span>Generate Clips</>}
                 </button>
               </div>
 
               {status && (
-                <div className="process-status" style={{ marginTop: '20px' }}>
-                  {status}
+                <div className="process-status" style={{ marginTop: '20px', maxWidth: '680px', marginLeft: 'auto', marginRight: 'auto' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                    <span style={{ display: 'flex', color: 'inherit', opacity: 0.6 }}>{icons.sparkles}</span>
+                    {status}
+                  </span>
                 </div>
               )}
 
-              <div className="process-features">
-                <span className="process-feature">AI viral detection</span>
-                <span className="process-feature">Auto subtitles</span>
-                <span className="process-feature">9:16 format</span>
-                <span className="process-feature">Smart trimming</span>
+              <div className="process-features" style={{ justifyContent: 'center', gap: '32px' }}>
+                <span className="process-feature" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ display: 'flex', opacity: 0.5 }}>{icons.sparkles}</span>
+                  AI viral detection
+                </span>
+                <span className="process-feature" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ display: 'flex', opacity: 0.5 }}>{icons.captions}</span>
+                  Auto subtitles
+                </span>
+                <span className="process-feature" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ display: 'flex', opacity: 0.5 }}>{icons.mobile}</span>
+                  9:16 format
+                </span>
+                <span className="process-feature" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ display: 'flex', opacity: 0.5 }}>{icons.scissors}</span>
+                  Smart trimming
+                </span>
               </div>
             </div>
 

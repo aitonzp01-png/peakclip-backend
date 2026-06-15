@@ -1,8 +1,10 @@
 'use client'
+import { useState, useEffect, useRef } from 'react'
 import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
 import { formatTime, aspectRatios } from '../../../lib/utils'
 import useEditorStore from '../store/editorStore'
 import icons from '../../../lib/icons'
+import { updateClip } from '../../../lib/api'
 
 export default function EditorTopBar({ videoRef }) {
   const {
@@ -12,6 +14,58 @@ export default function EditorTopBar({ videoRef }) {
     setAspectRatio, setShowExportModal, setSaving,
     setExportStatus, setExportUrl, setKeyboardHint, showHint,
   } = useEditorStore()
+
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleInput, setTitleInput] = useState('')
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const titleInputRef = useRef(null)
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    if (editingTitle && titleInputRef.current) {
+      titleInputRef.current.focus()
+      titleInputRef.current.select()
+    }
+  }, [editingTitle])
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setShowUserMenu(false)
+      }
+    }
+    if (showUserMenu) {
+      document.addEventListener('mousedown', handleClick)
+      return () => document.removeEventListener('mousedown', handleClick)
+    }
+  }, [showUserMenu])
+
+  const startEditingTitle = () => {
+    setTitleInput(clip?.title || 'New Project')
+    setEditingTitle(true)
+  }
+
+  const saveTitle = async () => {
+    const trimmed = titleInput.trim()
+    if (!trimmed) { setEditingTitle(false); return }
+    if (clip?.id && !clip.id.startsWith('demo_')) {
+      await updateClip(clip.id, { title: trimmed })
+    }
+    const store = useEditorStore.getState()
+    store.setClip({ ...clip, title: trimmed })
+    setEditingTitle(false)
+  }
+
+  const handleTitleKeyDown = (e) => {
+    if (e.key === 'Enter') saveTitle()
+    if (e.key === 'Escape') setEditingTitle(false)
+  }
+
+  const handleLogout = async () => {
+    const { getSupabaseClient } = await import('../../../lib/supabase')
+    await getSupabaseClient().auth.signOut()
+    window.location.href = '/login'
+  }
 
   const handleExport = async () => {
     if (!clip?.id || !user) return
@@ -95,14 +149,39 @@ export default function EditorTopBar({ videoRef }) {
           }}>PEAKCLIP</span>
         </div>
         <div style={{ width: '1px', height: '28px', background: borderSoft }} />
-        <div className="editor-topbar-project" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ fontSize: '13px', color: textSecondary, fontFamily: fonts.body, fontWeight: '500' }}>
-            {clip?.title?.slice(0, 30) || 'New Project'}
-          </div>
-          {clip?.video_url && (
+        <div className="editor-topbar-project" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+          onClick={!editingTitle ? startEditingTitle : undefined}>
+          {editingTitle ? (
+            <input
+              ref={titleInputRef}
+              type="text"
+              value={titleInput}
+              onChange={e => setTitleInput(e.target.value)}
+              onBlur={saveTitle}
+              onKeyDown={handleTitleKeyDown}
+              onClick={e => e.stopPropagation()}
+              style={{
+                fontSize: '13px', fontFamily: fonts.body, fontWeight: '500',
+                color: textPrimary, background: bgSecondary,
+                border: `1px solid ${brandBorder}`, borderRadius: '6px',
+                padding: '4px 8px', outline: 'none', width: '180px',
+              }}
+            />
+          ) : (
+            <>
+              <span style={{
+                fontSize: '13px', color: textSecondary, fontFamily: fonts.body,
+                fontWeight: '500', borderBottom: `1px dashed ${borderSoft}`,
+              }}>
+                {clip?.title?.slice(0, 30) || 'New Project'}
+              </span>
+              <span style={{ color: textDim, opacity: 0.4, display: 'flex' }}>{icons.pencil}</span>
+            </>
+          )}
+          {clip?.video_url && !editingTitle && (
             <a href={clip.video_url} target="_blank" rel="noopener noreferrer"
               style={{ fontSize: '11px', color: brand, textDecoration: 'none', opacity: 0.7 }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '3px', verticalAlign: 'middle' }}><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Source
+              {icons.externalLink} Source
             </a>
           )}
         </div>
@@ -184,17 +263,77 @@ export default function EditorTopBar({ videoRef }) {
           {saving ? 'Exporting...' : 'Export'}
         </button>
 
-        {/* Profile */}
-        <div style={{
-          width: '34px', height: '34px', borderRadius: '50%',
-          background: brandGrad, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', fontSize: '13px', fontWeight: '700',
-          color: '#000', cursor: 'pointer',
-          border: `2px solid ${brandDim}`,
-        }}>
-          {user?.email?.[0]?.toUpperCase() || 'U'}
+        {/* Profile with dropdown */}
+        <div ref={menuRef} style={{ position: 'relative' }}>
+          <div onClick={() => setShowUserMenu(!showUserMenu)}
+            style={{
+              width: '34px', height: '34px', borderRadius: '50%',
+              background: brandGrad, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', fontSize: '13px', fontWeight: '700',
+              color: '#000', cursor: 'pointer',
+              border: `2px solid ${showUserMenu ? brand : brandDim}`,
+              transition: 'border-color 0.15s',
+            }}>
+            {user?.email?.[0]?.toUpperCase() || 'U'}
+          </div>
+          {showUserMenu && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+              background: surface, border: `1px solid ${borderSoft}`,
+              borderRadius: '12px', padding: '6px', minWidth: '180px',
+              zIndex: 200, boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            }}>
+              <div style={{
+                padding: '8px 12px', borderBottom: `1px solid ${borderSoft}`,
+                marginBottom: '4px',
+              }}>
+                <div style={{ fontSize: '12px', color: textPrimary, fontWeight: '600' }}>{user?.email}</div>
+              </div>
+              <button onClick={() => { window.location.href = '/dashboard' }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '10px 12px', border: 'none', background: 'none',
+                  color: textSecondary, cursor: 'pointer', borderRadius: '8px',
+                  fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = textPrimary }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
+                <span style={{ display: 'flex', color: textDim }}>{icons.grid}</span>
+                Dashboard
+              </button>
+              <button onClick={() => {/* Settings page placeholder */}}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '10px 12px', border: 'none', background: 'none',
+                  color: textSecondary, cursor: 'pointer', borderRadius: '8px',
+                  fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = textPrimary }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
+                <span style={{ display: 'flex', color: textDim }}>{icons.settings}</span>
+                Settings
+              </button>
+              <button onClick={handleLogout}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '10px 12px', border: 'none', background: 'none',
+                  color: textSecondary, cursor: 'pointer', borderRadius: '8px',
+                  fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
+                  borderTop: `1px solid ${borderSoft}`, marginTop: '4px', paddingTop: '10px',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = '#EF4444' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
+                <span style={{ display: 'flex', color: textDim }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </span>
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
   )
 }
+
+
