@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [greeting, setGreeting] = useState('')
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -204,12 +205,7 @@ export default function Dashboard() {
   return (
     <ErrorBoundary>
     <div className="app-layout">
-      <button className="mobile-menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Toggle menu">
-        {sidebarOpen
-          ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        }
-      </button>
+
 
       <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
         <div className="sidebar-header">
@@ -247,14 +243,6 @@ export default function Dashboard() {
           </button>
         </div>
       </aside>
-
-      {sidebarOpen && (
-        <div
-          onClick={closeSidebar}
-          style={{ position: 'fixed', inset: 0, zIndex: 99, background: 'rgba(0,0,0,0.5)' }}
-          aria-hidden="true"
-        />
-      )}
 
       <main className="main-content">
         <div className="dash-header">
@@ -492,22 +480,57 @@ export default function Dashboard() {
             <span className="mobile-bottom-nav-label">{item.id === 'upgrade' ? 'Pro' : item.label.split(' ')[0]}</span>
           </button>
         ))}
-        <button
-          onClick={() => { setSidebarOpen(true) }}
-          className={`mobile-bottom-nav-item${sidebarOpen ? ' active' : ''}`}
-        >
-          <span className="mobile-bottom-nav-icon">
-            <div style={{
-              width: '20px', height: '20px', borderRadius: '50%',
-              background: brandGrad, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontSize: '10px', fontWeight: '700',
-              color: '#000',
-            }}>
-              {user?.email?.[0]?.toUpperCase() || 'U'}
-            </div>
-          </span>
-          <span className="mobile-bottom-nav-label">Profile</span>
-        </button>
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+            className={`mobile-bottom-nav-item${showProfileMenu ? ' active' : ''}`}
+          >
+            <span className="mobile-bottom-nav-icon">
+              <div style={{
+                width: '20px', height: '20px', borderRadius: '50%',
+                background: brandGrad, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', fontSize: '10px', fontWeight: '700',
+                color: '#000',
+              }}>
+                {user?.email?.[0]?.toUpperCase() || 'U'}
+              </div>
+            </span>
+            <span className="mobile-bottom-nav-label">Profile</span>
+          </button>
+          {showProfileMenu && (
+            <>
+              <div onClick={() => setShowProfileMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
+              <div style={{
+                position: 'fixed', bottom: '72px', right: '12px',
+                background: surface, border: `1px solid ${borderSoft}`,
+                borderRadius: '12px', padding: '6px', minWidth: '180px',
+                zIndex: 100, boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+              }}>
+                <div style={{
+                  padding: '8px 12px', borderBottom: `1px solid ${borderSoft}`,
+                  marginBottom: '4px',
+                }}>
+                  <div style={{ fontSize: '12px', color: textPrimary, fontWeight: '600' }}>{user?.email}</div>
+                  <div style={{ fontSize: '10px', color: brand, fontWeight: '500', marginTop: '2px' }}>{plan.toUpperCase()}</div>
+                </div>
+                <button onClick={handleLogout}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '10px 12px', border: 'none', background: 'none',
+                    color: textSecondary, cursor: 'pointer', borderRadius: '8px',
+                    fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = '#EF4444' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
+                  <span style={{ display: 'flex', color: textDim }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  </span>
+                  Sign out
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </nav>
     </div>
     </ErrorBoundary>
