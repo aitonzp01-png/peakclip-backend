@@ -21,6 +21,13 @@ export default function Dashboard() {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [greeting, setGreeting] = useState('')
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [displayName, setDisplayName] = useState('')
+  const [passwordCurrent, setPasswordCurrent] = useState('')
+  const [passwordNew, setPasswordNew] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [settingsStatus, setSettingsStatus] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [showSidebarMenu, setShowSidebarMenu] = useState(false)
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -31,11 +38,14 @@ export default function Dashboard() {
     const params = new URLSearchParams(window.location.search)
     const p = params.get('plan')
     if (p === 'creator' || p === 'pro') setActiveTab('upgrade')
+    const t = params.get('tab')
+    if (t === 'settings') setActiveTab('settings')
 
     const getUser = async () => {
       const { data: { user } } = await getSupabaseClient().auth.getUser()
       if (!user) { window.location.href = '/login'; return }
       setUser(user)
+      setDisplayName(user.user_metadata?.name || user.email?.split('@')[0] || '')
       const { data } = await getSupabaseClient().from('users').select('*').eq('id', user.id).single()
       if (data) { setCredits(data.credits); setPlan(data.plan) }
       loadClips(user.id)
@@ -47,6 +57,8 @@ export default function Dashboard() {
       const params = new URLSearchParams(window.location.search)
       const p = params.get('plan')
       if (p === 'creator' || p === 'pro') setActiveTab('upgrade')
+      const t = params.get('tab')
+      if (t === 'settings') setActiveTab('settings')
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
@@ -196,11 +208,49 @@ export default function Dashboard() {
     { id: 'generate', label: 'Generate Clips' },
     { id: 'clips', label: 'My Clips' },
     { id: 'upgrade', label: 'Upgrade' },
+    { id: 'settings', label: 'Settings' },
   ]
+
+  const handleUpdateProfile = async () => {
+    if (!displayName.trim()) { setSettingsStatus('Name cannot be empty'); return }
+    setSaving(true)
+    setSettingsStatus('')
+    try {
+      const { error } = await getSupabaseClient().auth.updateUser({
+        data: { name: displayName.trim() }
+      })
+      if (error) throw error
+      setSettingsStatus('Profile updated successfully')
+      setTimeout(() => setSettingsStatus(''), 3000)
+    } catch (err) {
+      setSettingsStatus(err.message || 'Update failed')
+    }
+    setSaving(false)
+  }
+
+  const handleUpdatePassword = async () => {
+    if (!passwordNew) { setSettingsStatus('New password is required'); return }
+    if (passwordNew.length < 6) { setSettingsStatus('Password must be at least 6 characters'); return }
+    if (passwordNew !== passwordConfirm) { setSettingsStatus('Passwords do not match'); return }
+    setSaving(true)
+    setSettingsStatus('')
+    try {
+      const { error } = await getSupabaseClient().auth.updateUser({ password: passwordNew })
+      if (error) throw error
+      setSettingsStatus('Password updated successfully')
+      setPasswordCurrent('')
+      setPasswordNew('')
+      setPasswordConfirm('')
+      setTimeout(() => setSettingsStatus(''), 3000)
+    } catch (err) {
+      setSettingsStatus(err.message || 'Update failed')
+    }
+    setSaving(false)
+  }
 
   const closeSidebar = () => setSidebarOpen(false)
 
-  const displayName = user?.email?.split('@')[0] || 'there'
+  const greetingName = user?.email?.split('@')[0] || 'there'
 
   return (
     <ErrorBoundary>
@@ -228,8 +278,8 @@ export default function Dashboard() {
           ))}
         </nav>
 
-        <div className="sidebar-footer">
-          <div className="sidebar-user">
+        <div className="sidebar-footer" style={{ position: 'relative' }}>
+          <div className="sidebar-user" onClick={() => setShowSidebarMenu(!showSidebarMenu)} style={{ cursor: 'pointer' }}>
             <div className="sidebar-avatar" style={{ background: brandGrad }}>
               {user?.email?.[0]?.toUpperCase()}
             </div>
@@ -238,9 +288,45 @@ export default function Dashboard() {
               <div className="sidebar-plan" style={{ color: brand }}>{plan.toUpperCase()}</div>
             </div>
           </div>
-          <button onClick={handleLogout} className="sidebar-logout">
-            Sign out
-          </button>
+          {showSidebarMenu && (
+            <>
+              <div onClick={() => setShowSidebarMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 98 }} />
+              <div style={{
+                position: 'absolute', bottom: 'calc(100% + 8px)', left: '12px',
+                background: surface, border: `1px solid ${borderSoft}`,
+                borderRadius: '12px', padding: '6px', minWidth: '160px',
+                zIndex: 100, boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+              }}>
+                <button onClick={() => { setActiveTab('settings'); setShowSidebarMenu(false) }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '10px 12px', border: 'none', background: 'none',
+                    color: textSecondary, cursor: 'pointer', borderRadius: '8px',
+                    fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = textPrimary }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
+                  <span style={{ display: 'flex', color: textDim }}>{icons.settings}</span>
+                  Settings
+                </button>
+                <button onClick={handleLogout}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '10px 12px', border: 'none', background: 'none',
+                    color: textSecondary, cursor: 'pointer', borderRadius: '8px',
+                    fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
+                    borderTop: `1px solid ${borderSoft}`, marginTop: '4px', paddingTop: '10px',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = '#EF4444' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
+                  <span style={{ display: 'flex', color: textDim }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  </span>
+                  Sign out
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </aside>
 
@@ -248,12 +334,13 @@ export default function Dashboard() {
         <div className="dash-header">
           <div className="dash-welcome">
             <div className="dash-welcome-greeting">
-              {greeting}, <span className="dash-welcome-name">{displayName}</span>
+              {greeting}, <span className="dash-welcome-name">{greetingName}</span>
             </div>
             <div className="dash-welcome-sub">
               {activeTab === 'generate' && 'Paste a link to create your next viral clip'}
               {activeTab === 'clips' && `You have ${clips.length} clip${clips.length !== 1 ? 's' : ''}`}
               {activeTab === 'upgrade' && 'Unlock more power with a premium plan'}
+              {activeTab === 'settings' && 'Manage your account settings and subscription'}
             </div>
           </div>
           <div className="dash-header-actions">
@@ -462,6 +549,221 @@ export default function Dashboard() {
             </div>
           </motion.div>
         )}
+        {activeTab === 'settings' && (
+          <motion.div
+            key="settings"
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '520px' }}>
+              {/* Profile Section */}
+              <div style={{
+                background: surface, borderRadius: '12px',
+                border: `1px solid ${borderSoft}`, padding: '20px',
+              }}>
+                <div style={{ fontFamily: fonts.display, fontSize: '13px', letterSpacing: '2px', color: brand, marginBottom: '16px' }}>
+                  PROFILE
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: textSecondary, marginBottom: '4px', fontFamily: fonts.body }}>DISPLAY NAME</label>
+                    <input
+                      value={displayName}
+                      onChange={e => setDisplayName(e.target.value)}
+                      style={{
+                        width: '100%', padding: '8px 12px', borderRadius: '8px',
+                        border: `1px solid ${borderSoft}`, background: bgSecondary,
+                        color: textPrimary, fontSize: '14px', fontFamily: fonts.body,
+                        outline: 'none',
+                      }}
+                      onFocus={e => { e.target.style.borderColor = brand }}
+                      onBlur={e => { e.target.style.borderColor = borderSoft }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: textSecondary, marginBottom: '4px', fontFamily: fonts.body }}>EMAIL</label>
+                    <div style={{
+                      width: '100%', padding: '8px 12px', borderRadius: '8px',
+                      border: `1px solid ${borderSoft}`, background: bgSecondary,
+                      color: textDim, fontSize: '14px', fontFamily: fonts.body,
+                    }}>
+                      {user?.email || '—'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleUpdateProfile}
+                    disabled={saving}
+                    style={{
+                      alignSelf: 'flex-start', padding: '8px 20px', borderRadius: '8px',
+                      border: 'none', background: brandGrad, color: '#000',
+                      fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                      fontFamily: fonts.body, marginTop: '4px',
+                      opacity: saving ? 0.6 : 1,
+                    }}
+                  >
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Password Section */}
+              <div style={{
+                background: surface, borderRadius: '12px',
+                border: `1px solid ${borderSoft}`, padding: '20px',
+              }}>
+                <div style={{ fontFamily: fonts.display, fontSize: '13px', letterSpacing: '2px', color: brand, marginBottom: '16px' }}>
+                  CHANGE PASSWORD
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: textSecondary, marginBottom: '4px', fontFamily: fonts.body }}>NEW PASSWORD</label>
+                    <input
+                      type="password"
+                      value={passwordNew}
+                      onChange={e => setPasswordNew(e.target.value)}
+                      style={{
+                        width: '100%', padding: '8px 12px', borderRadius: '8px',
+                        border: `1px solid ${borderSoft}`, background: bgSecondary,
+                        color: textPrimary, fontSize: '14px', fontFamily: fonts.body,
+                        outline: 'none',
+                      }}
+                      onFocus={e => { e.target.style.borderColor = brand }}
+                      onBlur={e => { e.target.style.borderColor = borderSoft }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', color: textSecondary, marginBottom: '4px', fontFamily: fonts.body }}>CONFIRM PASSWORD</label>
+                    <input
+                      type="password"
+                      value={passwordConfirm}
+                      onChange={e => setPasswordConfirm(e.target.value)}
+                      style={{
+                        width: '100%', padding: '8px 12px', borderRadius: '8px',
+                        border: `1px solid ${borderSoft}`, background: bgSecondary,
+                        color: textPrimary, fontSize: '14px', fontFamily: fonts.body,
+                        outline: 'none',
+                      }}
+                      onFocus={e => { e.target.style.borderColor = brand }}
+                      onBlur={e => { e.target.style.borderColor = borderSoft }}
+                    />
+                  </div>
+                  <button
+                    onClick={handleUpdatePassword}
+                    disabled={saving}
+                    style={{
+                      alignSelf: 'flex-start', padding: '8px 20px', borderRadius: '8px',
+                      border: 'none', background: brandGrad, color: '#000',
+                      fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                      fontFamily: fonts.body, marginTop: '4px',
+                      opacity: saving ? 0.6 : 1,
+                    }}
+                  >
+                    {saving ? 'Updating...' : 'Update Password'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Subscription Section */}
+              <div style={{
+                background: surface, borderRadius: '12px',
+                border: `1px solid ${borderSoft}`, padding: '20px',
+              }}>
+                <div style={{ fontFamily: fonts.display, fontSize: '13px', letterSpacing: '2px', color: brand, marginBottom: '16px' }}>
+                  SUBSCRIPTION
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '14px', color: textPrimary, fontWeight: '500', fontFamily: fonts.body }}>Current Plan</div>
+                    <div style={{ fontSize: '12px', color: textSecondary, marginTop: '4px', fontFamily: fonts.body }}>
+                      {credits > 0 ? `${credits} credits remaining` : 'No credits remaining'}
+                    </div>
+                  </div>
+                  <div style={{
+                    padding: '4px 14px', borderRadius: '20px',
+                    background: `${brand}22`, color: brand,
+                    fontSize: '12px', fontWeight: '600', fontFamily: fonts.body,
+                    textTransform: 'uppercase', letterSpacing: '1px',
+                  }}>
+                    {plan}
+                  </div>
+                </div>
+                <div style={{
+                  marginTop: '16px', paddingTop: '16px',
+                  borderTop: `1px solid ${borderSoft}`,
+                  display: 'flex', gap: '8px',
+                }}>
+                  {plan === 'free' && (
+                    <button
+                      onClick={() => setActiveTab('upgrade')}
+                      style={{
+                        padding: '8px 16px', borderRadius: '8px',
+                        border: 'none', background: brandGrad, color: '#000',
+                        fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                        fontFamily: fonts.body,
+                      }}
+                    >
+                      Upgrade Plan
+                    </button>
+                  )}
+                  <a
+                    href={`${BACKEND_URL}/create-portal-session`}
+                    style={{
+                      padding: '8px 16px', borderRadius: '8px',
+                      border: `1px solid ${borderSoft}`, background: 'none',
+                      color: textSecondary, fontSize: '12px', fontWeight: '500',
+                      cursor: 'pointer', textDecoration: 'none',
+                      fontFamily: fonts.body,
+                    }}
+                  >
+                    Manage Billing
+                  </a>
+                </div>
+              </div>
+
+              {/* Danger Zone */}
+              <div style={{
+                background: surface, borderRadius: '12px',
+                border: `1px solid rgba(239,68,68,0.3)`, padding: '20px',
+              }}>
+                <div style={{ fontFamily: fonts.display, fontSize: '13px', letterSpacing: '2px', color: '#EF4444', marginBottom: '16px' }}>
+                  DANGER ZONE
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '14px', color: textPrimary, fontWeight: '500', fontFamily: fonts.body }}>Sign Out</div>
+                    <div style={{ fontSize: '12px', color: textSecondary, marginTop: '2px', fontFamily: fonts.body }}>
+                      Sign out of your account on this device
+                    </div>
+                  </div>
+                  <button onClick={handleLogout}
+                    style={{
+                      padding: '8px 16px', borderRadius: '8px',
+                      border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)',
+                      color: '#EF4444', fontSize: '12px', fontWeight: '600',
+                      cursor: 'pointer', fontFamily: fonts.body,
+                    }}
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Messages */}
+              {settingsStatus && (
+                <div style={{
+                  padding: '10px 14px', borderRadius: '8px',
+                  background: settingsStatus.includes('success') ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                  border: `1px solid ${settingsStatus.includes('success') ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                  color: settingsStatus.includes('success') ? '#22C55E' : '#EF4444',
+                  fontSize: '13px', fontFamily: fonts.body,
+                }}>
+                  {settingsStatus}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
       </main>
 
       {/* Mobile Bottom Nav */}
@@ -475,6 +777,7 @@ export default function Dashboard() {
             <span className="mobile-bottom-nav-icon">
               {item.id === 'generate' ? icons.lightning :
                item.id === 'clips' ? icons.video :
+               item.id === 'settings' ? icons.settings :
                icons.crown}
             </span>
             <span className="mobile-bottom-nav-label">{item.id === 'upgrade' ? 'Pro' : item.label.split(' ')[0]}</span>
@@ -514,12 +817,25 @@ export default function Dashboard() {
                   <div style={{ fontSize: '12px', color: textPrimary, fontWeight: '600' }}>{user?.email}</div>
                   <div style={{ fontSize: '10px', color: brand, fontWeight: '500', marginTop: '2px' }}>{plan.toUpperCase()}</div>
                 </div>
+                <button onClick={() => { setActiveTab('settings'); setShowProfileMenu(false) }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '10px 12px', border: 'none', background: 'none',
+                    color: textSecondary, cursor: 'pointer', borderRadius: '8px',
+                    fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = textPrimary }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
+                  <span style={{ display: 'flex', color: textDim }}>{icons.settings}</span>
+                  Settings
+                </button>
                 <button onClick={handleLogout}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
                     padding: '10px 12px', border: 'none', background: 'none',
                     color: textSecondary, cursor: 'pointer', borderRadius: '8px',
                     fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
+                    borderTop: `1px solid ${borderSoft}`, marginTop: '4px', paddingTop: '10px',
                   }}
                   onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = '#EF4444' }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>

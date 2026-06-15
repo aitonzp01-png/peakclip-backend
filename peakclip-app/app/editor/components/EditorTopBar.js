@@ -301,7 +301,7 @@ export default function EditorTopBar({ videoRef }) {
                 <span style={{ display: 'flex', color: textDim }}>{icons.grid}</span>
                 Dashboard
               </button>
-              <button onClick={() => {/* Settings page placeholder */}}
+              <button onClick={() => { window.location.href = '/dashboard?tab=settings' }}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
                   padding: '10px 12px', border: 'none', background: 'none',
