@@ -14,12 +14,58 @@ import stripe
 import tempfile
 import re
 import time
+import httpx
+import asyncio
 from collections import defaultdict
 from urllib.parse import urlparse
 import jwt as pyjwt
 from jwt import PyJWKClient
 
 app = FastAPI()
+
+@app.on_event("startup")
+async def run_migrations():
+    try:
+        supabase_url = os.getenv("SUPABASE_URL")
+        service_key = os.getenv("SUPABASE_SERVICE_KEY")
+        if not supabase_url or not service_key:
+            print("MIGRATION SKIPPED: missing SUPABASE_URL or SUPABASE_SERVICE_KEY")
+            return
+        project_ref = supabase_url.split("https://")[1].split(".")[0]
+        sql = """
+            CREATE TABLE IF NOT EXISTS public.credit_transactions (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+                amount INTEGER NOT NULL,
+                type TEXT NOT NULL CHECK (type IN ('purchase', 'consume', 'refund')),
+                job_id UUID,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id
+                ON public.credit_transactions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_credit_transactions_created_at
+                ON public.credit_transactions(created_at DESC);
+        """
+        async with httpx.AsyncClient(timeout=30) as client:
+            headers = {
+                "apikey": service_key,
+                "Authorization": f"Bearer {service_key}",
+                "Content-Type": "application/json",
+            }
+            for url in [
+                f"https://{project_ref}.supabase.co/sql/v1/query",
+                f"https://api.supabase.com/v1/projects/{project_ref}/database/query",
+            ]:
+                try:
+                    res = await client.post(url, json={"query": sql}, headers=headers)
+                    if res.status_code == 200:
+                        print(f"MIGRATION OK via {url.split('/')[-1]}")
+                        break
+                    print(f"MIGRATION {url.split('/')[-1]}: {res.status_code} {res.text[:100]}")
+                except Exception as e:
+                    print(f"MIGRATION {url.split('/')[-1]} error: {e}")
+    except Exception as e:
+        print(f"MIGRATION ERROR: {e}")
 
 # In-memory rate limiter
 rate_store = defaultdict(list)
