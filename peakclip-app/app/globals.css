@@ -557,6 +557,10 @@ body {
   opacity: 1;
 }
 
+.plan-card.popular::after {
+  opacity: 1;
+}
+
 .plan-card.popular {
   border-color: var(--peak-border);
   box-shadow: 0 0 30px rgba(217, 179, 71, 0.07);
@@ -1794,6 +1798,10 @@ body {
 }
 
 .pricing-card:hover::after {
+  opacity: 1;
+}
+
+.pricing-card.popular::after {
   opacity: 1;
 }
 
