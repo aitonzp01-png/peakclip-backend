@@ -292,6 +292,27 @@ export default function Dashboard() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
           >
+            <div style={{
+              textAlign: 'center', marginBottom: '32px',
+              fontFamily: fonts.display, letterSpacing: '1px',
+            }}>
+              <div style={{
+                fontSize: 'clamp(28px, 4vw, 42px)', color: textPrimary,
+                lineHeight: 1.1, marginBottom: '12px',
+              }}>
+                TURN LONG VIDEOS INTO{' '}
+                <span style={{
+                  background: 'linear-gradient(135deg, #D9B44A, #E8C766)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                }}>VIRAL SHORTS</span>
+              </div>
+              <div style={{
+                fontFamily: fonts.body, fontSize: '14px', color: textSecondary,
+                maxWidth: '560px', margin: '0 auto', lineHeight: 1.6,
+              }}>
+                Extract high-scoring clips, generate animated captions, and auto-crop horizontal videos into high-impact vertical format in one click.
+              </div>
+            </div>
             <div className="process-card" style={{ textAlign: 'center' }}>
               <label className="process-label" htmlFor="video-url" style={{ textAlign: 'center' }}>VIDEO URL</label>
               <div className="process-row" style={{ justifyContent: 'center', maxWidth: '680px', margin: '0 auto' }}>
