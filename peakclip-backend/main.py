@@ -75,6 +75,32 @@ async def run_migrations():
                     print(f"MIGRATION {url.split('/')[-1]}: {res.status_code} {res.text[:100]}")
                 except Exception as e:
                     print(f"MIGRATION {url.split('/')[-1]} error: {e}")
+
+        # Ensure 'clips' storage bucket exists
+        try:
+            mgmt_url = f"https://api.supabase.com/v1/projects/{project_ref}/storage/buckets"
+            mgmt_headers = {
+                "Authorization": f"Bearer {service_key}",
+                "Content-Type": "application/json",
+            }
+            existing = await client.get(mgmt_url, headers=mgmt_headers)
+            if existing.status_code == 200:
+                buckets = [b["name"] for b in existing.json()]
+                if "clips" not in buckets:
+                    create_res = await client.post(
+                        mgmt_url,
+                        json={"id": "clips", "name": "clips", "public": True, "file_size_limit": 524288000},
+                        headers=mgmt_headers,
+                    )
+                    if create_res.status_code in (200, 201):
+                        print("STORAGE BUCKET 'clips' created")
+                    else:
+                        print(f"STORAGE BUCKET create: {create_res.status_code} {create_res.text[:100]}")
+                else:
+                    print("STORAGE BUCKET 'clips' already exists")
+        except Exception as e:
+            print(f"STORAGE BUCKET error: {e}")
+
     except Exception as e:
         print(f"MIGRATION ERROR: {e}")
 

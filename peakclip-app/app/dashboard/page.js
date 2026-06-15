@@ -52,16 +52,27 @@ export default function Dashboard() {
     }
     getUser()
 
-    // Reload clips when returning to dashboard from editor
-    const onFocus = () => {
+    // Reload clips + credits when returning to dashboard
+    const onFocus = async () => {
+      const { data: { user } } = await getSupabaseClient().auth.getUser()
+      if (user) {
+        loadClips(user.id)
+        const { data } = await getSupabaseClient().from('users').select('*').eq('id', user.id).single()
+        if (data) { setCredits(data.credits); setPlan(data.plan) }
+      }
       const params = new URLSearchParams(window.location.search)
       const p = params.get('plan')
       if (p === 'creator' || p === 'pro') setActiveTab('upgrade')
       const t = params.get('tab')
       if (t === 'settings') setActiveTab('settings')
     }
+    const onVisibilityChange = () => { if (!document.hidden) onFocus() }
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [])
 
   const loadClips = async (userId) => {
@@ -69,14 +80,15 @@ export default function Dashboard() {
     if (data) setClips(data)
   }
 
-  const pollClipStatus = async (clipId, userId) => {
+  const pollClipStatus = async (userId, since) => {
     let attempts = 0
     const poll = setInterval(async () => {
       attempts++
-      const { data } = await getSupabaseClient().from('clips').select('*').eq('id', clipId).single()
-      if (data?.video_url || attempts > 30) {
+      const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).gte('created_at', new Date(since).toISOString()).order('created_at', { ascending: false }).limit(5)
+      if (data?.length > 0 || attempts > 40) {
         clearInterval(poll)
         loadClips(userId)
+        if (data?.length > 0) setStatus(`${data.length} clips ready!`)
       }
     }, 3000)
   }
@@ -112,18 +124,23 @@ export default function Dashboard() {
     try {
       const { data: { session } } = await getSupabaseClient().auth.getSession()
 
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 120000)
+
       const response = await fetch(`${BACKEND_URL}/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({ url: trimmedUrl }),
-        signal: AbortSignal.timeout(30000),
+        signal: controller.signal,
       })
+      clearTimeout(timeoutId)
 
       if (response.ok) {
         const data = await response.json()
         setStatus(`${data.total || 1} clips generated! Check "My Clips" tab.`)
-        setCredits(prev => Math.max(prev - 1, 0))
-        setTimeout(() => loadClips(user.id), 2000)
+        const { data: userData } = await getSupabaseClient().from('users').select('credits').eq('id', user.id).single()
+        if (userData) setCredits(userData.credits)
+        setTimeout(() => { loadClips(user.id); setActiveTab('clips') }, 2000)
       } else {
         const err = await response.text()
         if (response.status === 402) {
@@ -131,27 +148,16 @@ export default function Dashboard() {
         } else if (response.status === 502 || response.status === 503) {
           setStatus('Server is busy. Please try again in a moment.')
         } else {
-          setStatus(`Error: ${err.slice(0, 120)}`)
+          setStatus(`Error: ${err.slice(0, 250)}`)
         }
       }
     } catch (err) {
       if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-        setStatus('Request timed out. The server might be processing a long video. Check "My Clips" in a moment.')
+        setStatus('The video is still processing. Polling for results...')
+        pollClipStatus(user.id, Date.now())
+        setTimeout(() => { setActiveTab('clips') }, 1000)
       } else {
-        const clipId = 'demo_' + Date.now()
-        const newClip = {
-          id: clipId,
-          title: trimmedUrl.split('/').pop()?.slice(0, 40) || 'Untitled Clip',
-          thumbnail_url: '',
-          video_url: trimmedUrl,
-          duration: 60,
-          status: 'done',
-          created_at: new Date().toISOString(),
-          url: trimmedUrl,
-        }
-        setClips(prev => [newClip, ...prev])
-        setStatus(`Opening "${newClip.title}" in editor...`)
-        setTimeout(() => { window.location.href = `/editor?id=${clipId}&url=${encodeURIComponent(trimmedUrl)}` }, 800)
+        setStatus(`Connection error: ${err.message}`)
       }
     }
 
@@ -489,9 +495,14 @@ export default function Dashboard() {
                   }}>
                     Your Clips
                   </h3>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: "'Poppins', sans-serif" }}>
-                    {clips.length} total
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button onClick={() => loadClips(user.id)} className="dash-clip-action-btn secondary" style={{ fontSize: '11px', padding: '4px 10px' }}>
+                      Refresh
+                    </button>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: "'Poppins', sans-serif" }}>
+                      {clips.length} total
+                    </span>
+                  </div>
                 </div>
                 <div className="dash-clip-grid">
                   {clips.map((clip, i) => (
@@ -853,6 +864,29 @@ export default function Dashboard() {
     </ErrorBoundary>
   )
 
+  const handleDownload = async (clip) => {
+    const filename = `${clip.title?.slice(0, 40) || 'clip'}.mp4`
+    try {
+      const response = await fetch(`${clip.video_url}?download=${encodeURIComponent(filename)}`, { mode: 'cors' })
+      if (!response.ok) throw new Error('Download failed')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } catch {
+      const a = document.createElement('a')
+      a.href = `${clip.video_url}?download=${encodeURIComponent(filename)}`
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      a.click()
+    }
+  }
+
   function renderClipCard(clip) {
     return (
       <motion.div
@@ -903,9 +937,14 @@ export default function Dashboard() {
                   Edit
                 </button>
                 {clip.video_url && (
-                  <a href={clip.video_url} target="_blank" rel="noopener noreferrer" className="dash-clip-action-btn secondary">
-                    View
-                  </a>
+                  <>
+                    <a href={clip.video_url} target="_blank" rel="noopener noreferrer" className="dash-clip-action-btn secondary">
+                      View
+                    </a>
+                    <button onClick={() => handleDownload(clip)} className="dash-clip-action-btn secondary">
+                      Download
+                    </button>
+                  </>
                 )}
               </>
             )}
