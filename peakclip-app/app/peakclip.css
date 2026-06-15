@@ -1840,6 +1840,17 @@
    10. RESPONSIVE STYLES
    ════════════════════════════════════════════════════════════════ */
 
+/* ── Gold hover effect on icons ── */
+button:hover svg,
+a:hover svg,
+.dash-quick-action:hover svg,
+.sidebar-item:hover svg,
+.process-btn:hover svg,
+.dash-clip-action-btn:hover svg {
+  color: #D9B44A !important;
+  transition: color 0.2s ease;
+}
+
 /* ── Tablet (769px - 1024px) ── */
 @media (min-width: 769px) and (max-width: 1024px) {
   .how-section {
@@ -2172,5 +2183,44 @@
 
   .editor-playback-speed {
     order: 2;
+  }
+
+  /* ── Pipeline mobile ── */
+  .pipeline-container {
+    height: auto !important;
+    min-height: 420px;
+    padding: 20px !important;
+    border-radius: 24px !important;
+  }
+
+  .pipeline-header {
+    margin-bottom: 24px !important;
+  }
+
+  .pipeline-steps {
+    gap: 12px !important;
+  }
+
+  .pipeline-step {
+    padding: 14px 16px !important;
+    gap: 12px !important;
+  }
+
+  .pipeline-step-label {
+    font-size: 13px !important;
+  }
+
+  .pipeline-step-desc {
+    font-size: 10px !important;
+  }
+
+  .pipeline-step-status {
+    font-size: 10px !important;
+    min-width: 70px;
+    text-align: right;
+  }
+
+  .pipeline-progress-wrap {
+    margin-top: 16px !important;
   }
 }

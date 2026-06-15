@@ -130,7 +130,9 @@ export default function Pricing() {
               <div className="pricing-card-features">
                 {plan.features.map((feat) => (
                   <div key={feat} className="pricing-card-feature">
-                    <span className="pricing-card-feature-check">✓</span>
+                    <span className="pricing-card-feature-check">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </span>
                     {feat}
                   </div>
                 ))}
