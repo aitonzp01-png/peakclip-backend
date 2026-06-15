@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { getSupabaseClient } from '../../lib/supabase'
 import { motion } from 'framer-motion'
-import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong } from '../../lib/tokens'
+import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../lib/tokens'
 import icons from '../../lib/icons'
 import ErrorBoundary from '../../lib/error-boundary'
 
