@@ -1345,7 +1345,7 @@ body {
   line-height: 0.88;
   font-weight: 900;
   color: var(--text-primary);
-  letter-spacing: 0.25em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   margin: 0;
   max-width: 860px;
