@@ -43,19 +43,15 @@ export default function HowItWorks() {
 
       <div className="how-grid">
         {steps.map((step, i) => (
-          <motion.div
+          <div
             key={step.number}
             className="how-card"
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: i * 0.15, ease: [0.16, 1, 0.3, 1] }}
           >
             <div className="how-number">{step.number}</div>
             <div className="how-icon" aria-hidden="true">{step.icon}</div>
             <h3 className="how-card-title">{step.title}</h3>
             <p className="how-card-desc">{step.desc}</p>
-          </motion.div>
+          </div>
         ))}
       </div>
     </section>
