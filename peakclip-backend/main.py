@@ -45,6 +45,17 @@ async def run_migrations():
                 ON public.credit_transactions(user_id);
             CREATE INDEX IF NOT EXISTS idx_credit_transactions_created_at
                 ON public.credit_transactions(created_at DESC);
+
+            CREATE OR REPLACE FUNCTION public.handle_new_user()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                INSERT INTO public.users (id, email, credits, plan)
+                VALUES (NEW.id, NEW.email, 3, 'free');
+                INSERT INTO public.credit_transactions (user_id, amount, type)
+                VALUES (NEW.id, 3, 'purchase');
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql SECURITY DEFINER;
         """
         async with httpx.AsyncClient(timeout=30) as client:
             headers = {
