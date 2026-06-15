@@ -475,6 +475,40 @@ export default function Dashboard() {
           </motion.div>
         )}
       </main>
+
+      {/* Mobile Bottom Nav */}
+      <nav className="mobile-bottom-nav">
+        {tabs.map(item => (
+          <button
+            key={item.id}
+            onClick={() => { setActiveTab(item.id); closeSidebar() }}
+            className={`mobile-bottom-nav-item${activeTab === item.id ? ' active' : ''}`}
+          >
+            <span className="mobile-bottom-nav-icon">
+              {item.id === 'generate' ? icons.lightning :
+               item.id === 'clips' ? icons.video :
+               icons.crown}
+            </span>
+            <span className="mobile-bottom-nav-label">{item.id === 'upgrade' ? 'Pro' : item.label.split(' ')[0]}</span>
+          </button>
+        ))}
+        <button
+          onClick={() => { setSidebarOpen(true) }}
+          className={`mobile-bottom-nav-item${sidebarOpen ? ' active' : ''}`}
+        >
+          <span className="mobile-bottom-nav-icon">
+            <div style={{
+              width: '20px', height: '20px', borderRadius: '50%',
+              background: brandGrad, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', fontSize: '10px', fontWeight: '700',
+              color: '#000',
+            }}>
+              {user?.email?.[0]?.toUpperCase() || 'U'}
+            </div>
+          </span>
+          <span className="mobile-bottom-nav-label">Profile</span>
+        </button>
+      </nav>
     </div>
     </ErrorBoundary>
   )

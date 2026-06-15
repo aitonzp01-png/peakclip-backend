@@ -43,7 +43,7 @@ export default function Pricing() {
   }
 
   return (
-    <section className="pricing-section" id="pricing">
+    <section className="pricing-section" id="pricing" data-yearly={yearly ? 'true' : 'false'}>
       <motion.div
         className="section-heading"
         initial={{ opacity: 0, y: 40 }}
