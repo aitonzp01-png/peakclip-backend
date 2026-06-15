@@ -41,3 +41,8 @@ __pycache__/
 peakclip-backend/downloads/
 peakclip-backend/outputs/
 peakclip-backend/thumbnails/
+
+DEPLOY-NOTES.txt
+_create_webhook.py
+_create_webhook2.py
+_test_stripe.py

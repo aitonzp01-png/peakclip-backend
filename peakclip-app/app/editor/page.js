@@ -241,36 +241,39 @@ export default function EditorPage() {
       </div>
 
       {/* Timeline */}
-      <EditorTimeline videoRef={videoRef} />
-
-      {/* Mobile bottom tools */}
-      <div className="editor-mobile-tools">
-        {['cursor', 'text', 'subtitles', 'music', 'ai'].map(t => {
-          const iconsMap = { cursor: 'cursor', text: 'text', subtitles: 'captions', music: 'audio', ai: 'ai' }
-          return (
-            <button key={t} onClick={() => { setActiveTool(t); setMobilePanelOpen(true) }}
-              style={{
-                flex: 1, padding: '10px 4px', border: 'none',
-                background: activeTool === t ? brandDim : 'transparent',
-                color: activeTool === t ? brand : textDim,
-                cursor: 'pointer', borderRadius: '8px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px',
-                fontSize: '10px', whiteSpace: 'nowrap', minHeight: '44px',
-                touchAction: 'manipulation',
-              }}>
-              <span style={{ display: 'flex', width: '18px', height: '18px', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {icons[iconsMap[t]]}
-              </span>
-              <span style={{ fontSize: '9px', lineHeight: '1' }}>
-                {t === 'cursor' ? 'Trim' : t === 'text' ? 'Text' : t === 'subtitles' ? 'Captions' : t === 'music' ? 'Audio' : 'AI'}
-              </span>
-            </button>
-          )
-        })}
+      <div className={`mobile-timeline-wrap ${mobilePanelOpen ? 'editing' : ''}`}>
+        <EditorTimeline videoRef={videoRef} />
       </div>
 
-      {/* Mobile Panel */}
-      <EditorMobilePanel videoRef={videoRef} open={mobilePanelOpen} onClose={() => setMobilePanelOpen(false)} />
+      {/* Mobile bottom: toolbar or edit panel (like CapCut) */}
+      {mobilePanelOpen ? (
+        <EditorMobilePanel videoRef={videoRef} activeTool={activeTool} onDone={() => setMobilePanelOpen(false)} />
+      ) : (
+        <div className="editor-mobile-tools">
+          {['cursor', 'text', 'subtitles', 'music', 'ai'].map(t => {
+            const iconsMap = { cursor: 'cursor', text: 'text', subtitles: 'captions', music: 'audio', ai: 'ai' }
+            return (
+              <button key={t} onClick={() => { setActiveTool(t); setMobilePanelOpen(true) }}
+                style={{
+                  flex: 1, padding: '10px 4px', border: 'none',
+                  background: activeTool === t ? brandDim : 'transparent',
+                  color: activeTool === t ? brand : textDim,
+                  cursor: 'pointer', borderRadius: '8px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px',
+                  fontSize: '10px', whiteSpace: 'nowrap', minHeight: '44px',
+                  touchAction: 'manipulation',
+                }}>
+                <span style={{ display: 'flex', width: '18px', height: '18px', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {icons[iconsMap[t]]}
+                </span>
+                <span style={{ fontSize: '9px', lineHeight: '1' }}>
+                  {t === 'cursor' ? 'Trim' : t === 'text' ? 'Text' : t === 'subtitles' ? 'Captions' : t === 'music' ? 'Audio' : 'AI'}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Export Modal */}
       <ExportModal />
@@ -418,43 +421,26 @@ export default function EditorPage() {
         }
 
         /* Mobile Responsive */
-        .mobile-panel-backdrop {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.6);
-          z-index: 200;
-          animation: fadeIn 0.2s ease;
-        }
-        .mobile-panel {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          max-height: 65vh;
-          background: #111111;
-          border-radius: 16px 16px 0 0;
-          z-index: 201;
+        .editor-mobile-edit-panel {
           display: flex;
           flex-direction: column;
-          animation: slideUp 0.25s ease;
-          box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
+          background: #111111;
+          border-top: 1px solid rgba(255,255,255,0.06);
+          flexShrink: 0;
+          overflow: hidden;
         }
-        .mobile-panel button, .mobile-panel input { touch-action: manipulation; }
-        .mobile-panel-body {
-          flex: 1;
-          overflow: auto;
-          padding: 14px 16px;
-          -webkit-overflow-scrolling: touch;
+        .editor-mobile-edit-panel {
+          max-height: 200px;
         }
-        @keyframes slideUp {
-          from { transform: translateY(100%); }
-          to { transform: translateY(0); }
-        }
+        .editor-mobile-edit-panel button, .editor-mobile-edit-panel input { touch-action: manipulation; }
+        .mobile-timeline-wrap { flexShrink: 0; }
         @media (max-width: 768px) {
           .editor-sidebar { display: none !important; }
           .editor-inspector { display: none !important; }
           .editor-preview { flex: 1 1 100% !important; width: 100% !important; }
-          .editor-timeline { height: 220px !important; }
+          .mobile-timeline-wrap { height: 220px; display: flex; flex-direction: column; }
+          .mobile-timeline-wrap.editing { height: 140px; }
+          .mobile-timeline-wrap .editor-timeline { height: 100% !important; }
           .editor-timeline-toolbar { flex-wrap: wrap; gap: 4px !important; }
           .editor-topbar-project { display: none !important; }
           .editor-mobile-tools {

@@ -5,58 +5,36 @@ import icons from '../../../lib/icons'
 import useEditorStore from '../store/editorStore'
 import AIPanel from './AIPanel'
 
-export default function EditorMobilePanel({ videoRef, open, onClose }) {
-  if (!open) return null
-
+export default function EditorMobilePanel({ videoRef, activeTool, onDone }) {
   return (
-    <>
-      <div className="mobile-panel-backdrop" onClick={onClose} />
-      <div className="mobile-panel">
-        <MobilePanelHeader onClose={onClose} />
-        <div className="mobile-panel-body">
-          <MobilePanelContent videoRef={videoRef} />
-        </div>
+    <div className="editor-mobile-edit-panel">
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '8px 12px', borderBottom: `1px solid ${borderSoft}`,
+        flexShrink: 0, minHeight: '40px',
+      }}>
+        <span style={{ fontSize: '12px', fontWeight: '600', color: textPrimary, fontFamily: fonts.body }}>
+          {activeTool === 'cursor' ? 'Trim' : activeTool === 'text' ? 'Text' : activeTool === 'subtitles' ? 'Captions' : activeTool === 'music' ? 'Audio' : 'AI Studio'}
+        </span>
+        <button onClick={onDone}
+          style={{
+            padding: '6px 16px', borderRadius: '8px', border: 'none',
+            background: brand, color: '#000', cursor: 'pointer',
+            fontSize: '11px', fontWeight: '600', fontFamily: fonts.body,
+          }}>
+          Done
+        </button>
       </div>
-    </>
-  )
-}
-
-function MobilePanelHeader({ onClose }) {
-  const activeTool = useEditorStore(s => s.activeTool)
-  const labels = { cursor: 'Trim', text: 'Text', subtitles: 'Captions', music: 'Audio', ai: 'AI Studio' }
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '12px 16px', borderBottom: `1px solid ${borderSoft}`,
-      flexShrink: 0, minHeight: '48px',
-    }}>
-      <span style={{ fontSize: '13px', fontWeight: '600', color: textPrimary, fontFamily: fonts.body }}>
-        {labels[activeTool] || 'Edit'}
-      </span>
-      <button onClick={onClose}
-        style={{
-          width: '32px', height: '32px', borderRadius: '8px',
-          border: 'none', background: bgSecondary, color: textDim,
-          cursor: 'pointer', display: 'flex', alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-        {icons.close}
-      </button>
+      <div style={{
+        flex: 1, overflow: 'auto', padding: '10px 12px',
+      }}>
+        {activeTool === 'cursor' && <TrimPanel videoRef={videoRef} />}
+        {(activeTool === 'text' || activeTool === 'subtitles') && <TextPanel />}
+        {activeTool === 'music' && <AudioPanel />}
+        {activeTool === 'ai' && <AIPanel />}
+      </div>
     </div>
   )
-}
-
-function MobilePanelContent({ videoRef }) {
-  const activeTool = useEditorStore(s => s.activeTool)
-
-  switch (activeTool) {
-    case 'cursor': return <TrimPanel videoRef={videoRef} />
-    case 'text':
-    case 'subtitles': return <TextPanel />
-    case 'music': return <AudioPanel />
-    case 'ai': return <AIPanel />
-    default: return null
-  }
 }
 
 function TrimPanel({ videoRef }) {
@@ -68,62 +46,55 @@ function TrimPanel({ videoRef }) {
   const setPlaybackSpeed = useEditorStore(s => s.setPlaybackSpeed)
 
   return (
-    <>
-      <Section label="Trim">
-        <SliderRow label="Start" value={`${Math.round(trimStart)}%`}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '9px', color: textDim, marginBottom: '4px' }}>Start</div>
           <input type="range" min="0" max={trimEnd - 5} value={trimStart}
             onChange={e => setTrimStart(Number(e.target.value))}
             className="editor-slider" />
-        </SliderRow>
-        <SliderRow label="End" value={`${Math.round(trimEnd)}%`}>
+        </div>
+        <span style={{ fontSize: '10px', color: brand, fontFamily: fonts.mono, minWidth: '32px', textAlign: 'right' }}>{Math.round(trimStart)}%</span>
+      </div>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '9px', color: textDim, marginBottom: '4px' }}>End</div>
           <input type="range" min={trimStart + 5} max="100" value={trimEnd}
             onChange={e => setTrimEnd(Number(e.target.value))}
             className="editor-slider" />
-        </SliderRow>
-        <div style={{
-          background: bgSecondary, borderRadius: '8px', padding: '10px',
-          fontSize: '11px', color: textDim, textAlign: 'center',
-        }}>
-          Duration: <span style={{ color: brand, fontWeight: '700' }}>{Math.round((trimEnd - trimStart) * 0.45)}s</span>
         </div>
-      </Section>
-      <Section label="Quick Presets">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
-          {[
-            { label: '15s', start: 0, end: 33 },
-            { label: '30s', start: 0, end: 67 },
-            { label: '60s', start: 0, end: 100 },
-          ].map(p => (
-            <button key={p.label} onClick={() => { setTrimStart(p.start); setTrimEnd(p.end) }}
-              style={{
-                background: bgSecondary, border: `1px solid ${borderSoft}`,
-                borderRadius: '6px', padding: '10px', cursor: 'pointer',
-                color: textPrimary, fontSize: '11px', fontFamily: fonts.body,
-              }}>
-              {p.label}
-            </button>
-          ))}
+        <span style={{ fontSize: '10px', color: brand, fontFamily: fonts.mono, minWidth: '32px', textAlign: 'right' }}>{Math.round(trimEnd)}%</span>
+      </div>
+      <div style={{ display: 'flex', gap: '6px' }}>
+        {[
+          { label: '15s', start: 0, end: 33 },
+          { label: '30s', start: 0, end: 67 },
+          { label: '60s', start: 0, end: 100 },
+        ].map(p => (
+          <button key={p.label} onClick={() => { setTrimStart(p.start); setTrimEnd(p.end) }}
+            style={{
+              flex: 1, background: bgSecondary, border: `1px solid ${borderSoft}`,
+              borderRadius: '6px', padding: '6px', cursor: 'pointer',
+              color: textPrimary, fontSize: '10px', fontFamily: fonts.body,
+            }}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '9px', color: textDim, marginBottom: '4px' }}>Speed</div>
+          <input type="range" min="0.25" max="4" step="0.25" value={playbackSpeed}
+            onChange={e => {
+              const s = Number(e.target.value)
+              setPlaybackSpeed(s)
+              if (videoRef?.current) videoRef.current.playbackRate = s
+            }}
+            className="editor-slider" />
         </div>
-      </Section>
-      <Section label="Speed">
-        <div style={{
-          fontSize: '24px', fontWeight: '700', color: brand,
-          fontFamily: fonts.mono, textAlign: 'center', padding: '8px',
-          background: bgSecondary, borderRadius: '8px', marginBottom: '8px',
-        }}>{playbackSpeed}x</div>
-        <input type="range" min="0.25" max="4" step="0.25" value={playbackSpeed}
-          onChange={e => {
-            const s = Number(e.target.value)
-            setPlaybackSpeed(s)
-            if (videoRef?.current) videoRef.current.playbackRate = s
-          }}
-          className="editor-slider" />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: textDim, marginTop: '2px' }}>
-          <span>0.25x</span>
-          <span>4x</span>
-        </div>
-      </Section>
-    </>
+        <span style={{ fontSize: '11px', color: brand, fontFamily: fonts.mono, fontWeight: '700', minWidth: '32px', textAlign: 'right' }}>{playbackSpeed}x</span>
+      </div>
+    </div>
   )
 }
 
@@ -138,59 +109,56 @@ function TextPanel() {
   const setFontSize = useEditorStore(s => s.setFontSize)
 
   return (
-    <>
-      <Section label="Text">
-        <input type="text" placeholder="Enter text..."
-          value={subtitleText}
-          onChange={e => setSubtitleText(e.target.value)}
-          className="editor-input" />
-      </Section>
-      <Section label="Style">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <input type="text" placeholder="Enter text..."
+        value={subtitleText}
+        onChange={e => setSubtitleText(e.target.value)}
+        className="editor-input" />
+      <div>
+        <div style={{ fontSize: '9px', color: textDim, marginBottom: '6px' }}>Style</div>
+        <div style={{ display: 'flex', gap: '4px', overflow: 'auto' }}>
           {subtitleStyles.map(s => (
             <button key={s.id} onClick={() => setSubtitleStyle(s.id)}
               style={{
-                background: bgSecondary, border: `1px solid ${subtitleStyle === s.id ? brand : borderSoft}`,
-                borderRadius: '8px', padding: '10px 8px', cursor: 'pointer',
+                flexShrink: 0, background: bgSecondary,
+                border: `1px solid ${subtitleStyle === s.id ? brand : borderSoft}`,
+                borderRadius: '8px', padding: '8px 10px', cursor: 'pointer',
                 textAlign: 'center', color: textPrimary,
               }}>
-              <div style={{ ...s.preview, fontSize: '14px', marginBottom: '4px' }}>Aa</div>
-              <div style={{ fontSize: '9px', color: subtitleStyle === s.id ? brand : textDim }}>{s.label}</div>
+              <div style={{ ...s.preview, fontSize: '12px', marginBottom: '2px' }}>Aa</div>
+              <div style={{ fontSize: '8px', color: subtitleStyle === s.id ? brand : textDim, whiteSpace: 'nowrap' }}>{s.label}</div>
             </button>
           ))}
         </div>
-      </Section>
-      <Section label="Position">
-        <div style={{ display: 'flex', gap: '6px' }}>
-          {[
-            { id: 'top', label: 'Top' },
-            { id: 'middle', label: 'Mid' },
-            { id: 'bottom', label: 'Bot' },
-          ].map(p => (
-            <button key={p.id} onClick={() => setSubtitlePosition(p.id)}
-              style={{
-                flex: 1, background: bgSecondary,
-                border: `1px solid ${subtitlePosition === p.id ? brand : borderSoft}`,
-                borderRadius: '6px', padding: '10px', cursor: 'pointer',
-                textAlign: 'center', color: subtitlePosition === p.id ? brand : textSecondary,
-                fontSize: '11px',
-              }}>
-              {p.label}
-            </button>
-          ))}
+      </div>
+      <div style={{ display: 'flex', gap: '6px' }}>
+        {[
+          { id: 'top', label: 'Top' },
+          { id: 'middle', label: 'Mid' },
+          { id: 'bottom', label: 'Bot' },
+        ].map(p => (
+          <button key={p.id} onClick={() => setSubtitlePosition(p.id)}
+            style={{
+              flex: 1, background: bgSecondary,
+              border: `1px solid ${subtitlePosition === p.id ? brand : borderSoft}`,
+              borderRadius: '6px', padding: '8px', cursor: 'pointer',
+              textAlign: 'center', color: subtitlePosition === p.id ? brand : textSecondary,
+              fontSize: '10px',
+            }}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '9px', color: textDim, marginBottom: '4px' }}>Size</div>
+          <input type="range" min="10" max="32" value={fontSize}
+            onChange={e => setFontSize(Number(e.target.value))}
+            className="editor-slider" />
         </div>
-      </Section>
-      <Section label="Font Size">
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: textDim }}>
-          <span>Small</span>
-          <span>{fontSize}px</span>
-          <span>Large</span>
-        </div>
-        <input type="range" min="10" max="32" value={fontSize}
-          onChange={e => setFontSize(Number(e.target.value))}
-          className="editor-slider" />
-      </Section>
-    </>
+        <span style={{ fontSize: '10px', color: brand, fontFamily: fonts.mono, minWidth: '24px', textAlign: 'right' }}>{fontSize}</span>
+      </div>
+    </div>
   )
 }
 
@@ -201,62 +169,32 @@ function AudioPanel() {
   const setMusicVolume = useEditorStore(s => s.setMusicVolume)
 
   return (
-    <Section label="Music">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div style={{ display: 'flex', gap: '4px', overflow: 'auto' }}>
         {musicTracks.map(t => (
           <button key={t.id} onClick={() => setMusic(t.id)}
             style={{
-              background: bgSecondary, border: `1px solid ${music === t.id ? brand : borderSoft}`,
-              borderRadius: '8px', padding: '12px 14px', cursor: 'pointer',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              color: music === t.id ? brand : textSecondary, fontSize: '12px',
-              fontFamily: fonts.body,
+              flexShrink: 0, background: bgSecondary,
+              border: `1px solid ${music === t.id ? brand : borderSoft}`,
+              borderRadius: '8px', padding: '8px 12px', cursor: 'pointer',
+              color: music === t.id ? brand : textSecondary, fontSize: '11px',
+              fontFamily: fonts.body, whiteSpace: 'nowrap',
             }}>
-            <span>{t.label}</span>
-            {music === t.id && <span style={{ color: brand, display: 'flex' }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
-            </span>}
+            {t.label}
           </button>
         ))}
       </div>
       {music !== 'none' && (
-        <div style={{ marginTop: '14px' }}>
-          <SliderRow label="Volume" value={`${musicVolume}%`}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '9px', color: textDim, marginBottom: '4px' }}>Volume</div>
             <input type="range" min="0" max="100" value={musicVolume}
               onChange={e => setMusicVolume(Number(e.target.value))}
               className="editor-slider" />
-          </SliderRow>
+          </div>
+          <span style={{ fontSize: '10px', color: brand, fontFamily: fonts.mono, minWidth: '24px', textAlign: 'right' }}>{musicVolume}%</span>
         </div>
       )}
-    </Section>
-  )
-}
-
-function Section({ label, children }) {
-  return (
-    <div style={{ marginBottom: '16px' }}>
-      <div style={{
-        fontSize: '9px', color: textDim, textTransform: 'uppercase',
-        letterSpacing: '1.5px', marginBottom: '8px', fontFamily: fonts.mono,
-      }}>
-        {label}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function SliderRow({ label, value, children }) {
-  return (
-    <div style={{ marginBottom: '10px' }}>
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: '4px',
-      }}>
-        <span style={{ fontSize: '10px', color: textDim }}>{label}</span>
-        <span style={{ fontSize: '10px', color: brand, fontFamily: fonts.mono, fontWeight: '600' }}>{value}</span>
-      </div>
-      {children}
     </div>
   )
 }
