@@ -139,6 +139,11 @@ def dedent_credits(user_id):
     if result.data and result.data[0]["credits"] > 0:
         new_credits = result.data[0]["credits"] - 1
         supabase.table("users").update({"credits": new_credits}).eq("id", user_id).execute()
+        supabase.table("credit_transactions").insert({
+            "user_id": user_id,
+            "amount": -1,
+            "type": "consume",
+        }).execute()
         return new_credits
     return 0
 
@@ -491,10 +496,16 @@ async def stripe_webhook(request: Request):
             "price_pro": "pro",
         }
         plan = plan_map.get(price_id, "creator")
+        credit_amount = 999 if plan == "pro" else 200
         supabase.table("users").update({
             "plan": plan,
-            "credits": 999 if plan == "pro" else 200
+            "credits": credit_amount
         }).eq("id", user_id).execute()
+        supabase.table("credit_transactions").insert({
+            "user_id": user_id,
+            "amount": credit_amount,
+            "type": "purchase",
+        }).execute()
     return {"received": True}
 
 

@@ -10,6 +10,19 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Credit transactions table: tracks all credit movements
+CREATE TABLE IF NOT EXISTS credit_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  amount INTEGER NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('purchase', 'consume', 'refund')),
+  job_id UUID,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id ON credit_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_created_at ON credit_transactions(created_at DESC);
+
 -- Clips table: stores generated clips per user
 CREATE TABLE IF NOT EXISTS clips (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -41,6 +54,10 @@ BEGIN
     3,
     'free'
   );
+
+  INSERT INTO public.credit_transactions (user_id, amount, type)
+  VALUES (NEW.id, 3, 'purchase');
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

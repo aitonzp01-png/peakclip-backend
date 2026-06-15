@@ -6,6 +6,18 @@ CREATE TABLE IF NOT EXISTS public.users (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS public.credit_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  amount INTEGER NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('purchase', 'consume', 'refund')),
+  job_id UUID,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id ON public.credit_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_created_at ON public.credit_transactions(created_at DESC);
+
 CREATE TABLE IF NOT EXISTS public.clips (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
@@ -22,6 +34,10 @@ RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO public.users (id, email, credits, plan)
   VALUES (NEW.id, NEW.email, 3, 'free');
+
+  INSERT INTO public.credit_transactions (user_id, amount, type)
+  VALUES (NEW.id, 3, 'purchase');
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
