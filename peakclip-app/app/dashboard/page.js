@@ -286,13 +286,13 @@ export default function Dashboard() {
               <div style={{
                 fontSize: 'clamp(28px, 4vw, 42px)', color: textPrimary,
                 lineHeight: 1.2, marginBottom: '12px',
-                fontFamily: fonts.display, letterSpacing: '0.08em',
+                fontFamily: fonts.display, letterSpacing: '0.03em',
               }}>
                 TURN LONG VIDEOS INTO{' '}
                 <span style={{
                   background: 'linear-gradient(135deg, #D9B44A, #E8C766)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  letterSpacing: '0.08em',
+                  letterSpacing: '0.03em',
                 }}>VIRAL SHORTS</span>
               </div>
               <div style={{
