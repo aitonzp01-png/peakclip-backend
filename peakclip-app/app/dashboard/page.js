@@ -286,18 +286,18 @@ export default function Dashboard() {
               <div style={{
                 fontSize: 'clamp(28px, 4vw, 42px)', color: textPrimary,
                 lineHeight: 1.2, marginBottom: '12px',
-                fontFamily: fonts.display, letterSpacing: '6px',
+                fontFamily: fonts.display, letterSpacing: '10px',
               }}>
                 TURN LONG VIDEOS INTO{' '}
                 <span style={{
                   background: 'linear-gradient(135deg, #D9B44A, #E8C766)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  letterSpacing: '6px',
+                  letterSpacing: '10px',
                 }}>VIRAL SHORTS</span>
               </div>
               <div style={{
-                fontFamily: fonts.body, fontSize: '13px', color: textSecondary,
-                maxWidth: '520px', margin: '0 auto', lineHeight: 1.7,
+                fontFamily: fonts.body, fontSize: '11.5px', color: textSecondary,
+                maxWidth: '480px', margin: '0 auto', lineHeight: 1.7,
               }}>
                 Extract high-scoring clips, generate animated captions, and auto-crop horizontal videos into high-impact vertical format in one click.
               </div>
@@ -480,10 +480,11 @@ export default function Dashboard() {
             <span className="mobile-bottom-nav-label">{item.id === 'upgrade' ? 'Pro' : item.label.split(' ')[0]}</span>
           </button>
         ))}
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', flex: 1 }}>
           <button
             onClick={() => setShowProfileMenu(!showProfileMenu)}
             className={`mobile-bottom-nav-item${showProfileMenu ? ' active' : ''}`}
+            style={{ width: '100%', flex: 'none' }}
           >
             <span className="mobile-bottom-nav-icon">
               <div style={{
