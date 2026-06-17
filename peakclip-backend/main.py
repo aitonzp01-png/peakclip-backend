@@ -457,8 +457,10 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
             },
-            'extractor_args': {'youtube': {'player_client': ['android']}},
+            'extractor_args': {'youtube': {'player_client': ['all'], 'formats': ['duplicate', 'missing_pot']}},
         }
+        if os.path.exists('cookies.txt'):
+            ydl_opts['cookiefile'] = 'cookies.txt'
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([req.url])
     except Exception as e:
