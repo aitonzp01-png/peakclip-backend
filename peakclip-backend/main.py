@@ -209,7 +209,7 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 # JWT verification
 supabase_url = os.getenv("SUPABASE_URL")
-jwks_client = PyJWKClient(f"{supabase_url}/.well-known/jwks.json")
+jwks_client = PyJWKClient(f"{supabase_url}/auth/v1/.well-known/jwks.json")
 
 async def get_current_user(authorization: str = Header(...)):
     token = authorization.replace("Bearer ", "")
