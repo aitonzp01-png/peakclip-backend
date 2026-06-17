@@ -306,6 +306,7 @@ def health():
 def debug():
     import shutil
     ffmpeg_path = shutil.which("ffmpeg")
+    deno_path = shutil.which("deno")
     yt_dlp_ok = True
     try:
         import yt_dlp
@@ -316,6 +317,7 @@ def debug():
     supabase_url = os.getenv("SUPABASE_URL", "")
     return {
         "ffmpeg": ffmpeg_path or "NOT FOUND",
+        "deno": deno_path or "NOT FOUND",
         "yt_dlp": yt_dlp_ok,
         "openai_key_set": bool(openai_key),
         "openai_key_prefix": openai_key[:8] + "..." if openai_key else "",
