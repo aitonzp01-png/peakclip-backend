@@ -22,7 +22,7 @@ import asyncio
 from collections import defaultdict
 from urllib.parse import urlparse
 import jwt as pyjwt
-from jwt import PyJWKClient
+from jwt import PyJWKClient, PyJWKClientError
 
 app = FastAPI()
 
@@ -223,7 +223,7 @@ async def get_current_user(authorization: str = Header(...)):
         return payload
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except pyjwt.InvalidTokenError:
+    except (pyjwt.InvalidTokenError, PyJWKClientError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
