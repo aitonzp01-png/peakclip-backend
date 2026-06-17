@@ -449,6 +449,15 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
         ydl_opts = {
             'format': 'best[ext=mp4]/best',
             'outtmpl': video_path,
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': False,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+            },
+            'extractor_args': {'youtube': {'player_client': ['android']}},
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([req.url])
