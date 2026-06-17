@@ -1,0 +1,225 @@
+══════════════════════════════════════════════════════════════════
+  GUÍA COMPLETA — PEAKCLIP: PUESTA EN MARCHA
+  (TODOS LOS PASOS PARA QUE EL FLUJO FUNCIONE)
+══════════════════════════════════════════════════════════════════
+
+─────────────────────────────────────────────────────────────
+ 1. EJECUTAR SQL EN SUPABASE DASHBOARD (OBLIGATORIO)
+─────────────────────────────────────────────────────────────
+
+  Ve a: https://supabase.com/dashboard/project/tjuiourlpbwivjzyewav/sql/new
+
+  Pega y ejecuta este SQL:
+
+  ── INICIO SQL ──
+  CREATE TABLE IF NOT EXISTS public.credit_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('purchase', 'consume', 'refund')),
+    job_id UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id
+    ON public.credit_transactions(user_id);
+  CREATE INDEX IF NOT EXISTS idx_credit_transactions_created_at
+    ON public.credit_transactions(created_at DESC);
+
+  CREATE OR REPLACE FUNCTION public.handle_new_user()
+  RETURNS TRIGGER AS $$
+  BEGIN
+    INSERT INTO public.users (id, email, credits, plan)
+    VALUES (NEW.id, NEW.email, 3, 'free');
+    INSERT INTO public.credit_transactions (user_id, amount, type)
+    VALUES (NEW.id, 3, 'purchase');
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql SECURITY DEFINER;
+  ── FIN SQL ──
+
+  ✅ Verifica que la tabla se haya creado:
+     En el panel izquierdo > "Table Editor" > debería aparecer "credit_transactions"
+
+─────────────────────────────────────────────────────────────
+ 2. GENERAR NUEVA LLAVE DE STRIPE
+─────────────────────────────────────────────────────────────
+
+  La llave actual en .env expiró o es inválida.
+
+  1. Ve a: https://dashboard.stripe.com/test/apikeys
+  2. Crea una nueva "Secret key" de prueba (empieza con sk_test_)
+  3. Cópiala y úsala en el paso 3
+
+─────────────────────────────────────────────────────────────
+ 3. ACTUALIZAR VARIABLES DE ENTORNO EN RAILWAY
+─────────────────────────────────────────────────────────────
+
+  Ve a: https://railway.app/dashboard
+  Selecciona el proyecto "peakclip-backend"
+  Ve a "Variables" y actualiza/agrega:
+
+    SUPABASE_URL          = https://tjuiourlpbwivjzyewav.supabase.co
+    SUPABASE_SERVICE_KEY  = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqdWlvdXJscGJ3aXZqenlld2F2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDYwODIxNywiZXhwIjoyMDk2MTg0MjE3fQ.XcxhPAO1Ikl6wl6ydA_YnNiYLX2rMF3iMp8wBxFQadA
+    OPENAI_API_KEY        = <tu API key de OpenAI>
+    STRIPE_SECRET_KEY     = <la nueva sk_test_ que generaste>
+    STRIPE_WEBHOOK_SECRET = whsec_your_webhook_secret
+    FRONTEND_URL          = https://peakclip-studio.vercel.app
+    PUBLIC_URL            = https://peakclip-backend-production.up.railway.app
+
+  ⚠️  Después de actualizar, Railway automaticamente redeploya el backend.
+     Espera 2-3 minutos y verifica que el deploy esté verde (success).
+
+─────────────────────────────────────────────────────────────
+ 4. FORZAR REDEPLOY DE RAILWAY (si no se autodeployó)
+─────────────────────────────────────────────────────────────
+
+  Si Railway no redeployó automáticamente:
+
+  1. Ve a: https://railway.app/dashboard
+  2. Selecciona peakclip-backend
+  3. Ve a "Deployments"
+  4. Haz clic en "Redeploy"
+
+  ✅ Verifica que el backend responda:
+     Visita https://peakclip-backend-production.up.railway.app/
+     Deberías ver: {"status": "PeakClip API running"}
+
+─────────────────────────────────────────────────────────────
+ 5. FORZAR REDEPLOY DE VERCEL
+─────────────────────────────────────────────────────────────
+
+  El frontend necesita reflejar los cambios.
+
+  Opción A — Via GitHub (recomendado):
+    1. Haz push a GitHub master:
+       git add .
+       git commit -m "fix: storage bucket public, credit_transactions table, upload upsert, CORS, env vars"
+       git push origin master
+    2. Vercel debería detectar el push y autodeployar
+
+  Opción B — Via Vercel CLI (si tienes token):
+    npx vercel --prod --token <token>
+
+  Opción C — Via Vercel Dashboard:
+    1. Ve a: https://vercel.com/dashboard
+    2. Selecciona peakclip-studio
+    3. Ve a "Deployments"
+    4. Haz clic en los tres puntos (...) > "Redeploy"
+
+  ✅ Verifica: https://peakclip-studio.vercel.app/ debe cargar sin errores
+
+─────────────────────────────────────────────────────────────
+ 6. PROBAR EL FLUJO COMPLETO
+─────────────────────────────────────────────────────────────
+
+  1. Abre: https://peakclip-studio.vercel.app/login
+  2. Inicia sesión con un usuario existente o registra uno nuevo
+  3. En el dashboard, pega una URL de YouTube (video < 10 min ideal)
+  4. Haz clic en "Generate Clips"
+  5. Debería aparecer el estado "Processing..." con un spinner
+  6. Después de ~30-120 segundos, deben aparecer los clips generados
+  7. Haz clic en "Open in Editor" en uno de los clips
+  8. En el editor, ajusta subtítulos, música, filtros, etc.
+  9. Haz clic en "Export" (esquina superior derecha)
+  10. Selecciona resolución, formato, FPS
+  11. Haz clic en "Export Clip"
+  12. Debería procesar y mostrarte un botón "Download"
+
+─────────────────────────────────────────────────────────────
+ 7. SI ALGO FALLA — LOGS DE DEPURACIÓN
+─────────────────────────────────────────────────────────────
+
+  Backend logs (Railway):
+    1. Ve a: https://railway.app/dashboard
+    2. Selecciona peakclip-backend
+    3. Ve a "Deployments"
+    4. Haz clic en el deployment actual
+    5. Ve a "Logs"
+
+  Frontend logs:
+    Abre la consola del navegador (F12 > Console)
+    Busca errores rojos o mensajes con "ERROR"
+
+  Errores comunes:
+
+  "No credits remaining"
+    → Verifica que el usuario tenga créditos en Supabase (Table Editor > users)
+    → Si no, inserta manualmente: UPDATE users SET credits = 3 WHERE email = 'tu@email.com'
+
+  "Storage upload failed"
+    → Verifica que el bucket 'clips' sea público: GET https://<project>.supabase.co/storage/v1/bucket/clips
+    → Debe decir "public": true
+
+  "credit_transactions insert failed (non-fatal)"
+    → La tabla no existe → ve al paso 1
+
+  "Network Error" o "Failed to fetch"
+    → Verifica CORS: el frontend necesita poder llamar al backend
+    → https://peakclip-studio.vercel.app debe estar en ALLOWED_ORIGINS
+
+  "Export error" en FFmpeg
+    → Revisa los logs de Railway para ver el error específico de FFmpeg
+    → Puede ser codec, formato o ruta de archivo
+
+─────────────────────────────────────────────────────────────
+ 8. CONFIGURAR STRIPE WEBHOOK (para pagos)
+─────────────────────────────────────────────────────────────
+
+  Cuando quieras activar pagos:
+
+  1. Ve a: https://dashboard.stripe.com/test/webhooks
+  2. "Add endpoint"
+  3. URL: https://peakclip-backend-production.up.railway.app/stripe-webhook
+  4. Eventos: Selecciona "checkout.session.completed"
+  5. Copia el "Signing secret" (whsec_...)
+  6. Agrégalo a Railway: STRIPE_WEBHOOK_SECRET = whsec_...
+
+─────────────────────────────────────────────────────────────
+ 9. ARCHIVOS MODIFICADOS (REFERENCIA)
+─────────────────────────────────────────────────────────────
+
+  peakclip-backend/main.py:
+    - CORS: added Vercel domain
+    - startup migration: detecta si credit_transactions existe, logging claro
+    - /process: storage upload con upsert, contenido-type correcto
+    - /export: storage upload con upsert
+    - dedent_credits: wrap credit_transactions en try/except
+    - stripe-webhook: wrap credit_transactions en try/except
+    - Bucket update: body correcto {"public": true}
+
+  peakclip-backend/schema.sql:
+    - Agregada tabla credit_transactions
+    - Actualizado trigger handle_new_user
+
+  peakclip-app/app/dashboard/page.js:
+    - Timeout 120s con AbortController
+    - Download button en clip cards
+    - Polling de estado cada 3s (40 intentos)
+    - Auto-switch a "My Clips" tab
+    - Refresh button
+    - focus/visibilitychange reload
+
+  peakclip-app/app/editor/page.js:
+    - setSubtitleStyle('bold-yellow') en vez de setSubtitleStyle(0)
+    - setMusic('chill') en vez de setMusic(1)
+    - setMusicVolume(30) en vez de setMusicVolume(0.3)
+
+  peakclip-app/app/editor/components/ExportModal.js:
+    - Maneja toda la lógica de exportación (antes estaba en EditorTopBar)
+
+  peakclip-app/app/editor/components/EditorTopBar.js:
+    - Export button solo abre el modal
+
+  peakclip-app/lib/api.js:
+    - Respaldos de URL apuntan a Railway, no localhost
+
+  peakclip-app/lib/supabase.js:
+    - Respaldos de credenciales para Vercel
+
+  peakclip-backend/.env:
+    - FRONTEND_URL actualizado a https://peakclip-studio.vercel.app
+
+══════════════════════════════════════════════════════════════════
+  FIN DE LA GUÍA
+══════════════════════════════════════════════════════════════════

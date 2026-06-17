@@ -28,13 +28,22 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def run_migrations():
+    supabase_url = os.getenv("SUPABASE_URL")
+    service_key = os.getenv("SUPABASE_SERVICE_KEY")
+    if not supabase_url or not service_key:
+        print("MIGRATION SKIPPED: missing SUPABASE_URL or SUPABASE_SERVICE_KEY")
+        return
+    project_ref = supabase_url.split("https://")[1].split(".")[0]
+
+    # Check if credit_transactions table exists via REST API
+    ct_exists = False
     try:
-        supabase_url = os.getenv("SUPABASE_URL")
-        service_key = os.getenv("SUPABASE_SERVICE_KEY")
-        if not supabase_url or not service_key:
-            print("MIGRATION SKIPPED: missing SUPABASE_URL or SUPABASE_SERVICE_KEY")
-            return
-        project_ref = supabase_url.split("https://")[1].split(".")[0]
+        supabase.table("credit_transactions").select("id").limit(1).execute()
+        ct_exists = True
+    except Exception:
+        pass
+
+    if not ct_exists:
         sql = """
             CREATE TABLE IF NOT EXISTS public.credit_transactions (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -60,6 +69,8 @@ async def run_migrations():
             END;
             $$ LANGUAGE plpgsql SECURITY DEFINER;
         """
+        sql_success = False
+        sql_errors = []
         async with httpx.AsyncClient(timeout=30) as client:
             headers = {
                 "apikey": service_key,
@@ -73,39 +84,45 @@ async def run_migrations():
                 try:
                     res = await client.post(url, json={"query": sql}, headers=headers)
                     if res.status_code == 200:
-                        print(f"MIGRATION OK via {url.split('/')[-1]}")
+                        print(f"SQL MIGRATION OK via {url.split('/')[-1]}")
+                        sql_success = True
                         break
-                    print(f"MIGRATION {url.split('/')[-1]}: {res.status_code} {res.text[:100]}")
+                    sql_errors.append(f"{url.split('/')[-1]}: {res.status_code} {res.text[:100]}")
                 except Exception as e:
-                    print(f"MIGRATION {url.split('/')[-1]} error: {e}")
+                    sql_errors.append(f"{url.split('/')[-1]}: {e}")
+        if not sql_success:
+            print("⚠️ CREDIT_TRANSACTIONS TABLE MISSING — DDL not available via API")
+            for err in sql_errors:
+                print(f"   {err}")
+            print("   To fix: open https://supabase.com/dashboard/project/tjuiourlpbwivjzyewav/sql/new")
+            print("   Paste the contents of peakclip-backend/schema.sql and click Run")
+    else:
+        print("SQL MIGRATION: credit_transactions table already exists (OK)")
 
-        # Ensure 'clips' storage bucket exists
-        try:
-            mgmt_url = f"https://api.supabase.com/v1/projects/{project_ref}/storage/buckets"
-            mgmt_headers = {
-                "Authorization": f"Bearer {service_key}",
-                "Content-Type": "application/json",
-            }
-            existing = await client.get(mgmt_url, headers=mgmt_headers)
-            if existing.status_code == 200:
-                buckets = [b["name"] for b in existing.json()]
-                if "clips" not in buckets:
-                    create_res = await client.post(
-                        mgmt_url,
-                        json={"id": "clips", "name": "clips", "public": True, "file_size_limit": 524288000},
-                        headers=mgmt_headers,
-                    )
-                    if create_res.status_code in (200, 201):
-                        print("STORAGE BUCKET 'clips' created")
-                    else:
-                        print(f"STORAGE BUCKET create: {create_res.status_code} {create_res.text[:100]}")
+    # Ensure 'clips' storage bucket exists and is public
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            update_res = await client.put(
+                f"https://{project_ref}.supabase.co/storage/v1/bucket/clips",
+                json={"public": True},
+                headers={"Authorization": f"Bearer {service_key}", "Content-Type": "application/json"},
+            )
+            if update_res.status_code in (200, 201, 204):
+                print("STORAGE BUCKET 'clips' is public (OK)")
+            elif update_res.status_code == 400:
+                create_res = await client.post(
+                    f"https://{project_ref}.supabase.co/storage/v1/bucket",
+                    json={"id": "clips", "name": "clips", "public": True, "file_size_limit": 524288000, "allowed_mime_types": ["video/mp4", "video/webm", "video/quicktime", "image/jpeg", "image/png"]},
+                    headers={"Authorization": f"Bearer {service_key}", "Content-Type": "application/json"},
+                )
+                if create_res.status_code in (200, 201):
+                    print("STORAGE BUCKET 'clips' created (OK)")
                 else:
-                    print("STORAGE BUCKET 'clips' already exists")
-        except Exception as e:
-            print(f"STORAGE BUCKET error: {e}")
-
+                    print(f"STORAGE BUCKET create: {create_res.status_code} {create_res.text[:200]}")
+            else:
+                print(f"STORAGE BUCKET update: {update_res.status_code} {update_res.text[:200]}")
     except Exception as e:
-        print(f"MIGRATION ERROR: {e}")
+        print(f"STORAGE BUCKET error: {e}")
 
 # In-memory rate limiter
 rate_store = defaultdict(list)
@@ -122,6 +139,8 @@ def check_rate_limit(key: str):
 
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "https://peakclip-studio.vercel.app",
+    "https://peakclip-app.railway.app",
     os.getenv("FRONTEND_URL", ""),
 ]
 ALLOWED_ORIGINS = [o for o in ALLOWED_ORIGINS if o]
@@ -273,11 +292,14 @@ def dedent_credits(user_id):
     if result.data and result.data[0]["credits"] > 0:
         new_credits = result.data[0]["credits"] - 1
         supabase.table("users").update({"credits": new_credits}).eq("id", user_id).execute()
-        supabase.table("credit_transactions").insert({
-            "user_id": user_id,
-            "amount": -1,
-            "type": "consume",
-        }).execute()
+        try:
+            supabase.table("credit_transactions").insert({
+                "user_id": user_id,
+                "amount": -1,
+                "type": "consume",
+            }).execute()
+        except Exception as e:
+            print(f"credit_transactions insert failed (non-fatal): {e}")
         return new_credits
     return 0
 
@@ -512,7 +534,7 @@ Return ONLY a JSON with this exact format:
             try:
                 with open(output_path, 'rb') as f:
                     storage_path = f"clips/{job_id}/{job_id}_clip{i+1}.mp4"
-                    supabase.storage.from_("clips").upload(storage_path, f)
+                    supabase.storage.from_("clips").upload(storage_path, f, {"content-type": "video/mp4", "upsert": "true"})
                     clip_storage_url = supabase.storage.from_("clips").get_public_url(storage_path)
             except Exception as e:
                 print(f"Storage upload failed: {e}")
@@ -522,7 +544,7 @@ Return ONLY a JSON with this exact format:
             try:
                 with open(thumb_path, 'rb') as f:
                     thumb_storage_path = f"thumbnails/{job_id}.jpg"
-                    supabase.storage.from_("clips").upload(thumb_storage_path, f)
+                    supabase.storage.from_("clips").upload(thumb_storage_path, f, {"content-type": "image/jpeg", "upsert": "true"})
                     thumb_storage_url = supabase.storage.from_("clips").get_public_url(thumb_storage_path)
             except Exception as e:
                 print(f"Thumbnail storage upload failed: {e}")
@@ -725,7 +747,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         try:
             with open(output_path, 'rb') as f:
                 storage_path = f"exports/{output_filename}"
-                supabase.storage.from_("clips").upload(storage_path, f)
+                supabase.storage.from_("clips").upload(storage_path, f, {"content-type": f"video/{output_ext}", "upsert": "true"})
                 public_url = supabase.storage.from_("clips").get_public_url(storage_path)
         except Exception as e:
             print(f"Storage upload failed: {e}")
@@ -806,11 +828,14 @@ async def stripe_webhook(request: Request):
             "plan": plan,
             "credits": credit_amount
         }).eq("id", user_id).execute()
-        supabase.table("credit_transactions").insert({
-            "user_id": user_id,
-            "amount": credit_amount,
-            "type": "purchase",
-        }).execute()
+        try:
+            supabase.table("credit_transactions").insert({
+                "user_id": user_id,
+                "amount": credit_amount,
+                "type": "purchase",
+            }).execute()
+        except Exception as e:
+            print(f"credit_transactions insert failed (non-fatal): {e}")
     return {"received": True}
 
 

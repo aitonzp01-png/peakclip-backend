@@ -6,7 +6,7 @@ import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surfac
 import icons from '../../lib/icons'
 import ErrorBoundary from '../../lib/error-boundary'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://peakclip-backend-production.up.railway.app'
 
 export default function Dashboard() {
   const [user, setUser] = useState(null)
