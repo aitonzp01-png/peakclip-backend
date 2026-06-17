@@ -253,6 +253,59 @@ def sanitize_drawtext(text: str) -> str:
     return re.sub(r"[^\w\s@.,!?¿¡\-:;'\"()]", "", text)
 
 
+# ─── Subtitle + Music helpers ───────────────────────────────
+
+MUSIC_DIR = "music"
+MOOD_TRACKS = {
+    "epic": "epic.mp3",
+    "hype": "hype.mp3",
+    "chill": "chill.mp3",
+    "funny": "funny.mp3",
+    "emotional": "emotional.mp3",
+    "suspense": "suspense.mp3",
+}
+os.makedirs(MUSIC_DIR, exist_ok=True)
+
+
+def format_srt_time(seconds: float) -> str:
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    ms = int(round((seconds - int(seconds)) * 1000))
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def generate_srt_subtitle(words, clip_start, clip_end, output_path):
+    """Generate SRT word-by-word subtitles with timestamps relative to clip_start."""
+    clip_words = [w for w in words if w['start'] >= clip_start and w['end'] <= clip_end]
+    lines = []
+    idx = 1
+    for w in clip_words:
+        word_text = w['word'].strip()
+        if not word_text:
+            continue
+        rel_start = max(0.0, w['start'] - clip_start)
+        rel_end = w['end'] - clip_start
+        lines.append(str(idx))
+        lines.append(f"{format_srt_time(rel_start)} --> {format_srt_time(rel_end)}")
+        lines.append(word_text)
+        lines.append("")
+        idx += 1
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write("\n".join(lines))
+
+
+def resolve_music_path(mood: str) -> str | None:
+    filename = MOOD_TRACKS.get(mood)
+    if not filename:
+        return None
+    path = os.path.join(MUSIC_DIR, filename)
+    return path if os.path.isfile(path) else None
+
+
+# ──────────────────────────────────────────────────────────────
+
+
 @app.post("/process")
 async def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
     check_rate_limit(f"process:{user['sub']}")
@@ -299,8 +352,17 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
             model="whisper-1",
             file=f,
             response_format="verbose_json",
-            timestamp_granularities=["segment"]
+            timestamp_granularities=["word", "segment"]
         )
+
+    words_data = []
+    if hasattr(transcript, 'words') and transcript.words:
+        for w in transcript.words:
+            word_text = getattr(w, 'word', '') or ''
+            w_start = getattr(w, 'start', None)
+            w_end = getattr(w, 'end', None)
+            if w_start is not None and w_end is not None and word_text.strip():
+                words_data.append({"word": word_text, "start": w_start, "end": w_end})
 
     segments_text = "\n".join([
         f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}"
@@ -316,12 +378,14 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
 Transcript:
 {segments_text}
 
+For each clip, classify the mood as one of: epic, hype, chill, funny, emotional, suspense.
+
 Return ONLY a JSON with this exact format:
 {{
   "clips": [
-    {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral"}},
-    {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral"}},
-    {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral"}}
+    {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype"}},
+    {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny"}},
+    {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional"}}
   ]
 }}"""
         }]
@@ -329,22 +393,69 @@ Return ONLY a JSON with this exact format:
 
     clips_data = json.loads(response.choices[0].message.content)
     output_clips = []
+    temp_files_extra = []
 
     try:
         for i, clip in enumerate(clips_data["clips"]):
             output_path = f"outputs/{job_id}_clip{i+1}.mp4"
             duration = clip["end"] - clip["start"]
+            clip_mood = clip.get("mood", "chill")
+            clip_start = clip["start"]
 
-            subprocess.run([
-                'ffmpeg',
-                '-ss', str(clip["start"]),
-                '-i', video_path,
-                '-t', str(duration),
-                '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1',
-                '-c:v', 'libx264',
-                '-c:a', 'aac',
-                '-y', output_path
-            ], capture_output=True)
+            # ── Generate SRT subtitles (word-by-word, relative to clip start) ──
+            srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}.srt")
+            generate_srt_subtitle(words_data, clip_start, clip["end"], srt_path)
+            temp_files_extra.append(srt_path)
+
+            # ── Resolve music track (silently skip if missing) ──
+            music_path = resolve_music_path(clip_mood)
+
+            # ── Build ffmpeg command ──
+            srt_path_ff = srt_path.replace('\\', '/')
+
+            video_filter = (
+                f"subtitles={srt_path_ff}:force_style="
+                f"'Fontname=Arial,Fontsize=48,PrimaryColour=&H0073BADF,"
+                f"BackColour=&H80000000,Outline=0,Bold=1,Alignment=2,MarginV=60'"
+            )
+            video_filter += (
+                ",scale=1080:1920:force_original_aspect_ratio=decrease,"
+                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
+            )
+
+            filter_parts = [f"[0:v]{video_filter}[v]"]
+            if music_path:
+                music_path_ff = music_path.replace('\\', '/')
+                filter_parts.append(
+                    "[0:a]volume=1.0[a_main];"
+                    f"[1:a]volume=0.18[a_music];"
+                    "[a_main][a_music]amix=inputs=2:duration=first[a]"
+                )
+            else:
+                filter_parts.append("[0:a]anull[a]")
+
+            cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
+            if music_path:
+                cmd += ['-stream_loop', '-1', '-i', music_path_ff]
+            cmd += ['-t', str(duration),
+                    '-filter_complex', ';'.join(filter_parts),
+                    '-map', '[v]', '-map', '[a]',
+                    '-c:v', 'libx264', '-preset', 'fast',
+                    '-c:a', 'aac', '-y', output_path]
+
+            subprocess.run(cmd, capture_output=True)
+
+            if os.path.getsize(output_path) < 1024:
+                # Subtitle-only fallback: skip subtitles + music
+                fallback_cmd = [
+                    'ffmpeg',
+                    '-ss', str(clip_start), '-i', video_path,
+                    '-t', str(duration),
+                    '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2',
+                    '-c:v', 'libx264', '-preset', 'fast',
+                    '-c:a', 'aac', '-y', output_path
+                ]
+                subprocess.run(fallback_cmd, capture_output=True)
 
             local_files.append(output_path)
 
@@ -381,6 +492,7 @@ Return ONLY a JSON with this exact format:
                 "clip": i + 1,
                 "title": clip["title"],
                 "reason": clip["reason"],
+                "mood": clip_mood,
                 "start": clip["start"],
                 "end": clip["end"],
                 "file": clip_storage_url,
@@ -388,6 +500,9 @@ Return ONLY a JSON with this exact format:
             })
     finally:
         for f in local_files:
+            try: os.unlink(f)
+            except OSError: pass
+        for f in temp_files_extra:
             try: os.unlink(f)
             except OSError: pass
 
