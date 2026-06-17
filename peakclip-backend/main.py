@@ -22,7 +22,9 @@ import asyncio
 from collections import defaultdict
 from urllib.parse import urlparse
 import jwt as pyjwt
-from jwt import PyJWK
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+import base64
 
 app = FastAPI()
 
@@ -242,10 +244,17 @@ async def get_current_user(authorization: str = Header(...)):
     if not jwk:
         raise HTTPException(status_code=401, detail=f"Invalid token (unknown kid: {kid})")
     try:
-        signing_key = PyJWK(jwk).key
+        x = base64.urlsafe_b64decode(jwk["x"] + "==")
+        y = base64.urlsafe_b64decode(jwk["y"] + "==")
+        pub_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), b"\x04" + x + y)
+        pem = pub_key.public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo
+        )
         payload = pyjwt.decode(
             token,
-            signing_key,
+            pem,
+            algorithms=[jwk.get("alg", "ES256")],
             options={"verify_exp": True, "verify_aud": False}
         )
         return payload
