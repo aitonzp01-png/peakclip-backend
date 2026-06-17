@@ -22,7 +22,7 @@ import asyncio
 from collections import defaultdict
 from urllib.parse import urlparse
 import jwt as pyjwt
-from jwt import PyJWKClient, PyJWKClientError
+from jwt import PyJWK
 
 app = FastAPI()
 
@@ -209,7 +209,21 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 # JWT verification
 supabase_url = os.getenv("SUPABASE_URL")
-jwks_client = PyJWKClient(f"{supabase_url}/auth/v1/.well-known/jwks.json")
+_jwks_keys = []
+
+@app.on_event("startup")
+async def fetch_jwks():
+    global _jwks_keys
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(f"{supabase_url}/auth/v1/.well-known/jwks.json")
+            if r.status_code == 200:
+                _jwks_keys = r.json().get("keys", [])
+                print(f"JWKS loaded: {len(_jwks_keys)} keys")
+            else:
+                print(f"JWKS fetch failed: {r.status_code}")
+    except Exception as e:
+        print(f"JWKS fetch error: {e}")
 
 async def get_current_user(authorization: str = Header(...)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -218,16 +232,23 @@ async def get_current_user(authorization: str = Header(...)):
     if not token or token == "null":
         raise HTTPException(status_code=401, detail="Invalid token")
     try:
-        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        header = pyjwt.get_unverified_header(token)
+        kid = header.get("kid")
+        if not kid:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        jwk = next((k for k in _jwks_keys if k.get("kid") == kid), None)
+        if not jwk:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        signing_key = PyJWK(jwk).key
         payload = pyjwt.decode(
             token,
-            signing_key.key,
+            signing_key,
             options={"verify_exp": True, "verify_aud": False}
         )
         return payload
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except (pyjwt.InvalidTokenError, PyJWKClientError):
+    except pyjwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
