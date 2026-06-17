@@ -218,7 +218,7 @@ async def get_current_user(authorization: str = Header(...)):
         payload = pyjwt.decode(
             token,
             signing_key.key,
-            algorithms=["RS256"],
+            algorithms=[signing_key.algorithm],
             options={"verify_exp": True, "verify_aud": False}
         )
         return payload
