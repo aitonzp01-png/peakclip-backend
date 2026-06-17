@@ -212,7 +212,11 @@ supabase_url = os.getenv("SUPABASE_URL")
 jwks_client = PyJWKClient(f"{supabase_url}/auth/v1/.well-known/jwks.json")
 
 async def get_current_user(authorization: str = Header(...)):
-    token = authorization.replace("Bearer ", "")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+    token = authorization.replace("Bearer ", "").strip()
+    if not token or token == "null":
+        raise HTTPException(status_code=401, detail="Invalid token")
     try:
         signing_key = jwks_client.get_signing_key_from_jwt(token)
         payload = pyjwt.decode(
