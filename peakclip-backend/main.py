@@ -233,12 +233,15 @@ async def get_current_user(authorization: str = Header(...)):
         raise HTTPException(status_code=401, detail="Invalid token")
     try:
         header = pyjwt.get_unverified_header(token)
-        kid = header.get("kid")
-        if not kid:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        jwk = next((k for k in _jwks_keys if k.get("kid") == kid), None)
-        if not jwk:
-            raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    kid = header.get("kid")
+    if not kid:
+        raise HTTPException(status_code=401, detail="Invalid token (no kid)")
+    jwk = next((k for k in _jwks_keys if k.get("kid") == kid), None)
+    if not jwk:
+        raise HTTPException(status_code=401, detail=f"Invalid token (unknown kid: {kid})")
+    try:
         signing_key = PyJWK(jwk).key
         payload = pyjwt.decode(
             token,
@@ -279,6 +282,15 @@ class ExportRequest(BaseModel):
 @app.get("/")
 def root():
     return {"status": "PeakClip API running"}
+
+
+@app.get("/health")
+def health():
+    return {
+        "jwks_keys": len(_jwks_keys),
+        "jwks_loaded": len(_jwks_keys) > 0,
+        "supabase_url": supabase_url,
+    }
 
 
 @app.get("/debug")
