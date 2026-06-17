@@ -250,6 +250,8 @@ async def get_current_user(authorization: str = Header(...)):
         raise HTTPException(status_code=401, detail="Token expired")
     except pyjwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {type(e).__name__}: {e}")
 
 
 class VideoRequest(BaseModel):
