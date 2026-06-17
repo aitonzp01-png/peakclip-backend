@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 load_dotenv()
+import traceback
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -157,10 +158,11 @@ async def global_exception_handler(request: Request, exc: Exception):
     headers = {}
     if origin in ALLOWED_ORIGINS:
         headers["Access-Control-Allow-Origin"] = origin
+    traceback.print_exception(type(exc), exc, exc.__traceback__)
     print(f"[ERROR] {request.method} {request.url.path}: {exc}")
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error"},
+        content={"detail": f"Internal server error: {type(exc).__name__}: {str(exc)[:200]}"},
         headers=headers,
     )
 
@@ -232,6 +234,30 @@ class ExportRequest(BaseModel):
 @app.get("/")
 def root():
     return {"status": "PeakClip API running"}
+
+
+@app.get("/debug")
+def debug():
+    import shutil
+    ffmpeg_path = shutil.which("ffmpeg")
+    yt_dlp_ok = True
+    try:
+        import yt_dlp
+        yt_dlp_ok = True
+    except:
+        yt_dlp_ok = False
+    openai_key = os.getenv("OPENAI_API_KEY", "")
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    return {
+        "ffmpeg": ffmpeg_path or "NOT FOUND",
+        "yt_dlp": yt_dlp_ok,
+        "openai_key_set": bool(openai_key),
+        "openai_key_prefix": openai_key[:8] + "..." if openai_key else "",
+        "supabase_url": supabase_url,
+        "allowed_origins": ALLOWED_ORIGINS,
+        "cwd": os.getcwd(),
+        "music_dir_exists": os.path.isdir("music"),
+    }
 
 
 def generate_thumbnail(video_path, output_path, timestamp=5):
