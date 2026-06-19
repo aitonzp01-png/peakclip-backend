@@ -85,12 +85,12 @@ export default function Dashboard() {
     const poll = setInterval(async () => {
       attempts++
       const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).gte('created_at', new Date(since).toISOString()).order('created_at', { ascending: false }).limit(5)
-      if (data?.length > 0 || attempts > 40) {
+      if (data?.length > 0 || attempts > 120) {
         clearInterval(poll)
         loadClips(userId)
         if (data?.length > 0) setStatus(`${data.length} clips ready!`)
       }
-    }, 3000)
+    }, 5000)
   }
 
   const handleLogout = async () => {
@@ -125,7 +125,7 @@ export default function Dashboard() {
       const { data: { session } } = await getSupabaseClient().auth.getSession()
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 120000)
+      const timeoutId = setTimeout(() => controller.abort(), 600000)
 
       const response = await fetch(`${BACKEND_URL}/process`, {
         method: 'POST',
@@ -153,9 +153,9 @@ export default function Dashboard() {
       }
     } catch (err) {
       if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-        setStatus('The video is still processing. Polling for results...')
+        setStatus('Processing may take a few minutes. Check "My Clips" tab shortly.')
         pollClipStatus(user.id, Date.now())
-        setTimeout(() => { setActiveTab('clips') }, 1000)
+        setTimeout(() => { setActiveTab('clips') }, 2000)
       } else {
         setStatus(`Connection error: ${err.message}`)
       }

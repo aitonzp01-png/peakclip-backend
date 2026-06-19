@@ -488,7 +488,7 @@ async def upload_cookies(file: bytes = File(...)):
 
 
 @app.post("/process")
-async def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
+def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
     check_rate_limit(f"process:{user['sub']}")
     user_id = user["sub"]
     job_id = str(uuid.uuid4())
