@@ -1,0 +1,7 @@
+{
+  "rootDirectory": "peakclip-app",
+  "github": {
+    "silent": true,
+    "autoJobCancelation": true
+  }
+}

@@ -308,17 +308,30 @@ def debug():
     ffmpeg_path = shutil.which("ffmpeg")
     deno_path = shutil.which("deno")
     yt_dlp_ok = True
+    curl_cffi_ok = False
     try:
         import yt_dlp
         yt_dlp_ok = True
     except:
         yt_dlp_ok = False
+    try:
+        import curl_cffi
+        curl_cffi_ok = True
+    except:
+        curl_cffi_ok = False
+    try:
+        import yt_dlp.extractor.youtube as yt_extract
+        yt_version = getattr(yt_dlp, "__version__", "?")
+    except:
+        yt_version = "?"
     openai_key = os.getenv("OPENAI_API_KEY", "")
     supabase_url = os.getenv("SUPABASE_URL", "")
     return {
         "ffmpeg": ffmpeg_path or "NOT FOUND",
         "deno": deno_path or "NOT FOUND",
         "yt_dlp": yt_dlp_ok,
+        "yt_dlp_version": yt_version,
+        "curl_cffi": curl_cffi_ok,
         "openai_key_set": bool(openai_key),
         "openai_key_prefix": openai_key[:8] + "..." if openai_key else "",
         "supabase_url": supabase_url,
@@ -423,6 +436,47 @@ def resolve_music_path(mood: str) -> str | None:
 
 
 # ──────────────────────────────────────────────────────────────
+
+
+@app.get("/test-yt")
+async def test_yt(url: str = "https://www.youtube.com/watch?v=INuAA5TMYyc"):
+    import sys, io
+    old_stderr = sys.stderr
+    sys.stderr = buf = io.StringIO()
+    try:
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.5',
+            },
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'android_creator'],
+                    'player_skip': ['webpage', 'configs'],
+                }
+            },
+        }
+        if os.path.exists('cookies.txt'):
+            ydl_opts['cookiefile'] = 'cookies.txt'
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+        sys.stderr = old_stderr
+        return {
+            "status": "ok",
+            "title": info.get("title", "?"),
+            "duration": info.get("duration", "?"),
+            "stderr": buf.getvalue()[-1000:],
+        }
+    except Exception as e:
+        sys.stderr = old_stderr
+        return {
+            "status": "error",
+            "error": str(e),
+            "stderr": buf.getvalue()[-1000:],
+        }
 
 
 @app.post("/upload-cookies")
