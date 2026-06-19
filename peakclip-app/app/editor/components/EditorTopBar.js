@@ -261,18 +261,6 @@ export default function EditorTopBar({ videoRef }) {
                 <span style={{ display: 'flex', color: textDim }}>{icons.grid}</span>
                 Dashboard
               </button>
-              <button onClick={() => { window.location.href = '/dashboard?tab=settings' }}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
-                  padding: '10px 12px', border: 'none', background: 'none',
-                  color: textSecondary, cursor: 'pointer', borderRadius: '8px',
-                  fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = textPrimary }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
-                <span style={{ display: 'flex', color: textDim }}>{icons.settings}</span>
-                Settings
-              </button>
               <button onClick={handleLogout}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: '10px',

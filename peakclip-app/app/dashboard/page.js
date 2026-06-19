@@ -303,25 +303,12 @@ export default function Dashboard() {
                 borderRadius: '12px', padding: '6px', minWidth: '160px',
                 zIndex: 100, boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
               }}>
-                <button onClick={() => { setActiveTab('settings'); setShowSidebarMenu(false) }}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px 12px', border: 'none', background: 'none',
-                    color: textSecondary, cursor: 'pointer', borderRadius: '8px',
-                    fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = textPrimary }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
-                  <span style={{ display: 'flex', color: textDim }}>{icons.settings}</span>
-                  Settings
-                </button>
                 <button onClick={handleLogout}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
                     padding: '10px 12px', border: 'none', background: 'none',
                     color: textSecondary, cursor: 'pointer', borderRadius: '8px',
                     fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
-                    borderTop: `1px solid ${borderSoft}`, marginTop: '4px', paddingTop: '10px',
                   }}
                   onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = '#EF4444' }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
@@ -828,18 +815,6 @@ export default function Dashboard() {
                   <div style={{ fontSize: '12px', color: textPrimary, fontWeight: '600' }}>{user?.email}</div>
                   <div style={{ fontSize: '10px', color: brand, fontWeight: '500', marginTop: '2px' }}>{plan.toUpperCase()}</div>
                 </div>
-                <button onClick={() => { setActiveTab('settings'); setShowProfileMenu(false) }}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px 12px', border: 'none', background: 'none',
-                    color: textSecondary, cursor: 'pointer', borderRadius: '8px',
-                    fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = textPrimary }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
-                  <span style={{ display: 'flex', color: textDim }}>{icons.settings}</span>
-                  Settings
-                </button>
                 <button onClick={handleLogout}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
