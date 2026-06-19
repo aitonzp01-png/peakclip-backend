@@ -43,4 +43,5 @@ uvicorn==0.49.0
 websockets==15.0.1
 stripe==11.5.0
 yarl==1.24.2
+curl-cffi>=0.9.0
 yt-dlp[default]==2026.3.17
