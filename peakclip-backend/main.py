@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 import traceback
-from fastapi import FastAPI, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -425,6 +425,14 @@ def resolve_music_path(mood: str) -> str | None:
 # ──────────────────────────────────────────────────────────────
 
 
+@app.post("/upload-cookies")
+async def upload_cookies(file: bytes = File(...)):
+    path = "cookies.txt"
+    with open(path, "wb") as f:
+        f.write(file)
+    return {"status": "ok", "message": f"Cookies saved ({len(file)} bytes)"}
+
+
 @app.post("/process")
 async def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
     check_rate_limit(f"process:{user['sub']}")
@@ -459,7 +467,15 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
             },
-            'extractor_args': {'youtube': {'player_client': ['android', 'android_creator', 'web_safari'], 'formats': ['duplicate', 'missing_pot']}},
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'android_creator'],
+                    'player_skip': ['webpage', 'configs'],
+                    'formats': ['duplicate', 'missing_pot'],
+                }
+            },
+            'extractor_retries': 3,
+            'file_access_retries': 3,
         }
         if os.path.exists('cookies.txt'):
             ydl_opts['cookiefile'] = 'cookies.txt'
