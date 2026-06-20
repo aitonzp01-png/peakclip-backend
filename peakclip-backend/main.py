@@ -831,28 +831,43 @@ Return ONLY a JSON with this exact format (no markdown, no code fences):
                 "pad=1080:1920:(ow-iw)/2:(oh-ih)/2[v]"
             )
 
-            cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path,
-                   '-t', str(duration),
-                   '-filter_complex', video_filter,
-                   '-map', '[v]', '-c:v', 'libx264', '-preset', 'ultrafast',
-                   '-an', '-y', output_path]
-            result = subprocess.run(cmd, capture_output=True, timeout=600)
-            if result.returncode == -9:
-                steps[f'render_clip_{i+1}'] = 'OOM, trying simplified render'
+            raw_clip = f"downloads/{job_id}_raw{i+1}.mp4"
+            local_files.append(raw_clip)
+            # Step 1: extract raw clip (no encoding, very low memory)
+            r1 = subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                                 '-c', 'copy', '-an', '-y', raw_clip], capture_output=True, timeout=120)
+            if r1.returncode != 0:
+                steps[f'render_clip_{i+1}'] = f'extract failed: {r1.returncode}'
+                return {"job_id": job_id, "steps": steps, "error": f"Extract clip {i+1} failed"}
+            # Step 2: process extracted clip (much smaller input)
+            srt_path_ff_esc = srt_path_ff.replace(":", "\\:").replace("'", "'\\\\''")
+            video_filter = (
+                f"[0:v]subtitles={srt_path_ff}:force_style="
+                f"'Fontname=Arial,Fontsize=48,PrimaryColour=&H0073BADF,"
+                f"BackColour=&H80000000,Outline=0,Bold=1,Alignment=2,MarginV=60'"
+                ",scale=1080:1920:force_original_aspect_ratio=decrease,"
+                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2[v]"
+            )
+            r2 = subprocess.run(['ffmpeg', '-i', raw_clip,
+                                 '-filter_complex', video_filter,
+                                 '-map', '[v]', '-c:v', 'libx264', '-preset', 'ultrafast',
+                                 '-an', '-y', output_path], capture_output=True, timeout=600)
+            if r2.returncode == -9:
+                steps[f'render_clip_{i+1}'] = 'OOM on subtitles, trying no-subtitles'
                 simple_filter = f"[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2[v]"
-                cmd2 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
-                        '-filter_complex', simple_filter, '-map', '[v]',
-                        '-c:v', 'libx264', '-preset', 'ultrafast', '-an', '-y', output_path]
-                result2 = subprocess.run(cmd2, capture_output=True, timeout=600)
-                if result2.returncode != 0:
-                    steps[f'render_clip_{i+1}'] = f'simple render also failed: {result2.returncode}'
-                    return {"job_id": job_id, "steps": steps, "error": f"Render clip {i+1} OOM even simplified"}
-            elif result.returncode != 0:
-                steps[f'render_clip_{i+1}'] = f'ffmpeg exit {result.returncode}: {result.stderr.decode()[:200]}'
+                r3 = subprocess.run(['ffmpeg', '-i', raw_clip,
+                                     '-filter_complex', simple_filter, '-map', '[v]',
+                                     '-c:v', 'libx264', '-preset', 'ultrafast', '-an', '-y', output_path],
+                                    capture_output=True, timeout=600)
+                if r3.returncode != 0:
+                    steps[f'render_clip_{i+1}'] = f'no-subs also failed: {r3.returncode}'
+                    return {"job_id": job_id, "steps": steps, "error": f"Render clip {i+1} OOM even without subtitles"}
+            elif r2.returncode != 0:
+                steps[f'render_clip_{i+1}'] = f'ffmpeg exit {r2.returncode}: {r2.stderr.decode()[:200]}'
                 return {"job_id": job_id, "steps": steps, "error": f"Render clip {i+1} failed"}
             if os.path.getsize(output_path) < 1024:
-                steps[f'render_clip_{i+1}'] = f'file too small ({os.path.getsize(output_path)} bytes), trying fallback'
-                fallback_cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                steps[f'render_clip_{i+1}'] = f'file too small ({os.path.getsize(output_path)} bytes), trying direct fallback'
+                fallback_cmd = ['ffmpeg', '-i', raw_clip,
                                '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2',
                                '-c:v', 'libx264', '-preset', 'ultrafast', '-an', '-y', output_path]
                 subprocess.run(fallback_cmd, capture_output=True, timeout=600)
