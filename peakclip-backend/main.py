@@ -18,6 +18,7 @@ import tempfile
 import re
 import time
 import httpx
+import sys
 import asyncio
 from collections import defaultdict
 from urllib.parse import urlparse
@@ -32,6 +33,15 @@ COOKIES_B64_HARDCODED = "IyBOZXRzY2FwZSBIVFRQIENvb2tpZSBGaWxlCiMgaHR0cHM6Ly9jdXJ
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    # Try to update yt-dlp to latest version
+    try:
+        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'], capture_output=True, text=True, timeout=60)
+        print(f"yt-dlp upgrade: {result.returncode == 0}")
+        # Check version
+        ver = subprocess.run([sys.executable, '-m', 'yt_dlp', '--version'], capture_output=True, text=True, timeout=10)
+        print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
+    except Exception as e:
+        print(f"yt-dlp upgrade skipped: {e}")
     try:
         data = base64.b64decode(COOKIES_B64_HARDCODED).decode("utf-8")
         with open("cookies.txt", "w", encoding="utf-8") as f:
@@ -484,32 +494,41 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     audio_path = f"downloads/{job_id}.mp3"
     local_files = [video_path, audio_path]
 
-    # Retry download with different strategies
-    client_configs = [
-        {'player_client': ['android'], 'formats': ['duplicate', 'missing_pot']},
-        {'player_client': ['web', 'android'], 'formats': ['duplicate', 'missing_pot']},
-        {'player_client': ['ios'], 'formats': ['duplicate', 'missing_pot']},
+    # Retry download with different strategies — skip expired cookies
+    strategies = [
+        {'player_client': ['android'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['web'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['ios'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
         {'player_client': ['android'], 'include_dash_mpd': False},
         {'player_client': ['web'], 'include_dash_mpd': False},
+        {'player_client': ['android', 'web', 'ios']},
+        {},
     ]
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
         'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36',
         'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0',
+        'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36',
     ]
-    # Format fallbacks: try best mp4, then best video+audio, then any format
     format_fallbacks = [
+        'worst[ext=mp4]/worst',
+        'worstvideo+worstaudio/worst',
         'best[ext=mp4]/best',
         'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'bestvideo+bestaudio/best',
         'worstvideo+bestaudio/worst',
+        'bestaudio/best',
+        'worst',
     ]
 
     last_err = None
-    for attempt in range(8):
-        cfg = client_configs[attempt % len(client_configs)]
+    for attempt in range(12):
+        cfg = strategies[attempt % len(strategies)]
         ua = user_agents[attempt % len(user_agents)]
         fmt = format_fallbacks[attempt % len(format_fallbacks)]
         try:
@@ -521,8 +540,8 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 'extract_flat': False,
                 'sleep_interval': 10,
                 'sleep_interval_requests': 2,
-                'extractor_retries': 5,
-                'file_access_retries': 5,
+                'extractor_retries': 3,
+                'file_access_retries': 3,
                 'throttledratelimit': 100000,
                 'ignore_no_formats_error': True,
                 'allow_unplayable_formats': True,
@@ -531,12 +550,9 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Language': 'en-US,en;q=0.5',
                 },
-                'extractor_args': {'youtube': cfg},
             }
-            # Try with cookies first; if they fail, retry without
-            use_cookies = os.path.exists('cookies.txt') and attempt < 4
-            if use_cookies:
-                ydl_opts['cookiefile'] = 'cookies.txt'
+            if cfg:
+                ydl_opts['extractor_args'] = {'youtube': cfg}
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([req.url])
             last_err = None
@@ -544,11 +560,10 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
         except Exception as e:
             last_err = e
             err_lower = str(e).lower()
-            # Retry on rate-limit, no formats, or format not found
             if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
-                if attempt < 7:
-                    wait = min(15 * (2 ** attempt), 120)
-                    print(f"YouTube issue (attempt {attempt+1}/8): {type(e).__name__}, waiting {wait}s...")
+                if attempt < 11:
+                    wait = min(10 * (2 ** attempt), 120)
+                    print(f"YouTube issue (attempt {attempt+1}/12): {type(e).__name__}, waiting {wait}s...")
                     time.sleep(wait)
                     continue
             raise HTTPException(status_code=400, detail=f"Download error: {last_err}")
