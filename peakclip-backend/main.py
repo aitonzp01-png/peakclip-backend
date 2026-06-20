@@ -455,8 +455,7 @@ async def test_yt(url: str = "https://www.youtube.com/watch?v=INuAA5TMYyc", clie
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
                     'Accept-Language': 'en-US,en;q=0.5',
                 },
-                'impersonate': 'chrome',
-            'extractor_args': {
+                'extractor_args': {
                     'youtube': {
                         'player_client': [c],
                     }
