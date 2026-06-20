@@ -484,25 +484,37 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     audio_path = f"downloads/{job_id}.mp3"
     local_files = [video_path, audio_path]
 
-    # Retry download with different strategies to handle YouTube rate limiting
+    # Retry download with different strategies
     client_configs = [
         {'player_client': ['android'], 'formats': ['duplicate', 'missing_pot']},
-        {'player_client': ['web'], 'formats': ['duplicate', 'missing_pot']},
+        {'player_client': ['web', 'android'], 'formats': ['duplicate', 'missing_pot']},
         {'player_client': ['ios'], 'formats': ['duplicate', 'missing_pot']},
+        {'player_client': ['android'], 'include_dash_mpd': False},
+        {'player_client': ['web'], 'include_dash_mpd': False},
     ]
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
         'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36',
         'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    ]
+    # Format fallbacks: try best mp4, then best video+audio, then any format
+    format_fallbacks = [
+        'best[ext=mp4]/best',
+        'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        'bestvideo+bestaudio/best',
+        'worstvideo+bestaudio/worst',
     ]
 
     last_err = None
-    for attempt in range(5):
+    for attempt in range(8):
         cfg = client_configs[attempt % len(client_configs)]
         ua = user_agents[attempt % len(user_agents)]
+        fmt = format_fallbacks[attempt % len(format_fallbacks)]
         try:
             ydl_opts = {
-                'format': 'best[ext=mp4]/best',
+                'format': fmt,
                 'outtmpl': video_path,
                 'quiet': True,
                 'no_warnings': True,
@@ -513,6 +525,7 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 'file_access_retries': 5,
                 'throttledratelimit': 100000,
                 'ignore_no_formats_error': True,
+                'allow_unplayable_formats': True,
                 'http_headers': {
                     'User-Agent': ua,
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -520,7 +533,9 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 },
                 'extractor_args': {'youtube': cfg},
             }
-            if os.path.exists('cookies.txt'):
+            # Try with cookies first; if they fail, retry without
+            use_cookies = os.path.exists('cookies.txt') and attempt < 4
+            if use_cookies:
                 ydl_opts['cookiefile'] = 'cookies.txt'
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([req.url])
@@ -529,12 +544,11 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
         except Exception as e:
             last_err = e
             err_lower = str(e).lower()
-            if "rate-limited" in err_lower or "requested format not available" in err_lower:
-                if attempt < 4:
-                    wait = 30 * (2 ** attempt)
-                    # Cap wait at 120 seconds per attempt
-                    wait = min(wait, 120)
-                    print(f"YouTube rate-limited (attempt {attempt+1}/5), waiting {wait}s and retrying...")
+            # Retry on rate-limit, no formats, or format not found
+            if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
+                if attempt < 7:
+                    wait = min(15 * (2 ** attempt), 120)
+                    print(f"YouTube issue (attempt {attempt+1}/8): {type(e).__name__}, waiting {wait}s...")
                     time.sleep(wait)
                     continue
             raise HTTPException(status_code=400, detail=f"Download error: {last_err}")
