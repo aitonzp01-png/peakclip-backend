@@ -455,9 +455,9 @@ async def test_yt(url: str = "https://www.youtube.com/watch?v=INuAA5TMYyc"):
             'extractor_args': {
                 'youtube': {
                     'player_client': ['android', 'android_creator'],
-                    'player_skip': ['webpage', 'configs'],
                 }
             },
+            'extractor_retries': 3,
         }
         if os.path.exists('cookies.txt'):
             ydl_opts['cookiefile'] = 'cookies.txt'
@@ -524,12 +524,13 @@ def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
             'extractor_args': {
                 'youtube': {
                     'player_client': ['android', 'android_creator'],
-                    'player_skip': ['webpage', 'configs'],
                     'formats': ['duplicate', 'missing_pot'],
                 }
             },
             'extractor_retries': 3,
             'file_access_retries': 3,
+            'sleep_interval_requests': 1,
+            'sleep_interval': 1,
         }
         if os.path.exists('cookies.txt'):
             ydl_opts['cookiefile'] = 'cookies.txt'
