@@ -535,7 +535,63 @@ def get_ydl_opts():
     }
     if os.path.exists('cookies.txt'):
         opts['cookiefile'] = 'cookies.txt'
+    if os.path.exists(os.path.join(os.path.expanduser("~"), ".cache", "yt-dlp", "downloader", "youtube-oauth.json")):
+        opts['username'] = 'oauth'
+        opts['password'] = ''
     return opts
+
+YT_CLIENT_ID = "861556708454-d6trm2f5j19j97vfv6cipiks8p0mi4i7.apps.googleusercontent.com"
+
+@app.get("/auth-youtube")
+async def auth_youtube():
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post("https://oauth2.googleapis.com/device/code", data={
+            "client_id": YT_CLIENT_ID,
+            "scope": "https://www.googleapis.com/auth/youtube",
+        })
+        if r.status_code != 200:
+            return {"error": f"device_code failed: {r.text}"}
+        data = r.json()
+        return {
+            "verification_url": data["verification_url"],
+            "user_code": data["user_code"],
+            "device_code": data["device_code"],
+            "expires_in": data.get("expires_in", 1800),
+            "instructions": f"Visita {data['verification_url']} e ingresa el código: {data['user_code']}"
+        }
+
+@app.post("/auth-youtube/callback")
+async def auth_youtube_callback(device_code: str):
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post("https://oauth2.googleapis.com/token", data={
+            "client_id": YT_CLIENT_ID,
+            "device_code": device_code,
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+        })
+        data = r.json()
+        if "refresh_token" in data:
+            with open("yt_oauth.json", "w") as f:
+                json.dump({"refresh_token": data["refresh_token"]}, f)
+            os.environ["YT_REFRESH_TOKEN"] = data["refresh_token"]
+            setup_yt_oauth()
+            return {"status": "ok", "message": "YouTube OAuth autenticado exitosamente"}
+        if "error" in data and data["error"] == "authorization_pending":
+            return {"status": "pending", "message": "Esperando autorización..."}
+        if "error" in data and data["error"] == "slow_down":
+            return {"status": "slow_down", "message": "Reintenta en 5 segundos"}
+        return {"error": f"token failed: {r.text}"}
+
+def setup_yt_oauth():
+    rt = os.getenv("YT_REFRESH_TOKEN")
+    if not rt and os.path.exists("yt_oauth.json"):
+        rt = json.load(open("yt_oauth.json"))["refresh_token"]
+    if rt:
+        cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "yt-dlp", "downloader")
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(os.path.join(cache_dir, "youtube-oauth.json"), "w") as f:
+            json.dump({"refresh_token": rt, "access_token": "", "token_expiry": 0}, f)
+
+setup_yt_oauth()
 
 def _background_process(req: VideoRequest, user_id: str, job_id: str):
     video_path = f"downloads/{job_id}.mp4"
