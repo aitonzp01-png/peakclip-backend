@@ -517,12 +517,19 @@ def test_dl(url: str = "dQw4w9WgXcQ"):
         return {'ok': False, 'error': str(e)[:500]}
 
 
+def _set_job(job_id, user_id, status, message=None):
+    d = {"id": job_id, "user_id": user_id, "status": status}
+    if message:
+        d["message"] = message
+    supabase.table("jobs").upsert(d).execute()
+
 def _background_process(req: VideoRequest, user_id: str, job_id: str):
     video_path = f"downloads/{job_id}.mp4"
     audio_path = f"downloads/{job_id}.mp3"
     local_files = [video_path, audio_path]
     temp_files_extra = []
 
+    _set_job(job_id, user_id, "downloading", "Downloading video from YouTube...")
     try:
         ydl_opts = {
             'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
@@ -544,26 +551,25 @@ def _background_process(req: VideoRequest, user_id: str, job_id: str):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([req.url])
     except Exception as e:
-        print(f"BG ERROR [{job_id}] download: {e}")
-        supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "error", "error": str(e)[:500]}).execute()
+        _set_job(job_id, user_id, "error", f"Download failed: {str(e)[:200]}")
         return
 
     thumb_path = f"thumbnails/{job_id}.jpg"
+    _set_job(job_id, user_id, "extracting", "Extracting audio and generating thumbnail...")
     try:
         subprocess.run(['ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '32k', audio_path, '-y'], capture_output=True, timeout=300)
         generate_thumbnail(video_path, thumb_path)
         local_files.append(thumb_path)
     except Exception as e:
-        print(f"BG ERROR [{job_id}] audio/thumb: {e}")
-        supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "error", "error": str(e)[:500]}).execute()
+        _set_job(job_id, user_id, "error", f"Audio extraction failed: {str(e)[:200]}")
         return
 
+    _set_job(job_id, user_id, "transcribing", "Transcribing audio with Whisper AI...")
     try:
         with open(audio_path, 'rb') as f:
             transcript = client.audio.transcriptions.create(model="whisper-1", file=f, response_format="verbose_json", timestamp_granularities=["word", "segment"])
     except Exception as e:
-        print(f"BG ERROR [{job_id}] whisper: {e}")
-        supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "error", "error": str(e)[:500]}).execute()
+        _set_job(job_id, user_id, "error", f"Transcription failed: {str(e)[:200]}")
         return
 
     words_data = []
@@ -577,6 +583,7 @@ def _background_process(req: VideoRequest, user_id: str, job_id: str):
 
     segments_text = "\n".join([f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}" for s in transcript.segments])
 
+    _set_job(job_id, user_id, "analyzing", "Analyzing transcript with GPT-4 to find viral moments...")
     try:
         response = client.chat.completions.create(model="gpt-4", messages=[{
             "role": "user",
@@ -598,12 +605,13 @@ Return ONLY a JSON with this exact format:
         }])
         clips_data = json.loads(response.choices[0].message.content)
     except Exception as e:
-        print(f"BG ERROR [{job_id}] gpt: {e}")
-        supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "error", "error": str(e)[:500]}).execute()
+        _set_job(job_id, user_id, "error", f"Analysis failed: {str(e)[:200]}")
         return
 
+    num_clips = len(clips_data["clips"])
     try:
         for i, clip in enumerate(clips_data["clips"]):
+            _set_job(job_id, user_id, "rendering", f"Rendering clip {i+1} of {num_clips}...")
             output_path = f"outputs/{job_id}_clip{i+1}.mp4"
             duration = clip["end"] - clip["start"]
             clip_mood = clip.get("mood", "chill")
@@ -643,6 +651,7 @@ Return ONLY a JSON with this exact format:
 
             local_files.append(output_path)
 
+            _set_job(job_id, user_id, "uploading", f"Uploading clip {i+1} of {num_clips}...")
             clip_storage_url = ""
             try:
                 with open(output_path, 'rb') as f:
@@ -667,8 +676,7 @@ Return ONLY a JSON with this exact format:
                 "duration": round(duration, 1)
             }).execute()
     except Exception as e:
-        print(f"BG ERROR [{job_id}] render: {e}")
-        supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "error", "error": str(e)[:500]}).execute()
+        _set_job(job_id, user_id, "error", f"Rendering failed: {str(e)[:200]}")
         return
     finally:
         for f in local_files:
@@ -678,7 +686,7 @@ Return ONLY a JSON with this exact format:
             try: os.unlink(f)
             except OSError: pass
 
-    supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "done"}).execute()
+    _set_job(job_id, user_id, "done", "All clips generated successfully!")
     print(f"BG DONE [{job_id}]")
 
 
@@ -699,9 +707,18 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     if user_data["plan"] != "pro":
         dedent_credits(user_id)
 
+    _set_job(job_id, user_id, "queued", "Starting processing...")
     threading.Thread(target=_background_process, args=(req, user_id, job_id), daemon=True).start()
 
     return {"job_id": job_id, "status": "processing", "message": "Your video is being processed. Check My Clips in a few minutes."}
+
+
+@app.get("/status/{job_id}")
+def get_status(job_id: str):
+    result = supabase.table("jobs").select("*").eq("id", job_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return result.data[0]
 
 
 @app.post("/export")
