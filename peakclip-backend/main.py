@@ -692,6 +692,159 @@ Return ONLY a JSON with this exact format:
     print(f"BG DONE [{job_id}]")
 
 
+@app.get("/test-process")
+def test_process_sync(url: str = "dQw4w9WgXcQ"):
+    full_url = f"https://www.youtube.com/watch?v={url}" if "youtube.com" not in url and "youtu.be" not in url else url
+    req = VideoRequest(url=full_url)
+    job_id = str(uuid.uuid4())
+    user_id = "00000000-0000-0000-0000-000000000000"
+    errors = []
+    steps = {}
+
+    _set_job(job_id, user_id, "queued", "Starting...")
+    video_path = f"downloads/{job_id}.mp4"
+    audio_path = f"downloads/{job_id}.mp3"
+    local_files = [video_path, audio_path]
+
+    _set_job(job_id, user_id, "downloading")
+    try:
+        ydl_opts = {
+            'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
+            'outtmpl': video_path, 'quiet': True, 'no_warnings': True,
+            'socket_timeout': 30, 'retries': 3, 'fragment_retries': 3,
+            'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios'], 'skip': ['webpage', 'configs']}},
+        }
+        if os.path.exists('cookies.txt'):
+            ydl_opts['cookiefile'] = 'cookies.txt'
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([req.url])
+        steps['download'] = 'ok'
+    except Exception as e:
+        steps['download'] = str(e)[:200]
+        return {"job_id": job_id, "steps": steps, "error": f"Download: {e}"}
+
+    thumb_path = f"thumbnails/{job_id}.jpg"
+    local_files.append(thumb_path)
+    _set_job(job_id, user_id, "extracting")
+    try:
+        subprocess.run(['ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '32k', audio_path, '-y'], capture_output=True, timeout=300)
+        steps['extract_audio'] = 'ok'
+        try:
+            subprocess.run(['ffmpeg', '-i', video_path, '-ss', '00:00:01', '-vframes', '1', '-q:v', '2', thumb_path, '-y'], capture_output=True, timeout=30)
+            steps['thumbnail'] = 'ok'
+        except Exception as e:
+            steps['thumbnail'] = str(e)[:100]
+    except Exception as e:
+        steps['extract_audio'] = str(e)[:200]
+        return {"job_id": job_id, "steps": steps, "error": f"Audio: {e}"}
+
+    _set_job(job_id, user_id, "transcribing")
+    try:
+        with open(audio_path, 'rb') as f:
+            transcript = client.audio.transcriptions.create(model="whisper-1", file=f, response_format="verbose_json", timestamp_granularities=["word", "segment"])
+        steps['transcribe'] = f'ok ({len(transcript.words or [])} words)'
+    except Exception as e:
+        steps['transcribe'] = str(e)[:200]
+        return {"job_id": job_id, "steps": steps, "error": f"Whisper: {e}"}
+
+    words_data = []
+    if hasattr(transcript, 'words') and transcript.words:
+        for w in transcript.words:
+            word_text = getattr(w, 'word', '') or ''
+            w_start = getattr(w, 'start', None)
+            w_end = getattr(w, 'end', None)
+            if w_start is not None and w_end is not None and word_text.strip():
+                words_data.append({"word": word_text, "start": w_start, "end": w_end})
+    segments_text = "\n".join([f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}" for s in transcript.segments])
+
+    _set_job(job_id, user_id, "analyzing")
+    try:
+        response = client.chat.completions.create(model="gpt-4", messages=[{
+            "role": "user",
+            "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
+
+Transcript:
+{segments_text}
+
+For each clip, classify the mood as one of: epic, hype, chill, funny, emotional, suspense.
+
+Return ONLY a JSON with this exact format:
+{{
+  "clips": [
+    {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype"}},
+    {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny"}},
+    {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional"}}
+  ]
+}}"""
+        }])
+        clips_data = json.loads(response.choices[0].message.content)
+        steps['analyze'] = f'ok ({len(clips_data["clips"])} clips)'
+    except Exception as e:
+        steps['analyze'] = str(e)[:200]
+        return {"job_id": job_id, "steps": steps, "error": f"GPT: {e}"}
+
+    num_clips = len(clips_data["clips"])
+    try:
+        for i, clip in enumerate(clips_data["clips"]):
+            _set_job(job_id, user_id, "rendering", f"Rendering clip {i+1} of {num_clips}...")
+            output_path = f"outputs/{job_id}_clip{i+1}.mp4"
+            duration = clip["end"] - clip["start"]
+            clip_mood = clip.get("mood", "chill")
+            clip_start = clip["start"]
+
+            srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}.srt")
+            srt_lines = []
+            for w in words_data:
+                if w["start"] >= clip_start and w["end"] <= clip["end"]:
+                    srt_lines.append(w)
+            with open(srt_path, 'w', encoding='utf-8') as f:
+                idx = 1
+                for w in srt_lines:
+                    start_srt = f"{int(w['start']//3600):02d}:{int((w['start']%3600)//60):02d}:{w['start']%60:06.3f}".replace('.', ',')
+                    end_srt = f"{int(w['end']//3600):02d}:{int((w['end']%3600)//60):02d}:{w['end']%60:06.3f}".replace('.', ',')
+                    f.write(f"{idx}\n{start_srt} --> {end_srt}\n{w['word']}\n\n")
+                    idx += 1
+
+            srt_path_ff = srt_path.replace('\\', '/')
+            video_filter = (
+                f"[0:v]subtitles={srt_path_ff}:force_style="
+                f"'Fontname=Arial,Fontsize=48,PrimaryColour=&H0073BADF,"
+                f"BackColour=&H80000000,Outline=0,Bold=1,Alignment=2,MarginV=60'"
+                ",scale=1080:1920:force_original_aspect_ratio=decrease,"
+                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2[v]"
+            )
+
+            cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                   '-t', str(duration),
+                   '-filter_complex', video_filter,
+                   '-map', '[v]', '-c:v', 'libx264', '-preset', 'fast',
+                   '-an', '-y', output_path]
+            result = subprocess.run(cmd, capture_output=True, timeout=600)
+            if result.returncode != 0:
+                steps[f'render_clip_{i+1}'] = f'ffmpeg exit {result.returncode}: {result.stderr.decode()[:200]}'
+                return {"job_id": job_id, "steps": steps, "error": f"Render clip {i+1} failed"}
+            if os.path.getsize(output_path) < 1024:
+                steps[f'render_clip_{i+1}'] = f'file too small ({os.path.getsize(output_path)} bytes), trying fallback'
+                fallback_cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                               '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2',
+                               '-c:v', 'libx264', '-preset', 'veryfast', '-an', '-y', output_path]
+                subprocess.run(fallback_cmd, capture_output=True, timeout=600)
+            steps[f'render_clip_{i+1}'] = f'ok ({os.path.getsize(output_path)} bytes)'
+            local_files.append(output_path)
+
+        steps['render'] = 'ok'
+    except Exception as e:
+        steps['render'] = str(e)[:200]
+        return {"job_id": job_id, "steps": steps, "error": f"Render loop: {e}"}
+    finally:
+        for f in local_files:
+            try: os.unlink(f)
+            except OSError: pass
+
+    _set_job(job_id, user_id, "done", "All clips generated successfully!")
+    return {"job_id": job_id, "steps": steps, "status": "done"}
+
+
 @app.post("/process")
 async def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
     check_rate_limit(f"process:{user['sub']}")
