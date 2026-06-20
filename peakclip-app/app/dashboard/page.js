@@ -98,9 +98,8 @@ export default function Dashboard() {
       const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).gte('created_at', new Date(since).toISOString()).order('created_at', { ascending: false }).limit(5)
       if (data?.length > 0) {
         clearInterval(poll)
-        loadClips(userId)
-        setStatus(`${data.length} clips ready!`)
-        setTimeout(() => setActiveTab('clips'), 1000)
+        setStatus('Redirecting to editor...')
+        window.location.href = `/editor?id=${data[0].id}`
       } else if (attempts > 720) {
         clearInterval(poll)
         loadClips(userId)
@@ -158,8 +157,14 @@ export default function Dashboard() {
           pollClipStatus(user.id, Date.now(), data.job_id)
           setTimeout(() => { setActiveTab('clips') }, 2000)
         } else {
-          setStatus(`${data.total || 1} clips generated! Check "My Clips" tab.`)
-          setTimeout(() => { loadClips(user.id); setActiveTab('clips') }, 2000)
+          setStatus('Redirecting to editor...')
+          // Navigate to editor with the first generated clip
+          const { data: newClips } = await getSupabaseClient().from('clips').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
+          if (newClips?.length > 0) {
+            window.location.href = `/editor?id=${newClips[0].id}`
+          } else {
+            setTimeout(() => { loadClips(user.id); setActiveTab('clips') }, 2000)
+          }
         }
         const { data: userData } = await getSupabaseClient().from('users').select('credits').eq('id', user.id).single()
         if (userData) setCredits(userData.credits)
