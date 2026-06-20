@@ -14,6 +14,8 @@ export default function Dashboard() {
   const [plan, setPlan] = useState('free')
   const [clips, setClips] = useState([])
   const [url, setUrl] = useState('')
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState('')
   const [activeTab, setActiveTab] = useState('generate')
@@ -79,17 +81,32 @@ export default function Dashboard() {
     if (data) setClips(data)
   }
 
-  const pollClipStatus = async (userId, since) => {
+  const pollClipStatus = async (userId, since, jobId) => {
     let attempts = 0
     const poll = setInterval(async () => {
       attempts++
+      if (jobId) {
+        try {
+          const r = await fetch(`${BACKEND_URL}/status/${jobId}`, { signal: AbortSignal.timeout(3000) })
+          if (r.ok) {
+            const d = await r.json()
+            if (d.status === 'error') { setStatus(`Error: ${d.message || 'Processing failed'}`); clearInterval(poll); return }
+            if (d.message) setStatus(d.message)
+          }
+        } catch {}
+      }
       const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).gte('created_at', new Date(since).toISOString()).order('created_at', { ascending: false }).limit(5)
-      if (data?.length > 0 || attempts > 40) {
+      if (data?.length > 0) {
         clearInterval(poll)
         loadClips(userId)
-        if (data?.length > 0) setStatus(`${data.length} clips ready!`)
+        setStatus(`${data.length} clips ready!`)
+        setTimeout(() => setActiveTab('clips'), 1000)
+      } else if (attempts > 720) {
+        clearInterval(poll)
+        loadClips(userId)
+        setStatus('Processing is taking longer than expected. Your clips will appear here once ready.')
       }
-    }, 3000)
+    }, 5000)
   }
 
   const handleLogout = async () => {
@@ -124,7 +141,7 @@ export default function Dashboard() {
       const { data: { session } } = await getSupabaseClient().auth.getSession()
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 120000)
+      const timeoutId = setTimeout(() => controller.abort(), 600000)
 
       const response = await fetch(`${BACKEND_URL}/process`, {
         method: 'POST',
@@ -136,10 +153,16 @@ export default function Dashboard() {
 
       if (response.ok) {
         const data = await response.json()
-        setStatus(`${data.total || 1} clips generated! Check "My Clips" tab.`)
+        if (data.status === 'processing') {
+          setStatus('Started! Waiting for clips...')
+          pollClipStatus(user.id, Date.now(), data.job_id)
+          setTimeout(() => { setActiveTab('clips') }, 2000)
+        } else {
+          setStatus(`${data.total || 1} clips generated! Check "My Clips" tab.`)
+          setTimeout(() => { loadClips(user.id); setActiveTab('clips') }, 2000)
+        }
         const { data: userData } = await getSupabaseClient().from('users').select('credits').eq('id', user.id).single()
         if (userData) setCredits(userData.credits)
-        setTimeout(() => { loadClips(user.id); setActiveTab('clips') }, 2000)
       } else {
         const err = await response.text()
         if (response.status === 402) {
@@ -152,9 +175,9 @@ export default function Dashboard() {
       }
     } catch (err) {
       if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-        setStatus('The video is still processing. Polling for results...')
+        setStatus('Processing started! Clips will appear in "My Clips" as they are ready.')
         pollClipStatus(user.id, Date.now())
-        setTimeout(() => { setActiveTab('clips') }, 1000)
+        setTimeout(() => { setActiveTab('clips') }, 2000)
       } else {
         setStatus(`Connection error: ${err.message}`)
       }
@@ -162,6 +185,50 @@ export default function Dashboard() {
 
     setUrl('')
     setLoading(false)
+  }
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (file) setSelectedFile(file)
+  }
+
+  const handleFileUpload = async () => {
+    if (!selectedFile || !user) return
+    if (credits <= 0 && plan !== 'pro') { setStatus('No credits remaining. Upgrade your plan.'); return }
+
+    setUploading(true)
+    setStatus('Uploading video...')
+
+    try {
+      const { data: { session } } = await getSupabaseClient().auth.getSession()
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+      formData.append('url', url || '')
+
+      const response = await fetch(`${BACKEND_URL}/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+        body: formData,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.job_id) {
+          setStatus('Upload complete! Processing video...')
+          setSelectedFile(null)
+          setUrl('')
+          pollClipStatus(user.id, Date.now(), data.job_id)
+          setTimeout(() => setActiveTab('clips'), 2000)
+        }
+      } else {
+        const err = await response.text()
+        setStatus(`Upload error: ${err.slice(0, 200)}`)
+      }
+    } catch (err) {
+      setStatus(`Upload failed: ${err.message}`)
+    }
+
+    setUploading(false)
   }
 
   const handleCheckout = async (priceId) => {
@@ -401,25 +468,12 @@ export default function Dashboard() {
                 borderRadius: '12px', padding: '6px', minWidth: '160px',
                 zIndex: 100, boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
               }}>
-                <button onClick={() => { setActiveTab('settings'); setShowSidebarMenu(false) }}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px 12px', border: 'none', background: 'none',
-                    color: textSecondary, cursor: 'pointer', borderRadius: '8px',
-                    fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = textPrimary }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
-                  <span style={{ display: 'flex', color: textDim }}>{icons.settings}</span>
-                  Settings
-                </button>
                 <button onClick={handleLogout}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
                     padding: '10px 12px', border: 'none', background: 'none',
                     color: textSecondary, cursor: 'pointer', borderRadius: '8px',
                     fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
-                    borderTop: `1px solid ${borderSoft}`, marginTop: '4px', paddingTop: '10px',
                   }}
                   onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = '#EF4444' }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
@@ -493,7 +547,7 @@ export default function Dashboard() {
                 Extract high-scoring clips, generate animated captions, and auto-crop horizontal videos into high-impact vertical format in one click.
               </div>
             </div>
-            <div className="process-card" style={{ textAlign: 'center' }}>
+              <div className="process-card" style={{ textAlign: 'center' }}>
               <label className="process-label" htmlFor="video-url" style={{ textAlign: 'center' }}>VIDEO URL</label>
               <div className="process-row" style={{ justifyContent: 'center', maxWidth: '680px', margin: '0 auto' }}>
                 <input
@@ -509,6 +563,73 @@ export default function Dashboard() {
                   {loading ? 'Processing...' : <><span style={{ display: 'flex' }}>{icons.lightning}</span>Generate Clips</>}
                 </button>
               </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', maxWidth: '680px', margin: '20px auto 0', opacity: 0.3 }}>
+                <div style={{ flex: 1, height: '1px', background: 'currentColor' }} />
+                <span style={{ fontSize: '10px', letterSpacing: '2px', color: textSecondary, fontFamily: fonts.body, flexShrink: 0 }}>OR</span>
+                <div style={{ flex: 1, height: '1px', background: 'currentColor' }} />
+              </div>
+
+              <input type="file" accept="video/*" onChange={handleFileSelect} id="file-upload" style={{ display: 'none' }} />
+              {selectedFile ? (
+                <div style={{ maxWidth: '680px', margin: '16px auto 0' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: bgSecondary, borderRadius: '8px',
+                    border: `1px solid ${borderSoft}`, padding: '10px 14px',
+                  }}>
+                    <span style={{ fontSize: '12px', color: textPrimary, fontFamily: fonts.body, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, textAlign: 'left' }}>
+                      {selectedFile.name}
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                      <button onClick={() => setSelectedFile(null)} disabled={uploading}
+                        style={{
+                          padding: '6px 12px', borderRadius: '6px', border: `1px solid ${borderSoft}`,
+                          background: 'none', color: textSecondary, cursor: 'pointer',
+                          fontSize: '11px', fontFamily: fonts.body,
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button onClick={handleFileUpload} disabled={uploading}
+                        style={{
+                          padding: '6px 14px', borderRadius: '6px', border: 'none',
+                          background: brandGrad, color: '#000', cursor: uploading ? 'default' : 'pointer',
+                          fontSize: '11px', fontWeight: '600', fontFamily: fonts.body,
+                          display: 'inline-flex', alignItems: 'center', gap: '6px',
+                          opacity: uploading ? 0.6 : 1,
+                        }}
+                      >
+                        {uploading ? 'Uploading...' : <><span style={{ display: 'flex' }}>{icons.upload}</span>Upload</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('file-upload')?.click() } }}
+                  role="button"
+                  tabIndex={0}
+                  style={{
+                    maxWidth: '680px', margin: '16px auto 0', padding: '20px',
+                    border: `1px dashed ${borderSoft}`, borderRadius: '10px',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                    background: 'transparent', outline: 'none',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = brand; e.currentTarget.style.background = `${brand}08` }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = borderSoft; e.currentTarget.style.background = 'transparent' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = brand; e.currentTarget.style.background = `${brand}08` }}
+                  onBlur={e => { e.currentTarget.style.borderColor = borderSoft; e.currentTarget.style.background = 'transparent' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                    <span style={{ display: 'flex', color: brand }}>{icons.upload}</span>
+                    <span style={{ fontSize: '13px', color: textSecondary, fontFamily: fonts.body }}>
+                      Upload video file (MP4, MOV, WebM)
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {status && (
                 <div className="process-status" style={{ marginTop: '20px', maxWidth: '680px', marginLeft: 'auto', marginRight: 'auto' }}>
@@ -926,18 +1047,6 @@ export default function Dashboard() {
                   <div style={{ fontSize: '12px', color: textPrimary, fontWeight: '600' }}>{user?.email}</div>
                   <div style={{ fontSize: '10px', color: brand, fontWeight: '500', marginTop: '2px' }}>{plan.toUpperCase()}</div>
                 </div>
-                <button onClick={() => { setActiveTab('settings'); setShowProfileMenu(false) }}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px 12px', border: 'none', background: 'none',
-                    color: textSecondary, cursor: 'pointer', borderRadius: '8px',
-                    fontSize: '13px', fontFamily: fonts.body, transition: 'all 0.1s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = bgSecondary; e.currentTarget.style.color = textPrimary }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary }}>
-                  <span style={{ display: 'flex', color: textDim }}>{icons.settings}</span>
-                  Settings
-                </button>
                 <button onClick={handleLogout}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
