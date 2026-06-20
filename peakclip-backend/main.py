@@ -630,42 +630,48 @@ Return ONLY a JSON with this exact format (no markdown, no code fences):
             generate_srt_subtitle(words_data, clip_start, clip["end"], srt_path)
             temp_files_extra.append(srt_path)
 
+            raw_clip = f"downloads/{job_id}_raw{i+1}.mp4"
+            local_files.append(raw_clip)
+            subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                            '-c', 'copy', '-y', raw_clip], capture_output=True, timeout=120)
+
             music_path = resolve_music_path(clip_mood)
             srt_path_ff = srt_path.replace('\\', '/')
 
             video_filter = (
-                f"subtitles={srt_path_ff}:force_style="
+                f"[0:v]subtitles={srt_path_ff}:force_style="
                 f"'Fontname=Arial,Fontsize=48,PrimaryColour=&H0073BADF,"
                 f"BackColour=&H80000000,Outline=0,Bold=1,Alignment=2,MarginV=60'"
                 ",scale=1080:1920:force_original_aspect_ratio=decrease,"
-                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
+                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2[v]"
             )
 
-            filter_parts = [f"[0:v]{video_filter}[v]"]
+            filter_parts = [video_filter]
+            a_label = "[a]"
             if music_path:
                 music_path_ff = music_path.replace('\\', '/')
-                filter_parts.append("[0:a]volume=1.0[a_main];" f"[1:a]volume=0.18[a_music];" "[a_main][a_music]amix=inputs=2:duration=first[a]")
+                filter_parts.append("[0:a]volume=1.0[a_main];[1:a]volume=0.18[a_music];[a_main][a_music]amix=inputs=2:duration=first[a]")
             else:
                 filter_parts.append("[0:a]anull[a]")
 
-            cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
+            cmd = ['ffmpeg', '-i', raw_clip]
             if music_path:
                 cmd += ['-stream_loop', '-1', '-i', music_path_ff]
-            cmd += ['-t', str(duration), '-filter_complex', ';'.join(filter_parts), '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', output_path]
+            cmd += ['-filter_complex', ';'.join(filter_parts), '-map', '[v]', '-map', a_label, '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', output_path]
             result = subprocess.run(cmd, capture_output=True, timeout=600)
 
             if result.returncode != 0 or os.path.getsize(output_path) < 1024:
-                print(f"BG [{job_id}] ffmpeg exit {result.returncode}, size {os.path.getsize(output_path)}, retrying without subtitles")
-                simple_parts = ["[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2[v]"]
+                print(f"BG [{job_id}] ffmpeg exit {result.returncode}, size {os.path.getsize(output_path)}, fallback to mpeg4")
+                simple_parts = ["[0:v]scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2[v]"]
                 if music_path:
                     music_path_ff = music_path.replace('\\', '/')
                     simple_parts.append("[0:a]volume=1.0[a_main];[1:a]volume=0.18[a_music];[a_main][a_music]amix=inputs=2:duration=first[a]")
                 else:
                     simple_parts.append("[0:a]anull[a]")
-                fallback_cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
+                fallback_cmd = ['ffmpeg', '-i', raw_clip]
                 if music_path:
                     fallback_cmd += ['-stream_loop', '-1', '-i', music_path_ff]
-                fallback_cmd += ['-t', str(duration), '-filter_complex', ';'.join(simple_parts), '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', output_path]
+                fallback_cmd += ['-filter_complex', ';'.join(simple_parts), '-map', '[v]', '-map', a_label, '-c:v', 'mpeg4', '-qscale:v', '5', '-c:a', 'aac', '-y', output_path]
                 subprocess.run(fallback_cmd, capture_output=True, timeout=600)
 
             local_files.append(output_path)
