@@ -29,6 +29,10 @@ import base64
 
 COOKIES_B64_HARDCODED = "IyBOZXRzY2FwZSBIVFRQIENvb2tpZSBGaWxlCiMgaHR0cHM6Ly9jdXJsLmhheHguc2UvcmZjL2Nvb2tpZV9zcGVjLmh0bWwKIyBUaGlzIGlzIGEgZ2VuZXJhdGVkIGZpbGUhIERvIG5vdCBlZGl0LgoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MDU4MzQ0NjgJX2dhCUdBMS4xLjUwNzMyMTAwNS4xNzcxMjc0NDY4Ci55b3V0dWJlLmNvbQlUUlVFCS8JRkFMU0UJMTgwNTgzNDQ3NglfZ2FfVkNHRVBZNDBWQglHUzIuMS5zMTc3MTI3NDQ2OCRvMSRnMSR0MTc3MTI3NDQ3NiRqNTIkbDAkaDAKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE3OTIxODc0NTQJX19TZWN1cmUtQlVDS0VUCUNLTUQKLnlvdXR1YmUuY29tCVRSVUUJLwlGQUxTRQkxNzg1NjQ0NTQ3CV9nY2xfYXUJMS4xLjEyMjc5NjI2NzMuMTc3Nzg2ODU0NwoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MTU1MDk2ODEJSFNJRAlBcEdIMTdCOUVtU3dIZmNJWQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgxNTUwOTY4MQlTU0lECUFCTkZKOUpJY1B2d2FVZlZjCi55b3V0dWJlLmNvbQlUUlVFCS8JRkFMU0UJMTgxNTUwOTY4MQlBUElTSUQJOTVWbmtjTmNZSWNZOWw4RS9BbjV5dGJSZ1JTRmx3X1gxbwoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgxNTUwOTY4MQlTQVBJU0lECXZrUTlUZ1J6SlVKS2Y4cHMvQUNpOXQxSW1PZ25QZE5IVVMKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MTU1MDk2ODEJX19TZWN1cmUtMVBBUElTSUQJdmtROVRnUnpKVUpLZjhwcy9BQ2k5dDFJbU9nblBkTkhVUwoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgxNTYwMzgyNglfX1NlY3VyZS0zUEFQSVNJRAl2a1E5VGdSekpVSktmOHBzL0FDaTl0MUltT2duUGROSFVTCi55b3V0dWJlLmNvbQlUUlVFCS8JRkFMU0UJMTgxNTUwOTY4MQlTSUQJZy5hMDAwLXdpb2hVQ2RHYm40VXFTSVJhT2ZzVzdpX0dMdWg3Q2plVWtqdWJzbVA3RlN6ajNfUHc1Z1ZNVi1Rem8tYkY4a21OeklhQUFDZ1lLQVRZU0FSVVNGUUhHWDJNaVNYdnY5NWJERUFEUWVlR0tHdXhZZFJvVkFVRjh5S3J5Rjd4b3Q4Q3dHaUZqNm5xMUxreFQwMDc2Ci55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODE1NTA5NjgxCV9fU2VjdXJlLTFQU0lECWcuYTAwMC13aW9oVUNkR2JuNFVxU0lSYU9mc1c3aV9HTHVoN0NqZVVranVic21QN0ZTemozX285Q1BLTXFQRVlZcnVWV1poVnZFRGdBQ2dZS0FkSVNBUlVTRlFIR1gyTWlEQXVLNU9yZUZSU2NDLW5oaG1COER4b1ZBVUY4eUtwemhDQWcyOGJudXFyblMyeVFzeGtsMDA3NgoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgxNTYwMzgyNglfX1NlY3VyZS0zUFNJRAlnLmEwMDAtd2lvaFVDZEdibjRVcVNJUmFPZnNXN2lfR0x1aDdDamVVa2p1YnNtUDdGU3pqM192V3A0bFJRVHVMcEZKc3FJTWU5UEV3QUNnWUtBZkFTQVJVU0ZRSEdYMk1pRHppZ1J3T0hPc0RVR3JyV2FiRTgyQm9WQVVGOHlLcmVoVk5VQ3RwSzcxM3F0WlpoQ3N6NTAwNzYKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MTU2NDMxODUJTE9HSU5fSU5GTwlBRm1tRjJzd1JRSWhBT2RLc1lKS1JrQ1hDR2IzelZYUnlsU2RxWVNlV0VSUVF4VVNldmE1ZDlPUEFpQmd6OXkzdDhrdkpmZjJPWEZ1V2NEb1hUblNZdTZIT3Q5bldYRFVMSklhSGc6UVVRM01qTm1lVkpPWTBOUFQzQlZhR3hwVGs5Zk9XVjRSMmRRVURkNWMzVk1TbFJvVDBSbVIzUk5hVEppTVc1NFVEWkxPRU5uYUdOT04xcDBabUY1Y1VrelZ5MVVWRGhUYWtocU5FNTBUbWRRUlRCUFRFdG1ObEZqVWxnNWRsWkdaVzEyWW1wTFEwNXRVVWhyUjFCRVprVkJlVnBYVW1aUmVXcFliMGxSVkcwNWFVcFNXRmx3UjFaQ2VHRjBRWGN6YkZWSk5sTXhlVlJRVERKS1dubHVha0pCCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxNzk3MDU0Mzc4CVZJU0lUT1JfSU5GTzFfTElWRQlBY0JCRGpKUl9KOAoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTc5NzA1NDM3OAlWSVNJVE9SX1BSSVZBQ1lfTUVUQURBVEEJQ2dKRFR4SUVHZ0FnREElM0QlM0QKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MTY0NzYyNTcJUFJFRglmNj00MDAwMDA4MCZ2b2x1bWU9MTgmZjc9MTAwJnR6PUFtZXJpY2EuQm9nb3RhJnJlcGVhdD1OT05FJmF1dG9wbGF5PXRydWUKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MTM0NTIxMzEJX19TZWN1cmUtMVBTSURUUwlzaWR0cy1DalVCeW9qUVV4UWJ5NjJ0aElvZng5MTY0RWQ2S3BNNjZYMlU1YjJUWFJMZm9LcXIyTTNUekFNWC1hVTBSS3ZmRXpsMENOMWkyUkFBCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODEzNDUyMTMxCV9fU2VjdXJlLTNQU0lEVFMJc2lkdHMtQ2pVQnlvalFVeFFieTYydGhJb2Z4OTE2NEVkNktwTTY2WDJVNWIyVFhSTGZvS3FyMk0zVHpBTVgtYVUwUkt2ZkV6bDBDTjFpMlJBQQoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MTM0NTIyNjMJU0lEQ0MJQUtFeVh6WHNFdWdGUEV4Wm5hSTQySjNBUnVJMUV4U0xsd3JhRmJHT01TRTlxOGotUmh2akNBSkRGRDRBVG1OR3lWcXFuY3Z4eWhJCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODEzNDUyMjYzCV9fU2VjdXJlLTFQU0lEQ0MJQUtFeVh6WHFndk9nMENvd3hFSjI1R00xSGE1M01GZXJJU25rRzRaRG9VeXRVbDBjRk9kVkpRVS1PRExPOC1vc3dDU2ZHd0xkMVEKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MTM0NTIyNjMJX19TZWN1cmUtM1BTSURDQwlBS0V5WHpXOF9jaV8zYkY5UTFnQ1FwUGk3d0dweHl0N1Q5Y29DV2lJUEkzMDJfY0lhaXkzZXBEMHl5aUlaOWlPbDJ0dkZaZndsZkEKLnlvdXR1YmUuY29tCVRSVUUJLwlGQUxTRQkxNzgxOTE2Mjg1CVNULTNvcHZwNQlzZXNzaW9uX2xvZ2luaW5mbz1BRm1tRjJzd1JRSWhBT2RLc1lKS1JrQ1hDR2IzelZYUnlsU2RxWVNlV0VSUVF4VVNldmE1ZDlPUEFpQmd6OXkzdDhrdkpmZjJPWEZ1V2NEb1hUblNZdTZIT3Q5bldYRFVMSklhSGclM0FRVVEzTWpObWVWSk9ZME5QVDNCVmFHeHBUazlmT1dWNFIyZFFVRGQ1YzNWTVNsUm9UMFJtUjNSTmFUSmlNVzU0VURaTE9FTm5hR05PTjFwMFptRjVjVWt6VnkxVVZEaFRha2hxTkU1MFRtZFFSVEJQVEV0bU5sRmpVbGc1ZGxaR1pXMTJZbXBMUTA1dFVVaHJSMUJFWmtWQmVWcFhVbVpSZVdwWWIwbFJWRzA1YVVwU1dGbHdSMVpDZUdGMFFYY3piRlZKTmxNeGVWUlFUREpLV25sdWFrSkIKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE3OTc0NjgyNTMJVklTSVRPUl9JTkZPMV9MSVZFCXdHWmRKQm1HYXRBCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxNzk3NDY4MjUzCVZJU0lUT1JfUFJJVkFDWV9NRVRBREFUQQlDZ0pEVHhJRUdnQWdKUSUzRCUzRAoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTc5NzM4NjUwNwlfX1NlY3VyZS1ZTklECTE5LllUPXBSaWt6OXF2NEktNXEydmpueTlpbGduRzRsb2gtdzdZekJDeEpscTdRSFdObzNLQXA3OTZWZTQ3aDgzVm1Nal92UnI2SmdsRkRRZkpybWcyaGpGeU1SYjlWMGNuUl9BZGU5eGc1VHNMSHlQeFctWlg3SWpWS2NNSUVqNHRxYXh0N1d4aW9LUnZpOVJPVHRWMk5CLUdVSS1PTEJMOHJzTXpTaHlIWVNRRFdjMUlqRGhmUC1zWVJndnB3QzRva1JldDIyU0tNTlhPeExmYm9lc3MyMWJVMTREWEtlOTBDRkNrQ3RSR0xIcXBfYXZpZXdJdkFHdV9naWQ2ODVsaGIzVk8yM2hqLVlRUFJYdzZRdmpfZEwtRldnakNzU3ZhazYxdVRLQ05MUG5TZ0FfNXdkSmljZERaVFFtMmVmbm9MaEZYVEFudnBMOHdHYmhaUHFVbGF1Uk1DdwoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTc5NzM4NjUwNwlfX1NlY3VyZS1ST0xMT1VUX1RPS0VOCUNQR3pvY09hOU5jZkVKTG14UGZ4OVpRREdNUGV5ZWFha3BVRAoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMAlZU0MJRG0zWGdjUkY3Q2cK"
 
+# In-memory job progress tracking (survives per session)
+_job_progress = {}
+_job_progress_lock = threading.Lock()
+
 app = FastAPI()
 
 @app.on_event("startup")
@@ -50,33 +54,6 @@ async def run_migrations():
         print("MIGRATION SKIPPED: missing SUPABASE_URL or SUPABASE_SERVICE_KEY")
         return
     project_ref = supabase_url.split("https://")[1].split(".")[0]
-
-    # Ensure jobs table exists (runs every startup, idempotent)
-    jobs_sql = """
-        CREATE TABLE IF NOT EXISTS public.jobs (
-            id UUID PRIMARY KEY,
-            user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-            status TEXT DEFAULT 'queued',
-            message TEXT,
-            error TEXT,
-            created_at TIMESTAMPTZ DEFAULT now()
-        );
-    """
-    import httpx
-    j_headers = {"apikey": service_key, "Authorization": f"Bearer {service_key}", "Content-Type": "application/json"}
-    j_ref = supabase_url.split("https://")[1].split(".")[0]
-    async with httpx.AsyncClient(timeout=15) as client:
-        for j_url in [
-            f"https://{j_ref}.supabase.co/sql/v1/query",
-            f"https://{j_ref}.supabase.co/rest/v1/rpc/exec",
-        ]:
-            try:
-                r = await client.post(j_url, json={"query": jobs_sql}, headers=j_headers)
-                print(f"JOBS TABLE via {j_url}: {r.status_code}")
-                if r.status_code < 400:
-                    break
-            except Exception as e:
-                print(f"JOBS TABLE via {j_url}: {e}")
 
     # Check if credit_transactions table exists via REST API
     ct_exists = False
@@ -545,10 +522,8 @@ def test_dl(url: str = "dQw4w9WgXcQ"):
 
 
 def _set_job(job_id, user_id, status, message=None):
-    d = {"id": job_id, "user_id": user_id, "status": status}
-    if message:
-        d["message"] = message
-    supabase.table("jobs").upsert(d).execute()
+    with _job_progress_lock:
+        _job_progress[job_id] = {"id": job_id, "user_id": user_id, "status": status, "message": message}
 
 def _background_process(req: VideoRequest, user_id: str, job_id: str):
     video_path = f"downloads/{job_id}.mp4"
@@ -742,10 +717,11 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
 
 @app.get("/status/{job_id}")
 def get_status(job_id: str):
-    result = supabase.table("jobs").select("*").eq("id", job_id).execute()
-    if not result.data:
+    with _job_progress_lock:
+        job = _job_progress.get(job_id)
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return result.data[0]
+    return job
 
 
 @app.post("/export")
