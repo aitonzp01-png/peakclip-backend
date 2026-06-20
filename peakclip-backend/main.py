@@ -519,6 +519,7 @@ def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
             },
+            'impersonate': 'chrome',
             'extractor_args': {
                 'youtube': {
                     'player_client': ['android', 'android_creator'],
