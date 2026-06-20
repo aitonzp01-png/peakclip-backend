@@ -526,11 +526,13 @@ def get_ydl_opts():
     opts = {
         'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
         'quiet': True, 'no_warnings': True,
-        'socket_timeout': 30, 'retries': 3, 'fragment_retries': 3,
-        'extractor_retries': 3, 'file_access_retries': 3,
+        'socket_timeout': 60, 'retries': 10, 'fragment_retries': 10,
+        'extractor_retries': 10, 'file_access_retries': 10,
+        'sleep_interval': 10,
         'extractor_args': {
             'youtube': {
                 'player_client': ['android', 'ios'],
+                'skip': ['dash', 'hls'],
             }
         },
     }
