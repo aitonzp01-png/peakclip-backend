@@ -602,7 +602,11 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
 
     response = client.chat.completions.create(
         model="gpt-4o",
+        response_format={"type": "json_object"},
         messages=[{
+            "role": "system",
+            "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
+        }, {
             "role": "user",
             "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
@@ -615,18 +619,22 @@ RULES:
 - Classify mood as: epic, hype, chill, funny, emotional, suspense.
 - Include a hook_score from 1-10 ranking virality potential.
 
-Return ONLY a JSON with this exact format:
-{{
-  "clips": [
-    {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype", "hook_score": 9}},
-    {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
-    {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
-  ]
-}}"""
+Return JSON with this exact format:
+{{"clips": [
+  {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype", "hook_score": 9}},
+  {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
+  {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
+]}}"""
         }]
     )
 
-    clips_data = json.loads(response.choices[0].message.content)
+    raw = response.choices[0].message.content.strip()
+    # Strip markdown code fences if present
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1].rsplit("\n", 1)[0]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+    clips_data = json.loads(raw)
 
     # Sort clips by hook_score descending (best viral moment first)
     clips_data["clips"].sort(key=lambda c: c.get("hook_score", 5), reverse=True)
@@ -1126,7 +1134,11 @@ async def upload_video(
 
     response = client.chat.completions.create(
         model="gpt-4o",
+        response_format={"type": "json_object"},
         messages=[{
+            "role": "system",
+            "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
+        }, {
             "role": "user",
             "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
@@ -1139,18 +1151,21 @@ RULES:
 - Classify mood as: epic, hype, chill, funny, emotional, suspense.
 - Include a hook_score from 1-10 ranking virality potential.
 
-Return ONLY a JSON with this exact format:
-{{
-  "clips": [
-    {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype", "hook_score": 9}},
-    {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
-    {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
-  ]
-}}"""
+Return JSON with this exact format:
+{{"clips": [
+  {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype", "hook_score": 9}},
+  {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
+  {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
+]}}"""
         }]
     )
 
-    clips_data = json.loads(response.choices[0].message.content)
+    raw = response.choices[0].message.content.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1].rsplit("\n", 1)[0]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+    clips_data = json.loads(raw)
     clips_data["clips"].sort(key=lambda c: c.get("hook_score", 5), reverse=True)
 
     output_clips = []
