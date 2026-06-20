@@ -487,29 +487,27 @@ async def upload_cookies(file: bytes = File(...)):
 @app.get("/test-dl")
 def test_dl(url: str = "dQw4w9WgXcQ"):
     full_url = f"https://www.youtube.com/watch?v={url}" if "youtube.com" not in url and "youtu.be" not in url else url
-    cookies_arg = []
-    if os.path.exists("cookies.txt"):
-        cookies_arg = ["--cookies", "cookies.txt"]
     ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "extract_flat": True,
-        "force_generic_extractor": False,
+        'quiet': True, 'no_warnings': True,
+        'socket_timeout': 15,
+        'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
     }
-    if cookies_arg:
-        ydl_opts["cookiefile"] = "cookies.txt"
+    if os.path.exists('cookies.txt'):
+        ydl_opts['cookiefile'] = 'cookies.txt'
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(full_url, download=False)
-        return {
-            "ok": True,
-            "title": info.get("title", "?"),
-            "duration": info.get("duration", "?"),
-            "id": info.get("id", "?"),
-            "used_cookies": bool(cookies_arg),
-        }
+            best = info.get('requested_formats') or info.get('format')
+            return {
+                'ok': True,
+                'title': info.get('title', '?'),
+                'duration': info.get('duration', '?'),
+                'id': info.get('id', '?'),
+                'format': str(best)[:200],
+                'used_cookies': os.path.exists('cookies.txt'),
+            }
     except Exception as e:
-        return {"ok": False, "error": str(e)[:500]}
+        return {'ok': False, 'error': str(e)[:500]}
 
 
 @app.post("/process")
