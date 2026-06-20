@@ -525,6 +525,13 @@ def _set_job(job_id, user_id, status, message=None):
     with _job_progress_lock:
         _job_progress[job_id] = {"id": job_id, "user_id": user_id, "status": status, "message": message}
 
+def extract_json(text: str) -> dict:
+    text = text.strip()
+    m = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
+    if m:
+        text = m.group(1).strip()
+    return json.loads(text)
+
 def _background_process(req: VideoRequest, user_id: str, job_id: str):
     video_path = f"downloads/{job_id}.mp4"
     audio_path = f"downloads/{job_id}.mp3"
@@ -585,27 +592,27 @@ def _background_process(req: VideoRequest, user_id: str, job_id: str):
 
     segments_text = "\n".join([f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}" for s in transcript.segments])
 
-    _set_job(job_id, user_id, "analyzing", "Analyzing transcript with GPT-4 to find viral moments...")
-    try:
-        response = client.chat.completions.create(model="gpt-4", messages=[{
-            "role": "user",
-            "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
+    prompt = f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
 {segments_text}
 
 For each clip, classify the mood as one of: epic, hype, chill, funny, emotional, suspense.
 
-Return ONLY a JSON with this exact format:
-{{
-  "clips": [
-    {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype"}},
-    {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny"}},
-    {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional"}}
-  ]
-}}"""
-        }])
-        clips_data = json.loads(response.choices[0].message.content)
+Return ONLY a JSON with this exact format (no markdown, no code fences):
+{{"clips":[{{"start":10.5,"end":40.2,"title":"...","reason":"...","mood":"hype"}},{{"start":120.0,"end":150.5,"title":"...","reason":"...","mood":"funny"}},{{"start":200.0,"end":230.0,"title":"...","reason":"...","mood":"emotional"}}]}}"""
+    _set_job(job_id, user_id, "analyzing", "Analyzing transcript with AI to find viral moments...")
+    try:
+        for model_name in ["gpt-4o-mini", "gpt-4"]:
+            try:
+                response = client.chat.completions.create(model=model_name, messages=[{"role": "user", "content": prompt}], timeout=60)
+                clips_data = extract_json(response.choices[0].message.content)
+                if "clips" in clips_data and len(clips_data["clips"]) > 0:
+                    break
+            except Exception:
+                continue
+        else:
+            raise Exception("All models failed")
     except Exception as e:
         _set_job(job_id, user_id, "error", f"Analysis failed: {str(e)[:200]}")
         return
@@ -757,27 +764,27 @@ def test_process_sync(url: str = "dQw4w9WgXcQ"):
                 words_data.append({"word": word_text, "start": w_start, "end": w_end})
     segments_text = "\n".join([f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}" for s in transcript.segments])
 
-    _set_job(job_id, user_id, "analyzing")
-    try:
-        response = client.chat.completions.create(model="gpt-4", messages=[{
-            "role": "user",
-            "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
+    prompt = f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
 {segments_text}
 
 For each clip, classify the mood as one of: epic, hype, chill, funny, emotional, suspense.
 
-Return ONLY a JSON with this exact format:
-{{
-  "clips": [
-    {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype"}},
-    {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny"}},
-    {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional"}}
-  ]
-}}"""
-        }])
-        clips_data = json.loads(response.choices[0].message.content)
+Return ONLY a JSON with this exact format (no markdown, no code fences):
+{{"clips":[{{"start":10.5,"end":40.2,"title":"...","reason":"...","mood":"hype"}},{{"start":120.0,"end":150.5,"title":"...","reason":"...","mood":"funny"}},{{"start":200.0,"end":230.0,"title":"...","reason":"...","mood":"emotional"}}]}}"""
+    _set_job(job_id, user_id, "analyzing")
+    try:
+        for model_name in ["gpt-4o-mini", "gpt-4"]:
+            try:
+                response = client.chat.completions.create(model=model_name, messages=[{"role": "user", "content": prompt}], timeout=60)
+                clips_data = extract_json(response.choices[0].message.content)
+                if "clips" in clips_data and len(clips_data["clips"]) > 0:
+                    break
+            except Exception:
+                continue
+        else:
+            raise Exception("All models failed")
         steps['analyze'] = f'ok ({len(clips_data["clips"])} clips)'
     except Exception as e:
         steps['analyze'] = str(e)[:200]
