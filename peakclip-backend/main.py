@@ -492,13 +492,8 @@ async def upload_cookies(file: bytes = File(...)):
 @app.get("/test-dl")
 def test_dl(url: str = "dQw4w9WgXcQ"):
     full_url = f"https://www.youtube.com/watch?v={url}" if "youtube.com" not in url and "youtu.be" not in url else url
-    ydl_opts = {
-        'quiet': True, 'no_warnings': True,
-        'socket_timeout': 15,
-        'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
-    }
-    if os.path.exists('cookies.txt'):
-        ydl_opts['cookiefile'] = 'cookies.txt'
+    ydl_opts = get_ydl_opts()
+    ydl_opts['socket_timeout'] = 15
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(full_url, download=False)
@@ -526,6 +521,22 @@ def extract_json(text: str) -> dict:
         text = m.group(1).strip()
     return json.loads(text)
 
+def get_ydl_opts():
+    opts = {
+        'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
+        'quiet': True, 'no_warnings': True,
+        'socket_timeout': 30, 'retries': 3, 'fragment_retries': 3,
+        'extractor_retries': 3, 'file_access_retries': 3,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['web', 'android', 'ios'],
+            }
+        },
+    }
+    if os.path.exists('cookies.txt'):
+        opts['cookiefile'] = 'cookies.txt'
+    return opts
+
 def _background_process(req: VideoRequest, user_id: str, job_id: str):
     video_path = f"downloads/{job_id}.mp4"
     audio_path = f"downloads/{job_id}.mp3"
@@ -534,14 +545,8 @@ def _background_process(req: VideoRequest, user_id: str, job_id: str):
 
     _set_job(job_id, user_id, "downloading", "Downloading video from YouTube...")
     try:
-        ydl_opts = {
-            'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
-            'outtmpl': video_path, 'quiet': True, 'no_warnings': True,
-            'socket_timeout': 30, 'retries': 3, 'fragment_retries': 3,
-            'extractor_retries': 3, 'file_access_retries': 3,
-        }
-        if os.path.exists('cookies.txt'):
-            ydl_opts['cookiefile'] = 'cookies.txt'
+        ydl_opts = get_ydl_opts()
+        ydl_opts['outtmpl'] = video_path
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([req.url])
     except Exception as e:
@@ -716,13 +721,9 @@ def test_process_sync(url: str = "dQw4w9WgXcQ"):
 
     _set_job(job_id, user_id, "downloading")
     try:
-        ydl_opts = {
-            'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
-            'outtmpl': video_path, 'quiet': True, 'no_warnings': True,
-            'socket_timeout': 30, 'retries': 3, 'fragment_retries': 3,
-        }
-        if os.path.exists('cookies.txt'):
-            ydl_opts['cookiefile'] = 'cookies.txt'
+        ydl_opts = get_ydl_opts()
+        ydl_opts['outtmpl'] = video_path
+        ydl_opts['socket_timeout'] = 30
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([req.url])
         steps['download'] = 'ok'
