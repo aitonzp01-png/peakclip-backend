@@ -85,10 +85,15 @@ export default function Dashboard() {
     const poll = setInterval(async () => {
       attempts++
       const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).gte('created_at', new Date(since).toISOString()).order('created_at', { ascending: false }).limit(5)
-      if (data?.length > 0 || attempts > 120) {
+      if (data?.length > 0) {
         clearInterval(poll)
         loadClips(userId)
-        if (data?.length > 0) setStatus(`${data.length} clips ready!`)
+        setStatus(`${data.length} clips ready!`)
+        setTimeout(() => setActiveTab('clips'), 1000)
+      } else if (attempts > 720) {
+        clearInterval(poll)
+        loadClips(userId)
+        setStatus('Processing is taking longer than expected. Your clips will appear here once ready.')
       }
     }, 5000)
   }
@@ -153,7 +158,7 @@ export default function Dashboard() {
       }
     } catch (err) {
       if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-        setStatus('Processing may take a few minutes. Check "My Clips" tab shortly.')
+        setStatus('Processing started! Clips will appear in "My Clips" as they are ready.')
         pollClipStatus(user.id, Date.now())
         setTimeout(() => { setActiveTab('clips') }, 2000)
       } else {
