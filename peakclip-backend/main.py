@@ -568,8 +568,9 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                     continue
             raise HTTPException(status_code=400, detail=f"Download error: {last_err}")
 
+    # Extract audio at low bitrate to stay under Whisper's 25MB limit
     subprocess.run([
-        'ffmpeg', '-i', video_path, '-q:a', '0', '-map', 'a', audio_path, '-y'
+        'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '24k', audio_path, '-y'
     ], capture_output=True)
 
     # Generate a thumbnail for the source video
@@ -1090,7 +1091,7 @@ async def upload_video(
     jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
 
     subprocess.run([
-        'ffmpeg', '-i', video_path, '-q:a', '0', '-map', 'a', audio_path, '-y'
+        'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '24k', audio_path, '-y'
     ], capture_output=True)
 
     thumb_path = f"thumbnails/{job_id}.jpg"
