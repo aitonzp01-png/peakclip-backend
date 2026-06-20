@@ -326,12 +326,19 @@ def debug():
         yt_version = "?"
     openai_key = os.getenv("OPENAI_API_KEY", "")
     supabase_url = os.getenv("SUPABASE_URL", "")
+    cookies_path = "cookies.txt"
+    cookies_info = "not found"
+    if os.path.exists(cookies_path):
+        size = os.path.getsize(cookies_path)
+        lines = open(cookies_path).readlines()
+        cookies_info = f"{size} bytes, {len(lines)} lines, 1st: {lines[0][:50] if lines else 'empty'}"
     return {
         "ffmpeg": ffmpeg_path or "NOT FOUND",
         "deno": deno_path or "NOT FOUND",
         "yt_dlp": yt_dlp_ok,
         "yt_dlp_version": yt_version,
         "curl_cffi": curl_cffi_ok,
+        "cookies": cookies_info,
         "openai_key_set": bool(openai_key),
         "openai_key_prefix": openai_key[:8] + "..." if openai_key else "",
         "supabase_url": supabase_url,
@@ -436,6 +443,24 @@ def resolve_music_path(mood: str) -> str | None:
 
 
 # ──────────────────────────────────────────────────────────────
+
+
+@app.get("/check-cookies")
+def check_cookies():
+    exists = os.path.exists("cookies.txt")
+    if not exists:
+        return {"cookies": False}
+    size = os.path.getsize("cookies.txt")
+    lines = open("cookies.txt").readlines()
+    has_tabs = any("\t" in l for l in lines)
+    return {
+        "cookies": True,
+        "size": size,
+        "lines": len(lines),
+        "has_tabs": has_tabs,
+        "first_line": lines[0][:80] if lines else "",
+        "sample": lines[1][:80] if len(lines) > 1 else "",
+    }
 
 
 @app.post("/upload-cookies")
