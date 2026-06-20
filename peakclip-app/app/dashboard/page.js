@@ -142,10 +142,16 @@ export default function Dashboard() {
 
       if (response.ok) {
         const data = await response.json()
-        setStatus(`${data.total || 1} clips generated! Check "My Clips" tab.`)
+        if (data.status === 'processing') {
+          setStatus('Processing started! Clips will appear in "My Clips" as they are ready.')
+          pollClipStatus(user.id, Date.now())
+          setTimeout(() => { setActiveTab('clips') }, 2000)
+        } else {
+          setStatus(`${data.total || 1} clips generated! Check "My Clips" tab.`)
+          setTimeout(() => { loadClips(user.id); setActiveTab('clips') }, 2000)
+        }
         const { data: userData } = await getSupabaseClient().from('users').select('credits').eq('id', user.id).single()
         if (userData) setCredits(userData.credits)
-        setTimeout(() => { loadClips(user.id); setActiveTab('clips') }, 2000)
       } else {
         const err = await response.text()
         if (response.status === 402) {
