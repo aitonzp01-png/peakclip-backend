@@ -37,7 +37,7 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def startup():
-    cookies_b64 = os.getenv("COOKIES_BASE64") or COOKIES_B64_HARDCODED
+    cookies_b64 = COOKIES_B64_HARDCODED
     try:
         data = base64.b64decode(cookies_b64).decode("utf-8")
         with open("cookies.txt", "w", encoding="utf-8") as f:
@@ -529,25 +529,24 @@ def get_ydl_opts():
         'extractor_retries': 3, 'file_access_retries': 3,
         'extractor_args': {
             'youtube': {
-                'player_client': ['web', 'android', 'ios'],
+                'player_client': ['web'],
+                'skip': ['webpage', 'configs'],
             }
         },
     }
     if os.path.exists('cookies.txt'):
         opts['cookiefile'] = 'cookies.txt'
-    if os.path.exists(os.path.join(os.path.expanduser("~"), ".cache", "yt-dlp", "downloader", "youtube-oauth.json")):
-        opts['username'] = 'oauth'
-        opts['password'] = ''
     return opts
 
 YT_CLIENT_ID = "861556708454-d6trm2f5j19j97vfv6cipiks8p0mi4i7.apps.googleusercontent.com"
 
 @app.get("/auth-youtube")
 async def auth_youtube():
+    scope = "https://www.googleapis.com/auth/youtube"
     async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.post("https://oauth2.googleapis.com/device/code", data={
+        r = await client.post("https://accounts.google.com/o/oauth2/device/code", data={
             "client_id": YT_CLIENT_ID,
-            "scope": "https://www.googleapis.com/auth/youtube",
+            "scope": scope,
         })
         if r.status_code != 200:
             return {"error": f"device_code failed: {r.text}"}
@@ -563,7 +562,7 @@ async def auth_youtube():
 @app.post("/auth-youtube/callback")
 async def auth_youtube_callback(device_code: str):
     async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.post("https://oauth2.googleapis.com/token", data={
+        r = await client.post("https://www.googleapis.com/oauth2/v4/token", data={
             "client_id": YT_CLIENT_ID,
             "device_code": device_code,
             "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
