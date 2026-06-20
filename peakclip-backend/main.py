@@ -66,9 +66,9 @@ async def run_migrations():
         import httpx
         ref = supabase_url.split("https://")[1].split(".")[0]
         r = httpx.post(
-            f"https://{ref}.supabase.co/rest/v1/rpc/exec",
+            f"https://{ref}.supabase.co/sql/v1/query",
             json={"query": jobs_sql},
-            headers={"apikey": service_key, "Authorization": f"Bearer {service_key}"},
+            headers={"apikey": service_key, "Authorization": f"Bearer {service_key}", "Content-Type": "application/json"},
             timeout=10
         )
         print(f"JOBS TABLE MIGRATION: {r.status_code}")
