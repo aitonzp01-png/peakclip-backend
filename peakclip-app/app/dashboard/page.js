@@ -80,10 +80,20 @@ export default function Dashboard() {
     if (data) setClips(data)
   }
 
-  const pollClipStatus = async (userId, since) => {
+  const pollClipStatus = async (userId, since, jobId) => {
     let attempts = 0
     const poll = setInterval(async () => {
       attempts++
+      if (jobId) {
+        try {
+          const r = await fetch(`${BACKEND_URL}/status/${jobId}`, { signal: AbortSignal.timeout(3000) })
+          if (r.ok) {
+            const d = await r.json()
+            if (d.status === 'error') { setStatus(`Error: ${d.message || 'Processing failed'}`); clearInterval(poll); return }
+            if (d.message) setStatus(d.message)
+          }
+        } catch {}
+      }
       const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).gte('created_at', new Date(since).toISOString()).order('created_at', { ascending: false }).limit(5)
       if (data?.length > 0) {
         clearInterval(poll)
@@ -143,8 +153,8 @@ export default function Dashboard() {
       if (response.ok) {
         const data = await response.json()
         if (data.status === 'processing') {
-          setStatus('Processing started! Clips will appear in "My Clips" as they are ready.')
-          pollClipStatus(user.id, Date.now())
+          setStatus('Started! Waiting for clips...')
+          pollClipStatus(user.id, Date.now(), data.job_id)
           setTimeout(() => { setActiveTab('clips') }, 2000)
         } else {
           setStatus(`${data.total || 1} clips generated! Check "My Clips" tab.`)
