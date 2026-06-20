@@ -326,6 +326,7 @@ class ExportRequest(BaseModel):
     subtitle_text: str = ""
     subtitle_style: str = "bold-yellow"
     subtitle_position: str = "bottom"
+    font_size: int = 14
     watermark_text: str = ""
     watermark_position: str = "top-right"
     music_track: str = "none"
@@ -838,12 +839,13 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         # Subtitles via textfile
         subtitle_text = req.subtitle_text or "PeakClip"
         if req.subtitle_style != "none" and subtitle_text:
+            fs = req.font_size
             style_configs = {
-                "bold-yellow": "fontsize=h/18:fontcolor=yellow:borderw=3:bordercolor=black",
-                "white-outline": "fontsize=h/18:fontcolor=white:borderw=3:bordercolor=black",
-                "neon-green": "fontsize=h/18:fontcolor=#00ff88:borderw=2:bordercolor=#003322",
-                "minimal-white": "fontsize=h/16:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=8",
-                "tiktok-style": "fontsize=h/18:fontcolor=white:borderw=4:bordercolor=#fe2c55",
+                "bold-yellow": f"fontsize={fs}:fontcolor=yellow:borderw=3:bordercolor=black",
+                "white-outline": f"fontsize={fs}:fontcolor=white:borderw=3:bordercolor=black",
+                "neon-green": f"fontsize={fs}:fontcolor=#00ff88:borderw=2:bordercolor=#003322",
+                "minimal-white": f"fontsize={fs}:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=8",
+                "tiktok-style": f"fontsize={fs}:fontcolor=white:borderw=4:bordercolor=#fe2c55",
             }
             dt_params = style_configs.get(req.subtitle_style, style_configs["bold-yellow"])
             pos_map = {"top": "y=20", "middle": "y=(h-text_h)/2", "bottom": "y=h-text_h-80"}
