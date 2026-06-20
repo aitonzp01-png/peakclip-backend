@@ -439,44 +439,42 @@ def resolve_music_path(mood: str) -> str | None:
 
 
 @app.get("/test-yt")
-async def test_yt(url: str = "https://www.youtube.com/watch?v=INuAA5TMYyc"):
+async def test_yt(url: str = "https://www.youtube.com/watch?v=INuAA5TMYyc", client: str = "android"):
     import sys, io
     old_stderr = sys.stderr
     sys.stderr = buf = io.StringIO()
-    try:
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': True,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.5',
-            },
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'android_creator'],
-                }
-            },
-            'extractor_retries': 3,
-        }
-        if os.path.exists('cookies.txt'):
-            ydl_opts['cookiefile'] = 'cookies.txt'
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-        sys.stderr = old_stderr
-        return {
-            "status": "ok",
-            "title": info.get("title", "?"),
-            "duration": info.get("duration", "?"),
-            "stderr": buf.getvalue()[-1000:],
-        }
-    except Exception as e:
-        sys.stderr = old_stderr
-        return {
-            "status": "error",
-            "error": str(e),
-            "stderr": buf.getvalue()[-1000:],
-        }
+    results = {}
+    clients_to_try = client.split(",") if client else ["android", "web_safari", "web", "android_creator"]
+    for c in clients_to_try:
+        try:
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': True,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                },
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': [c],
+                    }
+                },
+                'extractor_retries': 3,
+            }
+            if os.path.exists('cookies.txt'):
+                ydl_opts['cookiefile'] = 'cookies.txt'
+            info = yt_dlp.YoutubeDL(ydl_opts).extract_info(url, download=False)
+            results[c] = {"ok": True, "title": info.get("title","?"), "dur": info.get("duration","?")}
+        except Exception as e:
+            buf.write(f"\n[{c}]: {e}")
+            results[c] = {"ok": False, "error": str(e)[:150]}
+    sys.stderr = old_stderr
+    return {
+        "url": url,
+        "results": results,
+        "stderr": buf.getvalue()[-1500:],
+    }
 
 
 @app.post("/upload-cookies")
