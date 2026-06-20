@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 import traceback
-from fastapi import FastAPI, HTTPException, Depends, Header, Request, File
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -760,13 +760,14 @@ Return ONLY a JSON with this exact format (no markdown, no code fences):
 
 
 @app.post("/upload")
-async def upload_video(file: bytes = File(...), url: str = "", user: dict = Depends(get_current_user)):
+async def upload_video(file: UploadFile = File(...), url: str = "", user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     job_id = str(uuid.uuid4())
     video_path = f"downloads/{job_id}.mp4"
     os.makedirs("downloads", exist_ok=True)
     with open(video_path, "wb") as f:
-        f.write(file)
+        while chunk := await file.read(65536):
+            f.write(chunk)
     
     def bg():
         _background_process_with_video(video_path, url, user_id, job_id)
