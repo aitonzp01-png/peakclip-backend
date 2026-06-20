@@ -539,7 +539,7 @@ def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"Download error: {str(e)}")
 
     subprocess.run([
-        'ffmpeg', '-i', video_path, '-q:a', '0', '-map', 'a', audio_path, '-y'
+        'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '32k', audio_path, '-y'
     ], capture_output=True)
 
     # Generate a thumbnail for the source video
