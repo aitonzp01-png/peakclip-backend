@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 import traceback
-from fastapi import FastAPI, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -113,9 +113,32 @@ async def run_migrations():
             print("⚠️ CREDIT_TRANSACTIONS TABLE MISSING — DDL not available via API")
             for err in sql_errors:
                 print(f"   {err}")
-            print("   To fix: open supabase dashboard > SQL editor and run schema.sql")
+            print("   To fix: open supabase dashboard > SQL editor and run peakclip-app/schema.sql")
     else:
         print("SQL MIGRATION: credit_transactions table already exists (OK)")
+
+    # Ensure stripe_customer_id column exists on users table
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            headers = {
+                "apikey": service_key,
+                "Authorization": f"Bearer {service_key}",
+                "Content-Type": "application/json",
+            }
+            alter_sql = "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;"
+            for url in [
+                f"https://{project_ref}.supabase.co/sql/v1/query",
+                f"https://api.supabase.com/v1/projects/{project_ref}/database/query",
+            ]:
+                try:
+                    res = await client.post(url, json={"query": alter_sql}, headers=headers)
+                    if res.status_code == 200:
+                        print(f"COLUMN MIGRATION: stripe_customer_id added (OK)")
+                        break
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"COLUMN MIGRATION error: {e}")
 
     # Ensure 'clips' storage bucket exists and is public
     try:
@@ -157,17 +180,15 @@ async def check_rate_limit(key: str):
             raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
         rate_store[key].append(now)
 
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "https://peakclip-studio.vercel.app",
-    "https://peakclip-app.railway.app",
-    os.getenv("FRONTEND_URL", ""),
-]
-ALLOWED_ORIGINS = [o for o in ALLOWED_ORIGINS if o]
+# In-memory job store for status tracking
+jobs_store: dict = {}
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+ALLOWED_ORIGINS = [FRONTEND_URL]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS or ["http://localhost:3000"],
+    allow_origins=[FRONTEND_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -550,7 +571,7 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     ])
 
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[{
             "role": "user",
             "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
@@ -920,13 +941,27 @@ async def create_checkout_session(data: dict, user: dict = Depends(get_current_u
     await check_rate_limit(f"checkout:{user['sub']}")
     user_id = user["sub"]
     price_id = data.get("price_id")
-    return_url = data.get("return_url", "http://localhost:3000/dashboard")
+    return_url = data.get("return_url", f"{FRONTEND_URL}/dashboard")
 
     if not price_id:
         raise HTTPException(status_code=400, detail="Missing price_id")
 
     try:
+        # Find or create Stripe Customer
+        user_result = supabase.table("users").select("email,stripe_customer_id").eq("id", user_id).execute()
+        user_email = user_result.data[0]["email"] if user_result.data else None
+        customer_id = user_result.data[0].get("stripe_customer_id") if user_result.data else None
+
+        if not customer_id:
+            customer = stripe.Customer.create(
+                email=user_email,
+                metadata={"user_id": user_id},
+            )
+            customer_id = customer.id
+            supabase.table("users").update({"stripe_customer_id": customer_id}).eq("id", user_id).execute()
+
         session = stripe.checkout.Session.create(
+            customer=customer_id,
             payment_method_types=["card"],
             mode="subscription",
             line_items=[{"price": price_id, "quantity": 1}],
@@ -943,20 +978,16 @@ async def create_checkout_session(data: dict, user: dict = Depends(get_current_u
 async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
-    if sig_header:
-        try:
-            event = stripe.Webhook.construct_event(
-                payload, sig_header, os.getenv("STRIPE_WEBHOOK_SECRET")
-            )
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid payload")
-        except stripe.error.SignatureVerificationError:
-            raise HTTPException(status_code=400, detail="Invalid signature")
-    else:
-        try:
-            event = json.loads(payload)
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=400, detail="Invalid JSON")
+    if not sig_header:
+        raise HTTPException(status_code=400, detail="Missing stripe-signature header")
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, os.getenv("STRIPE_WEBHOOK_SECRET")
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
     if event.get("type") == "checkout.session.completed":
         session = event["data"]["object"]
         user_id = session["metadata"]["user_id"]
@@ -987,6 +1018,266 @@ def get_user_clips(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     result = supabase.table("clips").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
     return {"clips": result.data}
+
+
+@app.get("/status/{job_id}")
+async def get_job_status(job_id: str, user: dict = Depends(get_current_user)):
+    job = jobs_store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@app.post("/upload")
+async def upload_video(
+    file: UploadFile = File(...),
+    url: str = Form(""),
+    user: dict = Depends(get_current_user),
+):
+    await check_rate_limit(f"upload:{user['sub']}")
+    user_id = user["sub"]
+    job_id = str(uuid.uuid4())
+
+    user_result = supabase.table("users").select("credits,plan").eq("id", user_id).execute()
+    if not user_result.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_data = user_result.data[0]
+    if user_data["plan"] != "pro" and user_data["credits"] <= 0:
+        raise HTTPException(status_code=402, detail="No credits remaining")
+
+    if user_data["plan"] != "pro":
+        dedent_credits(user_id)
+
+    video_path = f"downloads/{job_id}.mp4"
+    audio_path = f"downloads/{job_id}.mp3"
+    local_files = [video_path, audio_path]
+
+    # Save uploaded file
+    content = await file.read()
+    with open(video_path, "wb") as f:
+        f.write(content)
+    print(f"UPLOAD: saved {len(content)} bytes to {video_path}")
+
+    jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
+
+    subprocess.run([
+        'ffmpeg', '-i', video_path, '-q:a', '0', '-map', 'a', audio_path, '-y'
+    ], capture_output=True)
+
+    thumb_path = f"thumbnails/{job_id}.jpg"
+    generate_thumbnail(video_path, thumb_path)
+    local_files.append(thumb_path)
+
+    jobs_store[job_id] = {"status": "processing", "message": "Transcribing audio..."}
+
+    with open(audio_path, 'rb') as f:
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=f,
+            response_format="verbose_json",
+            timestamp_granularities=["word", "segment"]
+        )
+
+    words_data = []
+    if hasattr(transcript, 'words') and transcript.words:
+        for w in transcript.words:
+            word_text = getattr(w, 'word', '') or ''
+            w_start = getattr(w, 'start', None)
+            w_end = getattr(w, 'end', None)
+            if w_start is not None and w_end is not None and word_text.strip():
+                words_data.append({"word": word_text, "start": w_start, "end": w_end})
+
+    segments_text = "\n".join([
+        f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}"
+        for s in transcript.segments
+    ])
+
+    jobs_store[job_id] = {"status": "processing", "message": "Analyzing viral moments with AI..."}
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{
+            "role": "user",
+            "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
+
+Transcript:
+{segments_text}
+
+RULES:
+- Each clip MUST be 30-60 seconds long (ideal for shorts).
+- Prioritize: strong hooks in first 3s, emotional peaks, surprising twists, humor, high-energy moments, or controversy.
+- Classify mood as: epic, hype, chill, funny, emotional, suspense.
+- Include a hook_score from 1-10 ranking virality potential.
+
+Return ONLY a JSON with this exact format:
+{{
+  "clips": [
+    {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype", "hook_score": 9}},
+    {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
+    {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
+  ]
+}}"""
+        }]
+    )
+
+    clips_data = json.loads(response.choices[0].message.content)
+    clips_data["clips"].sort(key=lambda c: c.get("hook_score", 5), reverse=True)
+
+    output_clips = []
+    temp_files_extra = []
+
+    try:
+        for i, clip in enumerate(clips_data["clips"]):
+            output_path = f"outputs/{job_id}_clip{i+1}.mp4"
+            clip_start = clip["start"]
+            raw_duration = clip["end"] - clip["start"]
+            duration = max(15, min(raw_duration, 60))
+            clip["end"] = clip_start + duration
+            clip_mood = clip.get("mood", "chill")
+
+            srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}.srt")
+            generate_srt_subtitle(words_data, clip_start, clip["end"], srt_path)
+            temp_files_extra.append(srt_path)
+
+            music_path = resolve_music_path(clip_mood)
+            srt_path_ff = srt_path.replace('\\', '/')
+
+            video_filter = (
+                f"subtitles={srt_path_ff}:force_style="
+                f"'Fontname=Impact,Fontsize=52,PrimaryColour=&H00FFD700,"
+                f"BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=80'"
+            )
+            video_filter += (
+                ",scale=1080:1920:force_original_aspect_ratio=increase,"
+                "crop=1080:1920"
+            )
+            zoom_dur = max(duration, 2)
+            video_filter += (
+                f",zoompan=z='if(lte(on,1),1,min(1+0.05*(on/{zoom_dur}/24),1.05))':"
+                f"d={int(zoom_dur * 24)}:s=1080x1920:fps=24"
+            )
+
+            filter_parts = [f"[0:v]{video_filter}[v]"]
+            if music_path:
+                music_path_ff = music_path.replace('\\', '/')
+                filter_parts.append(
+                    "[0:a]volume=1.0[a_main];"
+                    f"[1:a]volume=0.15[a_music];"
+                    "[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]"
+                )
+            else:
+                filter_parts.append("[0:a]dynaudnorm=p=0.95[a]")
+
+            cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
+            if music_path:
+                cmd += ['-stream_loop', '-1', '-i', music_path_ff]
+            cmd += ['-t', str(duration),
+                    '-filter_complex', ';'.join(filter_parts),
+                    '-map', '[v]', '-map', '[a]',
+                    '-c:v', 'libx264', '-preset', 'fast',
+                    '-c:a', 'aac', '-b:a', '192k',
+                    '-y', output_path]
+
+            subprocess.run(cmd, capture_output=True)
+
+            if os.path.getsize(output_path) < 1024:
+                fallback_vf = (
+                    f"subtitles={srt_path_ff}:force_style="
+                    f"'Fontname=Impact,Fontsize=52,PrimaryColour=&H00FFD700,"
+                    f"BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=80',"
+                    "scale=1080:1920:force_original_aspect_ratio=increase,"
+                    "crop=1080:1920"
+                )
+                fallback_cmd = [
+                    'ffmpeg',
+                    '-ss', str(clip_start), '-i', video_path,
+                    '-t', str(duration),
+                    '-vf', fallback_vf,
+                    '-c:v', 'libx264', '-preset', 'fast',
+                    '-c:a', 'aac', '-b:a', '192k', '-y', output_path
+                ]
+                subprocess.run(fallback_cmd, capture_output=True)
+
+            local_files.append(output_path)
+
+            clip_storage_url = ""
+            try:
+                with open(output_path, 'rb') as f:
+                    storage_path = f"clips/{job_id}/{job_id}_clip{i+1}.mp4"
+                    supabase.storage.from_("clips").upload(storage_path, f, {"content-type": "video/mp4", "upsert": "true"})
+                    clip_storage_url = supabase.storage.from_("clips").get_public_url(storage_path)
+            except Exception as e:
+                print(f"Storage upload failed: {e}")
+
+            thumb_storage_url = ""
+            try:
+                with open(thumb_path, 'rb') as f:
+                    thumb_storage_path = f"thumbnails/{job_id}.jpg"
+                    supabase.storage.from_("clips").upload(thumb_storage_path, f, {"content-type": "image/jpeg", "upsert": "true"})
+                    thumb_storage_url = supabase.storage.from_("clips").get_public_url(thumb_storage_path)
+            except Exception as e:
+                print(f"Thumbnail storage upload failed: {e}")
+
+            supabase.table("clips").insert({
+                "user_id": user_id,
+                "title": clip["title"],
+                "status": "done",
+                "video_url": clip_storage_url,
+                "thumbnail_url": thumb_storage_url,
+                "duration": round(duration, 1)
+            }).execute()
+
+            output_clips.append({
+                "clip": i + 1,
+                "title": clip["title"],
+                "reason": clip["reason"],
+                "mood": clip_mood,
+                "start": clip["start"],
+                "end": clip["end"],
+                "hook_score": clip.get("hook_score", 5),
+                "file": clip_storage_url,
+                "thumbnail_url": thumb_storage_url
+            })
+
+        jobs_store[job_id] = {"status": "done", "message": f"{len(output_clips)} clips ready"}
+    except Exception as e:
+        jobs_store[job_id] = {"status": "error", "message": str(e)[:200]}
+        raise
+    finally:
+        for f in local_files:
+            try: os.unlink(f)
+            except OSError: pass
+        for f in temp_files_extra:
+            try: os.unlink(f)
+            except OSError: pass
+
+    return {
+        "job_id": job_id,
+        "clips": output_clips,
+        "total": len(output_clips)
+    }
+
+
+@app.get("/create-portal-session")
+async def create_portal_session(user: dict = Depends(get_current_user)):
+    from fastapi.responses import RedirectResponse
+    user_id = user["sub"]
+    user_result = supabase.table("users").select("email,stripe_customer_id").eq("id", user_id).execute()
+    if not user_result.data:
+        return RedirectResponse(url=f"{FRONTEND_URL}/dashboard?tab=settings&error=user_not_found")
+
+    customer_id = user_result.data[0].get("stripe_customer_id")
+    if not customer_id:
+        return RedirectResponse(url=f"{FRONTEND_URL}/dashboard?tab=settings&error=no_customer")
+
+    try:
+        session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=f"{FRONTEND_URL}/dashboard?tab=settings",
+        )
+        return RedirectResponse(url=session.url)
+    except Exception as e:
+        return RedirectResponse(url=f"{FRONTEND_URL}/dashboard?tab=settings&error={str(e)[:50]}")
 
 
 if __name__ == "__main__":

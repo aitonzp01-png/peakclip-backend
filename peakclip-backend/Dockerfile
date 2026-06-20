@@ -1,9 +1,6 @@
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y ffmpeg curl unzip && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://deno.land/install.sh | sh && \
-    ln -s /root/.deno/bin/deno /usr/local/bin/deno
+RUN apt-get update && apt-get install -y ffmpeg curl unzip gcc python3-dev libffi-dev && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

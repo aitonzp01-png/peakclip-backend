@@ -2,7 +2,7 @@ services:
   - type: web
     name: peakclip-backend
     env: docker
-    repo: https://github.com/tu-usuario/peakclipnuevo
+    repo: https://github.com/aitonzp01-png/peakclipnuevo
     dockerfilePath: ./peakclip-backend/Dockerfile
     dockerContext: ./peakclip-backend
     envVars:
@@ -20,3 +20,5 @@ services:
         value: https://peakclip-backend.onrender.com
       - key: FRONTEND_URL
         value: https://peakclip-app.vercel.app
+      - key: NEXT_PUBLIC_BACKEND_URL
+        value: https://peakclip-backend.onrender.com
