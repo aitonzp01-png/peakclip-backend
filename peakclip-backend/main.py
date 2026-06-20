@@ -536,24 +536,19 @@ def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
 
     try:
         ydl_opts = {
-            'format': 'best[ext=mp4]/best',
+            'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
             'outtmpl': video_path,
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-            },
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'android_creator'],
-                    'formats': ['duplicate', 'missing_pot'],
-                }
-            },
+            'socket_timeout': 30,
+            'retries': 3,
+            'fragment_retries': 3,
             'extractor_retries': 3,
             'file_access_retries': 3,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+            },
         }
         if os.path.exists('cookies.txt'):
             ydl_opts['cookiefile'] = 'cookies.txt'
@@ -564,7 +559,7 @@ def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
 
     subprocess.run([
         'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '32k', audio_path, '-y'
-    ], capture_output=True)
+    ], capture_output=True, timeout=300)
 
     # Generate a thumbnail for the source video
     thumb_path = f"thumbnails/{job_id}.jpg"
@@ -667,19 +662,18 @@ Return ONLY a JSON with this exact format:
                     '-c:v', 'libx264', '-preset', 'fast',
                     '-c:a', 'aac', '-y', output_path]
 
-            subprocess.run(cmd, capture_output=True)
+            subprocess.run(cmd, capture_output=True, timeout=600)
 
             if os.path.getsize(output_path) < 1024:
-                # Subtitle-only fallback: skip subtitles + music
                 fallback_cmd = [
                     'ffmpeg',
                     '-ss', str(clip_start), '-i', video_path,
                     '-t', str(duration),
                     '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2',
-                    '-c:v', 'libx264', '-preset', 'fast',
+                    '-c:v', 'libx264', '-preset', 'veryfast',
                     '-c:a', 'aac', '-y', output_path
                 ]
-                subprocess.run(fallback_cmd, capture_output=True)
+                subprocess.run(fallback_cmd, capture_output=True, timeout=600)
 
             local_files.append(output_path)
 
