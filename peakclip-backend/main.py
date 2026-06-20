@@ -529,8 +529,7 @@ def get_ydl_opts():
         'extractor_retries': 3, 'file_access_retries': 3,
         'extractor_args': {
             'youtube': {
-                'player_client': ['web'],
-                'skip': ['webpage', 'configs'],
+                'player_client': ['android', 'ios'],
             }
         },
     }
