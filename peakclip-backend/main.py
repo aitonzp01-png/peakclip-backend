@@ -496,12 +496,6 @@ def test_dl(url: str = "dQw4w9WgXcQ"):
         'quiet': True, 'no_warnings': True,
         'socket_timeout': 15,
         'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['web', 'android', 'ios'],
-                'skip': ['webpage', 'configs'],
-            }
-        },
     }
     if os.path.exists('cookies.txt'):
         ydl_opts['cookiefile'] = 'cookies.txt'
@@ -545,15 +539,6 @@ def _background_process(req: VideoRequest, user_id: str, job_id: str):
             'outtmpl': video_path, 'quiet': True, 'no_warnings': True,
             'socket_timeout': 30, 'retries': 3, 'fragment_retries': 3,
             'extractor_retries': 3, 'file_access_retries': 3,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['web', 'android', 'ios'],
-                    'skip': ['webpage', 'configs'],
-                }
-            },
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-            },
         }
         if os.path.exists('cookies.txt'):
             ydl_opts['cookiefile'] = 'cookies.txt'
@@ -735,7 +720,6 @@ def test_process_sync(url: str = "dQw4w9WgXcQ"):
             'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
             'outtmpl': video_path, 'quiet': True, 'no_warnings': True,
             'socket_timeout': 30, 'retries': 3, 'fragment_retries': 3,
-            'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios'], 'skip': ['webpage', 'configs']}},
         }
         if os.path.exists('cookies.txt'):
             ydl_opts['cookiefile'] = 'cookies.txt'
