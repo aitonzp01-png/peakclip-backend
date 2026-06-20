@@ -51,6 +51,30 @@ async def run_migrations():
         return
     project_ref = supabase_url.split("https://")[1].split(".")[0]
 
+    # Ensure jobs table exists (run migration every startup, idempotent)
+    jobs_sql = """
+        CREATE TABLE IF NOT EXISTS public.jobs (
+            id UUID PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+            status TEXT DEFAULT 'queued',
+            message TEXT,
+            error TEXT,
+            created_at TIMESTAMPTZ DEFAULT now()
+        );
+    """
+    try:
+        import httpx
+        ref = supabase_url.split("https://")[1].split(".")[0]
+        r = httpx.post(
+            f"https://{ref}.supabase.co/rest/v1/rpc/exec",
+            json={"query": jobs_sql},
+            headers={"apikey": service_key, "Authorization": f"Bearer {service_key}"},
+            timeout=10
+        )
+        print(f"JOBS TABLE MIGRATION: {r.status_code}")
+    except Exception as e:
+        print(f"JOBS TABLE MIGRATION ERROR: {e}")
+
     # Check if credit_transactions table exists via REST API
     ct_exists = False
     try:
