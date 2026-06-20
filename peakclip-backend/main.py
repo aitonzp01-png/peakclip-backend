@@ -484,6 +484,34 @@ async def upload_cookies(file: bytes = File(...)):
     return {"status": "ok", "message": f"Cookies saved ({len(file)} bytes)"}
 
 
+@app.get("/test-dl")
+def test_dl(url: str = "dQw4w9WgXcQ"):
+    full_url = f"https://www.youtube.com/watch?v={url}" if "youtube.com" not in url and "youtu.be" not in url else url
+    cookies_arg = []
+    if os.path.exists("cookies.txt"):
+        cookies_arg = ["--cookies", "cookies.txt"]
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": True,
+        "force_generic_extractor": False,
+    }
+    if cookies_arg:
+        ydl_opts["cookiefile"] = "cookies.txt"
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(full_url, download=False)
+        return {
+            "ok": True,
+            "title": info.get("title", "?"),
+            "duration": info.get("duration", "?"),
+            "id": info.get("id", "?"),
+            "used_cookies": bool(cookies_arg),
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:500]}
+
+
 @app.post("/process")
 def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
     check_rate_limit(f"process:{user['sub']}")
