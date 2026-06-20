@@ -25,10 +25,18 @@ import jwt as pyjwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 import base64
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await run_migrations()
+    await fetch_jwks()
+    yield
+    # Shutdown (nothing to do)
 
-@app.on_event("startup")
+app = FastAPI(lifespan=lifespan)
+
 async def run_migrations():
     supabase_url = os.getenv("SUPABASE_URL")
     service_key = os.getenv("SUPABASE_SERVICE_KEY")
@@ -96,8 +104,7 @@ async def run_migrations():
             print("⚠️ CREDIT_TRANSACTIONS TABLE MISSING — DDL not available via API")
             for err in sql_errors:
                 print(f"   {err}")
-            print("   To fix: open https://supabase.com/dashboard/project/tjuiourlpbwivjzyewav/sql/new")
-            print("   Paste the contents of peakclip-backend/schema.sql and click Run")
+            print("   To fix: open supabase dashboard > SQL editor and run schema.sql")
     else:
         print("SQL MIGRATION: credit_transactions table already exists (OK)")
 
@@ -128,16 +135,18 @@ async def run_migrations():
 
 # In-memory rate limiter
 rate_store = defaultdict(list)
+rate_lock = asyncio.Lock()
 RATE_LIMIT = 10
 RATE_WINDOW = 60
 
-def check_rate_limit(key: str):
-    now = time.time()
-    window_start = now - RATE_WINDOW
-    rate_store[key] = [t for t in rate_store[key] if t > window_start]
-    if len(rate_store[key]) >= RATE_LIMIT:
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
-    rate_store[key].append(now)
+async def check_rate_limit(key: str):
+    async with rate_lock:
+        now = time.time()
+        window_start = now - RATE_WINDOW
+        rate_store[key] = [t for t in rate_store[key] if t > window_start]
+        if len(rate_store[key]) >= RATE_LIMIT:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+        rate_store[key].append(now)
 
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
@@ -213,7 +222,6 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 supabase_url = os.getenv("SUPABASE_URL")
 _jwks_keys = []
 
-@app.on_event("startup")
 async def fetch_jwks():
     global _jwks_keys
     try:
@@ -320,7 +328,6 @@ def debug():
         "deno": deno_path or "NOT FOUND",
         "yt_dlp": yt_dlp_ok,
         "openai_key_set": bool(openai_key),
-        "openai_key_prefix": openai_key[:8] + "..." if openai_key else "",
         "supabase_url": supabase_url,
         "allowed_origins": ALLOWED_ORIGINS,
         "cwd": os.getcwd(),
@@ -427,7 +434,7 @@ def resolve_music_path(mood: str) -> str | None:
 
 @app.post("/process")
 async def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
-    check_rate_limit(f"process:{user['sub']}")
+    await check_rate_limit(f"process:{user['sub']}")
     user_id = user["sub"]
     job_id = str(uuid.uuid4())
 
@@ -447,26 +454,60 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     audio_path = f"downloads/{job_id}.mp3"
     local_files = [video_path, audio_path]
 
-    try:
-        ydl_opts = {
-            'format': 'best[ext=mp4]/best',
-            'outtmpl': video_path,
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': False,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-            },
-            'extractor_args': {'youtube': {'player_client': ['all'], 'formats': ['duplicate', 'missing_pot']}},
-        }
-        if os.path.exists('cookies.txt'):
-            ydl_opts['cookiefile'] = 'cookies.txt'
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([req.url])
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Download error: {str(e)}")
+    # Retry download with different strategies to handle YouTube rate limiting
+    client_configs = [
+        {'player_client': ['android'], 'formats': ['duplicate', 'missing_pot']},
+        {'player_client': ['web'], 'formats': ['duplicate', 'missing_pot']},
+        {'player_client': ['ios'], 'formats': ['duplicate', 'missing_pot']},
+    ]
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+    ]
+
+    last_err = None
+    for attempt in range(5):
+        cfg = client_configs[attempt % len(client_configs)]
+        ua = user_agents[attempt % len(user_agents)]
+        try:
+            ydl_opts = {
+                'format': 'best[ext=mp4]/best',
+                'outtmpl': video_path,
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': False,
+                'sleep_interval': 10,
+                'sleep_interval_requests': 2,
+                'extractor_retries': 5,
+                'file_access_retries': 5,
+                'throttledratelimit': 100000,
+                'ignore_no_formats_error': True,
+                'http_headers': {
+                    'User-Agent': ua,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                },
+                'extractor_args': {'youtube': cfg},
+            }
+            if os.path.exists('cookies.txt'):
+                ydl_opts['cookiefile'] = 'cookies.txt'
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([req.url])
+            last_err = None
+            break
+        except Exception as e:
+            last_err = e
+            err_lower = str(e).lower()
+            if "rate-limited" in err_lower or "requested format not available" in err_lower:
+                if attempt < 4:
+                    wait = 30 * (2 ** attempt)
+                    # Cap wait at 120 seconds per attempt
+                    wait = min(wait, 120)
+                    print(f"YouTube rate-limited (attempt {attempt+1}/5), waiting {wait}s and retrying...")
+                    time.sleep(wait)
+                    continue
+            raise HTTPException(status_code=400, detail=f"Download error: {last_err}")
 
     subprocess.run([
         'ffmpeg', '-i', video_path, '-q:a', '0', '-map', 'a', audio_path, '-y'
@@ -508,29 +549,40 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
 Transcript:
 {segments_text}
 
-For each clip, classify the mood as one of: epic, hype, chill, funny, emotional, suspense.
+RULES:
+- Each clip MUST be 30-60 seconds long (ideal for shorts).
+- Prioritize: strong hooks in first 3s, emotional peaks, surprising twists, humor, high-energy moments, or controversy.
+- Classify mood as: epic, hype, chill, funny, emotional, suspense.
+- Include a hook_score from 1-10 ranking virality potential.
 
 Return ONLY a JSON with this exact format:
 {{
   "clips": [
-    {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype"}},
-    {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny"}},
-    {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional"}}
+    {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype", "hook_score": 9}},
+    {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
+    {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
   ]
 }}"""
         }]
     )
 
     clips_data = json.loads(response.choices[0].message.content)
+
+    # Sort clips by hook_score descending (best viral moment first)
+    clips_data["clips"].sort(key=lambda c: c.get("hook_score", 5), reverse=True)
+
     output_clips = []
     temp_files_extra = []
 
     try:
         for i, clip in enumerate(clips_data["clips"]):
             output_path = f"outputs/{job_id}_clip{i+1}.mp4"
-            duration = clip["end"] - clip["start"]
-            clip_mood = clip.get("mood", "chill")
             clip_start = clip["start"]
+            raw_duration = clip["end"] - clip["start"]
+            # Enforce shorts-friendly duration: 15-60 seconds
+            duration = max(15, min(raw_duration, 60))
+            clip["end"] = clip_start + duration
+            clip_mood = clip.get("mood", "chill")
 
             # ── Generate SRT subtitles (word-by-word, relative to clip start) ──
             srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}.srt")
@@ -543,14 +595,24 @@ Return ONLY a JSON with this exact format:
             # ── Build ffmpeg command ──
             srt_path_ff = srt_path.replace('\\', '/')
 
+            # TikTok-style subtitles: large bold text, centered bottom, yellow on dark bg
             video_filter = (
                 f"subtitles={srt_path_ff}:force_style="
-                f"'Fontname=Arial,Fontsize=48,PrimaryColour=&H0073BADF,"
-                f"BackColour=&H80000000,Outline=0,Bold=1,Alignment=2,MarginV=60'"
+                f"'Fontname=Impact,Fontsize=52,PrimaryColour=&H00FFD700,"
+                f"BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=80'"
             )
+
+            # Scale to 1080x1920 (9:16 vertical) with crop to fill (no black bars)
             video_filter += (
-                ",scale=1080:1920:force_original_aspect_ratio=decrease,"
-                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
+                ",scale=1080:1920:force_original_aspect_ratio=increase,"
+                "crop=1080:1920"
+            )
+
+            # Add subtle zoom animation (ken burns) — starts at 1.0x, ends at 1.05x over duration
+            zoom_dur = max(duration, 2)
+            video_filter += (
+                f",zoompan=z='if(lte(on,1),1,min(1+0.05*(on/{zoom_dur}/24),1.05))':"
+                f"d={int(zoom_dur * 24)}:s=1080x1920:fps=24"
             )
 
             filter_parts = [f"[0:v]{video_filter}[v]"]
@@ -558,11 +620,12 @@ Return ONLY a JSON with this exact format:
                 music_path_ff = music_path.replace('\\', '/')
                 filter_parts.append(
                     "[0:a]volume=1.0[a_main];"
-                    f"[1:a]volume=0.18[a_music];"
-                    "[a_main][a_music]amix=inputs=2:duration=first[a]"
+                    f"[1:a]volume=0.15[a_music];"
+                    "[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]"
                 )
             else:
-                filter_parts.append("[0:a]anull[a]")
+                # Normalize audio for consistent volume
+                filter_parts.append("[0:a]dynaudnorm=p=0.95[a]")
 
             cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
             if music_path:
@@ -571,19 +634,27 @@ Return ONLY a JSON with this exact format:
                     '-filter_complex', ';'.join(filter_parts),
                     '-map', '[v]', '-map', '[a]',
                     '-c:v', 'libx264', '-preset', 'fast',
-                    '-c:a', 'aac', '-y', output_path]
+                    '-c:a', 'aac', '-b:a', '192k',
+                    '-y', output_path]
 
             subprocess.run(cmd, capture_output=True)
 
             if os.path.getsize(output_path) < 1024:
-                # Subtitle-only fallback: skip subtitles + music
+                # Fallback without zoom (some ffmpeg builds lack zoompan)
+                fallback_vf = (
+                    f"subtitles={srt_path_ff}:force_style="
+                    f"'Fontname=Impact,Fontsize=52,PrimaryColour=&H00FFD700,"
+                    f"BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=80',"
+                    "scale=1080:1920:force_original_aspect_ratio=increase,"
+                    "crop=1080:1920"
+                )
                 fallback_cmd = [
                     'ffmpeg',
                     '-ss', str(clip_start), '-i', video_path,
                     '-t', str(duration),
-                    '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2',
+                    '-vf', fallback_vf,
                     '-c:v', 'libx264', '-preset', 'fast',
-                    '-c:a', 'aac', '-y', output_path
+                    '-c:a', 'aac', '-b:a', '192k', '-y', output_path
                 ]
                 subprocess.run(fallback_cmd, capture_output=True)
 
@@ -625,6 +696,7 @@ Return ONLY a JSON with this exact format:
                 "mood": clip_mood,
                 "start": clip["start"],
                 "end": clip["end"],
+                "hook_score": clip.get("hook_score", 5),
                 "file": clip_storage_url,
                 "thumbnail_url": thumb_storage_url
             })
@@ -645,13 +717,15 @@ Return ONLY a JSON with this exact format:
 
 @app.post("/export")
 async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)):
-    check_rate_limit(f"export:{user['sub']}")
+    await check_rate_limit(f"export:{user['sub']}")
     user_id = user["sub"]
     job_id = str(uuid.uuid4())
     output_ext = req.format if req.format in ("mov", "webm") else "mp4"
     output_filename = f"{job_id}_export.{output_ext}"
     output_path = f"outputs/{output_filename}"
     local_files = []
+
+    validate_video_url(req.video_url)
 
     source_path = f"downloads/{job_id}_source.mp4"
     subprocess.run([
@@ -834,7 +908,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
 
 @app.post("/create-checkout-session")
 async def create_checkout_session(data: dict, user: dict = Depends(get_current_user)):
-    check_rate_limit(f"checkout:{user['sub']}")
+    await check_rate_limit(f"checkout:{user['sub']}")
     user_id = user["sub"]
     price_id = data.get("price_id")
     return_url = data.get("return_url", "http://localhost:3000/dashboard")
@@ -849,7 +923,7 @@ async def create_checkout_session(data: dict, user: dict = Depends(get_current_u
             line_items=[{"price": price_id, "quantity": 1}],
             success_url=return_url + "?plan=success",
             cancel_url=return_url + "?plan=cancelled",
-            metadata={"user_id": user_id},
+            metadata={"user_id": user_id, "price_id": price_id},
         )
         return {"url": session.url}
     except Exception as e:
@@ -877,7 +951,7 @@ async def stripe_webhook(request: Request):
     if event.get("type") == "checkout.session.completed":
         session = event["data"]["object"]
         user_id = session["metadata"]["user_id"]
-        price_id = session.get("line_items", {}).get("data", [{}])[0].get("price", {}).get("id", "")
+        price_id = session["metadata"].get("price_id", "")
         plan_map = {
             "price_creator": "creator",
             "price_pro": "pro",

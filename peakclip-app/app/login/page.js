@@ -23,8 +23,14 @@ export default function Login() {
   const handleGoogleLogin = async () => {
     setLoading(true)
     const callbackUrl = `${window.location.origin}/auth/callback?redirect_to=${encodeURIComponent(dashboardUrl())}`
-    const oauthUrl = `https://tjuiourlpbwivjzyewav.supabase.co/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(callbackUrl)}`
-    window.location.href = oauthUrl
+    const { error } = await getSupabaseClient().auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: callbackUrl },
+    })
+    if (error) {
+      setMessage({ type: 'error', text: error.message })
+      setLoading(false)
+    }
   }
 
   const handleEmailAuth = async () => {

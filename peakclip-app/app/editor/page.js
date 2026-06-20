@@ -24,6 +24,7 @@ export default function EditorPage() {
 
   const [loading, setLoading] = useState(true)
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
+  const timeoutsRef = useRef([])
 
   useEffect(() => {
     const init = async () => {
@@ -58,6 +59,15 @@ export default function EditorPage() {
         const store = useEditorStore.getState()
         store.setSubtitleText('Drop a video or paste a URL to start')
         store.setSubtitleStyle('bold-yellow')
+        if (urlParam) {
+          const title = urlParam.split('/').pop()?.slice(0, 40) || 'Video Clip'
+          const saved = await createClip(user.id, { title, video_url: urlParam, duration: 60 })
+          if (saved?.id) {
+            window.history.replaceState(null, '', `/editor?id=${saved.id}&url=${encodeURIComponent(urlParam)}`)
+            setClipId(saved.id)
+            setClip({ id: saved.id, title, video_url: urlParam, duration: 60, url: urlParam })
+          }
+        }
       }
 
       setLoading(false)
@@ -66,7 +76,13 @@ export default function EditorPage() {
     init()
 
     // Safety timeout — force stop loading after 10s
-    setTimeout(() => setLoading(false), 10000)
+    const safetyTimer = setTimeout(() => setLoading(false), 10000)
+    timeoutsRef.current.push(safetyTimer)
+
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout)
+      timeoutsRef.current = []
+    }
   }, [])
 
   const loadUser = async () => {
@@ -119,23 +135,24 @@ export default function EditorPage() {
       }
 
       // Auto-generate AI subtitles after clip loads
-      setTimeout(() => {
+      const t1 = setTimeout(() => {
         store.setSubtitleText('AI subtitles generated automatically')
         store.setSubtitleStyle('bold-yellow')
         store.showHint('Auto-captions generated')
       }, 1200)
 
       // Auto-set background music
-      setTimeout(() => {
+      const t2 = setTimeout(() => {
         store.setMusic('chill')
         store.setMusicVolume(30)
       }, 2000)
 
       // Auto-detect hook and set trim
-      setTimeout(() => {
+      const t3 = setTimeout(() => {
         store.setTrimStart(5)
         store.setTrimEnd(85)
       }, 2800)
+      timeoutsRef.current.push(t1, t2, t3)
 
     } catch (err) {
       console.error('Failed to load clip:', err)

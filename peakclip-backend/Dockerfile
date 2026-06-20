@@ -12,4 +12,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Create necessary directories
+RUN mkdir -p downloads outputs thumbnails music
+
+EXPOSE ${PORT:-8000}
+
 CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}

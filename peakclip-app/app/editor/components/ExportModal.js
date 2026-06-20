@@ -4,7 +4,7 @@ import { brand, brandGrad, brandDim, brandBorder, bgSecondary, surface, textPrim
 import useEditorStore from '../store/editorStore'
 import { getSupabaseClient } from '../../../lib/supabase'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://peakclip-backend-production.up.railway.app'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
 const resolutions = [
   { id: '720p', label: '720p', res: '720×1280', desc: 'Fast export, good quality' },
@@ -211,11 +211,11 @@ export default function ExportModal() {
               {exportStatus && (
                 <div style={{
                   padding: '12px', borderRadius: '8px', marginBottom: '16px',
-                  background: exportStatus.includes('fail') || exportStatus.includes('Error') ? 'rgba(239,68,68,0.1)' : bgSecondary,
+                  background: exportStatus.includes('fail') || exportStatus.includes('Error') || exportStatus.includes('error') ? 'rgba(239,68,68,0.1)' : bgSecondary,
                   border: `1px solid ${
-                    exportStatus.includes('fail') || exportStatus.includes('Error') ? 'rgba(239,68,68,0.2)' : borderSoft
+                    exportStatus.includes('fail') || exportStatus.includes('Error') || exportStatus.includes('error') ? 'rgba(239,68,68,0.2)' : borderSoft
                   }`,
-                  fontSize: '12px', color: exportStatus.includes('fail') || exportStatus.includes('Error') ? '#ef4444' : textSecondary,
+                  fontSize: '12px', color: exportStatus.includes('fail') || exportStatus.includes('Error') || exportStatus.includes('error') ? '#ef4444' : textSecondary,
                   display: 'flex', alignItems: 'center', gap: '8px',
                 }}>
                   <span>{exportStatus}</span>
