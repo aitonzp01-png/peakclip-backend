@@ -12,6 +12,7 @@ import openai
 import subprocess
 import os
 import uuid
+import threading
 import json
 import stripe
 import tempfile
@@ -516,40 +517,18 @@ def test_dl(url: str = "dQw4w9WgXcQ"):
         return {'ok': False, 'error': str(e)[:500]}
 
 
-@app.post("/process")
-def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
-    check_rate_limit(f"process:{user['sub']}")
-    user_id = user["sub"]
-    job_id = str(uuid.uuid4())
-
-    validate_video_url(req.url)
-
-    user_result = supabase.table("users").select("credits,plan").eq("id", user_id).execute()
-    if not user_result.data:
-        raise HTTPException(status_code=404, detail="User not found")
-    user_data = user_result.data[0]
-    if user_data["plan"] != "pro" and user_data["credits"] <= 0:
-        raise HTTPException(status_code=402, detail="No credits remaining")
-
-    if user_data["plan"] != "pro":
-        dedent_credits(user_id)
-
+def _background_process(req: VideoRequest, user_id: str, job_id: str):
     video_path = f"downloads/{job_id}.mp4"
     audio_path = f"downloads/{job_id}.mp3"
     local_files = [video_path, audio_path]
+    temp_files_extra = []
 
     try:
         ydl_opts = {
             'format': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
-            'outtmpl': video_path,
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': False,
-            'socket_timeout': 30,
-            'retries': 3,
-            'fragment_retries': 3,
-            'extractor_retries': 3,
-            'file_access_retries': 3,
+            'outtmpl': video_path, 'quiet': True, 'no_warnings': True,
+            'socket_timeout': 30, 'retries': 3, 'fragment_retries': 3,
+            'extractor_retries': 3, 'file_access_retries': 3,
             'extractor_args': {
                 'youtube': {
                     'player_client': ['web', 'android', 'ios'],
@@ -565,24 +544,27 @@ def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([req.url])
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Download error: {str(e)}")
+        print(f"BG ERROR [{job_id}] download: {e}")
+        supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "error", "error": str(e)[:500]}).execute()
+        return
 
-    subprocess.run([
-        'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '32k', audio_path, '-y'
-    ], capture_output=True, timeout=300)
-
-    # Generate a thumbnail for the source video
     thumb_path = f"thumbnails/{job_id}.jpg"
-    generate_thumbnail(video_path, thumb_path)
-    local_files.append(thumb_path)
+    try:
+        subprocess.run(['ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '32k', audio_path, '-y'], capture_output=True, timeout=300)
+        generate_thumbnail(video_path, thumb_path)
+        local_files.append(thumb_path)
+    except Exception as e:
+        print(f"BG ERROR [{job_id}] audio/thumb: {e}")
+        supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "error", "error": str(e)[:500]}).execute()
+        return
 
-    with open(audio_path, 'rb') as f:
-        transcript = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=f,
-            response_format="verbose_json",
-            timestamp_granularities=["word", "segment"]
-        )
+    try:
+        with open(audio_path, 'rb') as f:
+            transcript = client.audio.transcriptions.create(model="whisper-1", file=f, response_format="verbose_json", timestamp_granularities=["word", "segment"])
+    except Exception as e:
+        print(f"BG ERROR [{job_id}] whisper: {e}")
+        supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "error", "error": str(e)[:500]}).execute()
+        return
 
     words_data = []
     if hasattr(transcript, 'words') and transcript.words:
@@ -593,14 +575,10 @@ def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
             if w_start is not None and w_end is not None and word_text.strip():
                 words_data.append({"word": word_text, "start": w_start, "end": w_end})
 
-    segments_text = "\n".join([
-        f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}"
-        for s in transcript.segments
-    ])
+    segments_text = "\n".join([f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}" for s in transcript.segments])
 
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[{
+    try:
+        response = client.chat.completions.create(model="gpt-4", messages=[{
             "role": "user",
             "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
@@ -617,12 +595,12 @@ Return ONLY a JSON with this exact format:
     {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional"}}
   ]
 }}"""
-        }]
-    )
-
-    clips_data = json.loads(response.choices[0].message.content)
-    output_clips = []
-    temp_files_extra = []
+        }])
+        clips_data = json.loads(response.choices[0].message.content)
+    except Exception as e:
+        print(f"BG ERROR [{job_id}] gpt: {e}")
+        supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "error", "error": str(e)[:500]}).execute()
+        return
 
     try:
         for i, clip in enumerate(clips_data["clips"]):
@@ -631,23 +609,17 @@ Return ONLY a JSON with this exact format:
             clip_mood = clip.get("mood", "chill")
             clip_start = clip["start"]
 
-            # ── Generate SRT subtitles (word-by-word, relative to clip start) ──
             srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}.srt")
             generate_srt_subtitle(words_data, clip_start, clip["end"], srt_path)
             temp_files_extra.append(srt_path)
 
-            # ── Resolve music track (silently skip if missing) ──
             music_path = resolve_music_path(clip_mood)
-
-            # ── Build ffmpeg command ──
             srt_path_ff = srt_path.replace('\\', '/')
 
             video_filter = (
                 f"subtitles={srt_path_ff}:force_style="
                 f"'Fontname=Arial,Fontsize=48,PrimaryColour=&H0073BADF,"
                 f"BackColour=&H80000000,Outline=0,Bold=1,Alignment=2,MarginV=60'"
-            )
-            video_filter += (
                 ",scale=1080:1920:force_original_aspect_ratio=decrease,"
                 "pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
             )
@@ -655,39 +627,22 @@ Return ONLY a JSON with this exact format:
             filter_parts = [f"[0:v]{video_filter}[v]"]
             if music_path:
                 music_path_ff = music_path.replace('\\', '/')
-                filter_parts.append(
-                    "[0:a]volume=1.0[a_main];"
-                    f"[1:a]volume=0.18[a_music];"
-                    "[a_main][a_music]amix=inputs=2:duration=first[a]"
-                )
+                filter_parts.append("[0:a]volume=1.0[a_main];" f"[1:a]volume=0.18[a_music];" "[a_main][a_music]amix=inputs=2:duration=first[a]")
             else:
                 filter_parts.append("[0:a]anull[a]")
 
             cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
             if music_path:
                 cmd += ['-stream_loop', '-1', '-i', music_path_ff]
-            cmd += ['-t', str(duration),
-                    '-filter_complex', ';'.join(filter_parts),
-                    '-map', '[v]', '-map', '[a]',
-                    '-c:v', 'libx264', '-preset', 'fast',
-                    '-c:a', 'aac', '-y', output_path]
-
+            cmd += ['-t', str(duration), '-filter_complex', ';'.join(filter_parts), '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'fast', '-c:a', 'aac', '-y', output_path]
             subprocess.run(cmd, capture_output=True, timeout=600)
 
             if os.path.getsize(output_path) < 1024:
-                fallback_cmd = [
-                    'ffmpeg',
-                    '-ss', str(clip_start), '-i', video_path,
-                    '-t', str(duration),
-                    '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2',
-                    '-c:v', 'libx264', '-preset', 'veryfast',
-                    '-c:a', 'aac', '-y', output_path
-                ]
+                fallback_cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration), '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2', '-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'aac', '-y', output_path]
                 subprocess.run(fallback_cmd, capture_output=True, timeout=600)
 
             local_files.append(output_path)
 
-            # Upload to Supabase Storage
             clip_storage_url = ""
             try:
                 with open(output_path, 'rb') as f:
@@ -695,9 +650,8 @@ Return ONLY a JSON with this exact format:
                     supabase.storage.from_("clips").upload(storage_path, f, {"content-type": "video/mp4", "upsert": "true"})
                     clip_storage_url = supabase.storage.from_("clips").get_public_url(storage_path)
             except Exception as e:
-                print(f"Storage upload failed: {e}")
+                print(f"BG [{job_id}] storage upload: {e}")
 
-            # Upload thumbnail to Supabase Storage
             thumb_storage_url = ""
             try:
                 with open(thumb_path, 'rb') as f:
@@ -705,27 +659,17 @@ Return ONLY a JSON with this exact format:
                     supabase.storage.from_("clips").upload(thumb_storage_path, f, {"content-type": "image/jpeg", "upsert": "true"})
                     thumb_storage_url = supabase.storage.from_("clips").get_public_url(thumb_storage_path)
             except Exception as e:
-                print(f"Thumbnail storage upload failed: {e}")
+                print(f"BG [{job_id}] thumb upload: {e}")
 
             supabase.table("clips").insert({
-                "user_id": user_id,
-                "title": clip["title"],
-                "status": "done",
-                "video_url": clip_storage_url,
-                "thumbnail_url": thumb_storage_url,
+                "user_id": user_id, "title": clip["title"], "status": "done",
+                "video_url": clip_storage_url, "thumbnail_url": thumb_storage_url,
                 "duration": round(duration, 1)
             }).execute()
-
-            output_clips.append({
-                "clip": i + 1,
-                "title": clip["title"],
-                "reason": clip["reason"],
-                "mood": clip_mood,
-                "start": clip["start"],
-                "end": clip["end"],
-                "file": clip_storage_url,
-                "thumbnail_url": thumb_storage_url
-            })
+    except Exception as e:
+        print(f"BG ERROR [{job_id}] render: {e}")
+        supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "error", "error": str(e)[:500]}).execute()
+        return
     finally:
         for f in local_files:
             try: os.unlink(f)
@@ -734,11 +678,30 @@ Return ONLY a JSON with this exact format:
             try: os.unlink(f)
             except OSError: pass
 
-    return {
-        "job_id": job_id,
-        "clips": output_clips,
-        "total": len(output_clips)
-    }
+    supabase.table("jobs").insert({"id": job_id, "user_id": user_id, "status": "done"}).execute()
+    print(f"BG DONE [{job_id}]")
+
+
+@app.post("/process")
+async def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
+    check_rate_limit(f"process:{user['sub']}")
+    user_id = user["sub"]
+    job_id = str(uuid.uuid4())
+
+    validate_video_url(req.url)
+
+    user_result = supabase.table("users").select("credits,plan").eq("id", user_id).execute()
+    if not user_result.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_data = user_result.data[0]
+    if user_data["plan"] != "pro" and user_data["credits"] <= 0:
+        raise HTTPException(status_code=402, detail="No credits remaining")
+    if user_data["plan"] != "pro":
+        dedent_credits(user_id)
+
+    threading.Thread(target=_background_process, args=(req, user_id, job_id), daemon=True).start()
+
+    return {"job_id": job_id, "status": "processing", "message": "Your video is being processed. Check My Clips in a few minutes."}
 
 
 @app.post("/export")
