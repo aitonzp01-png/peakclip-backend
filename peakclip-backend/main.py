@@ -217,12 +217,15 @@ async def check_rate_limit(key: str):
 # In-memory job store for status tracking
 jobs_store: dict = {}
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-ALLOWED_ORIGINS = [FRONTEND_URL]
+FRONTEND_URL = os.getenv("FRONTEND_URL", "")
+ALLOWED_ORIGINS = [o.strip() for o in FRONTEND_URL.split(",") if o.strip()] or [
+    "http://localhost:3000",
+    "https://peakclip-studio.vercel.app"
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
