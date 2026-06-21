@@ -120,6 +120,33 @@ async def run_migrations():
     else:
         print("SQL MIGRATION: credit_transactions table already exists (OK)")
 
+    # Add start_time / end_time columns to clips table if missing
+    try:
+        supabase.table("clips").select("start_time").limit(1).execute()
+        print("SQL MIGRATION: start_time column already exists (OK)")
+    except Exception:
+        alter_sql = """
+            ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC;
+            ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC;
+        """
+        async with httpx.AsyncClient(timeout=15) as client:
+            headers = {
+                "apikey": service_key,
+                "Authorization": f"Bearer {service_key}",
+                "Content-Type": "application/json",
+            }
+            for url in [
+                f"https://{project_ref}.supabase.co/sql/v1/query",
+                f"https://api.supabase.com/v1/projects/{project_ref}/database/query",
+            ]:
+                try:
+                    res = await client.post(url, json={"query": alter_sql}, headers=headers)
+                    if res.status_code == 200:
+                        print("SQL MIGRATION: added start_time/end_time columns (OK)")
+                        break
+                except Exception:
+                    pass
+
     # Ensure 'clips' storage bucket exists and is public
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -680,7 +707,7 @@ Return ONLY a JSON with this exact format (no markdown, no code fences):
             raw_clip = f"downloads/{job_id}_raw{i+1}.mp4"
             local_files.append(raw_clip)
             subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
-                            '-c', 'copy', '-y', raw_clip], capture_output=True, timeout=120)
+                            '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', raw_clip], capture_output=True, timeout=120)
 
             music_path = resolve_music_path(clip_mood)
             
@@ -747,7 +774,8 @@ Return ONLY a JSON with this exact format (no markdown, no code fences):
             supabase.table("clips").insert({
                 "user_id": user_id, "title": clip["title"], "status": "done",
                 "video_url": clip_storage_url, "thumbnail_url": thumb_storage_url,
-                "duration": round(duration, 1)
+                "duration": round(duration, 1),
+                "start_time": clip_start, "end_time": clip["end"]
             }).execute()
     except Exception as e:
         _set_job(job_id, user_id, "error", f"Rendering failed: {str(e)[:200]}")
@@ -852,7 +880,7 @@ Return ONLY a JSON with this exact format (no markdown, no code fences):
             
             raw_clip_path = f"downloads/{job_id}_raw{i+1}.mp4"
             local_files.append(raw_clip_path)
-            subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration), '-c', 'copy', '-y', raw_clip_path], capture_output=True, timeout=120)
+            subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration), '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', raw_clip_path], capture_output=True, timeout=120)
             
             srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}.srt")
             srt_lines = []
@@ -937,7 +965,8 @@ Return ONLY a JSON with this exact format (no markdown, no code fences):
             supabase.table("clips").insert({
                 "user_id": user_id, "title": clip["title"], "status": "done",
                 "video_url": clip_storage_url, "thumbnail_url": thumb_storage_url,
-                "duration": round(duration, 1)
+                "duration": round(duration, 1),
+                "start_time": clip_start, "end_time": clip["end"]
             }).execute()
     except Exception as e:
         _set_job(job_id, user_id, "error", f"Rendering failed: {str(e)[:200]}")

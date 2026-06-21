@@ -12,6 +12,9 @@ const useEditorStore = create((set, get) => ({
   timelineZoom: 1,
   currentTime: 0,
   duration: 0,
+  videoError: null,
+  videoLoading: true,
+  videoLoaded: false,
 
   trimStart: 0,
   trimEnd: 100,
@@ -55,6 +58,9 @@ const useEditorStore = create((set, get) => ({
   setTimelineZoom: (timelineZoom) => set({ timelineZoom }),
   setCurrentTime: (currentTime) => set({ currentTime }),
   setDuration: (duration) => set({ duration }),
+  setVideoError: (videoError) => set({ videoError, videoLoading: false, videoLoaded: false }),
+  setVideoLoading: (videoLoading) => set({ videoLoading }),
+  setVideoLoaded: (videoLoaded) => set({ videoLoaded, videoLoading: false, videoError: null }),
 
   setTrimStart: (trimStart) => set({ trimStart }),
   setTrimEnd: (trimEnd) => set({ trimEnd }),
@@ -114,7 +120,8 @@ const useEditorStore = create((set, get) => ({
 
   resetEditor: () => set({
     clip: null, clipId: null, isPlaying: false, playheadPos: 0,
-    currentTime: 0, duration: 0, trimStart: 0, trimEnd: 100,
+    currentTime: 0, duration: 0, videoError: null, videoLoading: true, videoLoaded: false,
+    trimStart: 0, trimEnd: 100,
     subtitleText: '', subtitleStyle: 'bold-yellow',
     subtitlePosition: 'bottom', fontSize: 14, watermark: '',
     watermarkPosition: 'top-right', music: 'none', musicVolume: 30,

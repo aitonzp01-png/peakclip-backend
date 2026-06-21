@@ -131,10 +131,18 @@ export default function EditorPage() {
         store.setMusicVolume(30)
       }, 2000)
 
-      // Auto-detect hook and set trim
+      // Auto-set trim handles to viral moment boundaries
       setTimeout(() => {
-        store.setTrimStart(5)
-        store.setTrimEnd(85)
+        if (data?.start_time != null && data?.end_time != null && data?.duration) {
+          const dur = Number(data.duration)
+          if (dur > 0) {
+            store.setTrimStart((Number(data.start_time) / dur) * 100)
+            store.setTrimEnd((Number(data.end_time) / dur) * 100)
+          }
+        } else {
+          store.setTrimStart(0)
+          store.setTrimEnd(100)
+        }
       }, 2800)
 
     } catch (err) {

@@ -1,7 +1,6 @@
 'use client'
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
-const _bgPrimary = '#050505'
+import { brand, brandDim, brandBorder, surface, textPrimary, textSecondary, textDim, borderSoft, fonts } from '../../../lib/tokens'
 import { subtitleStyles, filters } from '../../../lib/utils'
 import useEditorStore from '../store/editorStore'
 
@@ -16,9 +15,9 @@ export default function EditorPreview({ videoRef }) {
     clip, isPlaying, playheadPos, aspectRatio,
     subtitleText, subtitleStyle, subtitlePosition, fontSize,
     watermark, watermarkPosition, activeFilter,
+    videoError, videoLoading, videoLoaded,
   } = useEditorStore()
-  const { setIsPlaying, setPlayheadPos, setCurrentTime, setDuration } = useEditorStore()
-  const canvasRef = useRef(null)
+  const { setIsPlaying, setPlayheadPos, setCurrentTime, setDuration, setVideoError, setVideoLoading, setVideoLoaded } = useEditorStore()
   const [showPlayOverlay, setShowPlayOverlay] = useState(true)
   const containerRef = useRef(null)
   const animRef = useRef(null)
@@ -120,16 +119,60 @@ export default function EditorPreview({ videoRef }) {
         )}
 
         {/* Video */}
-        {clip?.video_url ? (
+        {videoError ? (
+          <div style={{
+            width: '100%', height: '100%',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            background: '#0B0B0B', gap: '12px', padding: '24px',
+          }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,80,80,0.5)" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '13px', color: 'rgba(255,80,80,0.7)', fontFamily: fonts.body, marginBottom: '4px' }}>
+                Video failed to load
+              </div>
+              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)', fontFamily: fonts.mono, wordBreak: 'break-all' }}>
+                {videoError}
+              </div>
+            </div>
+          </div>
+        ) : clip?.video_url ? (
           <video
             ref={videoRef}
             src={clip.video_url}
+            crossOrigin="anonymous"
+            onLoadStart={() => setVideoLoading(true)}
+            onCanPlay={() => { setVideoLoaded(true); setVideoLoading(false) }}
+            onError={(e) => {
+              const msg = e.target?.error?.message || `Code ${e.target?.error?.code || 'unknown'}`
+              console.error('Video load error:', clip.video_url, msg)
+              setVideoError(msg)
+            }}
             style={{
               width: '100%', height: '100%', objectFit: 'contain',
-              display: 'block', background: '#000', ...selectedFilter,
+              display: videoLoaded ? 'block' : 'none', background: '#000', ...selectedFilter,
             }}
             playsInline
           />
+        ) : videoLoading && !videoLoaded ? (
+          <div style={{
+            width: '100%', height: '100%',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            background: '#0B0B0B', gap: '16px',
+          }}>
+            <div style={{
+              width: '28px', height: '28px', borderRadius: '50%',
+              border: '2px solid rgba(217,180,74,0.15)',
+              borderTopColor: '#D9B44A',
+              animation: 'spin 0.6s linear infinite',
+            }} />
+            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.25)', fontFamily: fonts.body }}>
+              Loading video...
+            </div>
+          </div>
         ) : (
           <div style={{
             width: '100%', height: '100%',
@@ -156,7 +199,7 @@ export default function EditorPreview({ videoRef }) {
         )}
 
         {/* Subtitles */}
-        {clip?.video_url && subtitleText && (
+        {videoLoaded && subtitleText && (
           <div style={{
             position: 'absolute', left: '50%', transform: 'translateX(-50%)',
             width: '90%', textAlign: 'center', pointerEvents: 'none', zIndex: 5,
@@ -173,7 +216,7 @@ export default function EditorPreview({ videoRef }) {
         )}
 
         {/* Watermark */}
-        {watermark && clip?.video_url && (
+        {watermark && videoLoaded && (
           <div style={{
             position: 'absolute',
             ...(watermarkPosition === 'top-right' ? { top: '12px', right: '12px' } :
@@ -191,7 +234,7 @@ export default function EditorPreview({ videoRef }) {
         )}
 
         {/* Play button overlay */}
-        {!isPlaying && clip?.video_url && (
+        {!isPlaying && videoLoaded && (
           <div onClick={playVideo}
             style={{
               position: 'absolute', inset: 0, zIndex: 6,
