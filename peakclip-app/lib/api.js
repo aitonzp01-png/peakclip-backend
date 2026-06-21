@@ -1,7 +1,7 @@
 'use client'
 import { getSupabaseClient } from './supabase'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://peakclip-backend-production.up.railway.app'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
 export async function getSessionToken() {
   const { data } = await getSupabaseClient().auth.getSession()

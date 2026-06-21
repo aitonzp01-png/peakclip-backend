@@ -97,7 +97,7 @@ export default function AIPanel() {
           break
       }
       try {
-        fetch(`https://peakclip-backend-production.up.railway.app/ai/${toolId}`, { method: 'POST' })
+        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/ai/${toolId}`, { method: 'POST' })
           .catch(() => {})
       } catch {}
       setProcessing(null)

@@ -6,7 +6,7 @@ import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surfac
 import icons from '../../lib/icons'
 import ErrorBoundary from '../../lib/error-boundary'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://peakclip-backend-production.up.railway.app'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
 export default function Dashboard() {
   const [user, setUser] = useState(null)
@@ -24,7 +24,6 @@ export default function Dashboard() {
   const [greeting, setGreeting] = useState('')
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [displayName, setDisplayName] = useState('')
-  const [passwordCurrent, setPasswordCurrent] = useState('')
   const [passwordNew, setPasswordNew] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [settingsStatus, setSettingsStatus] = useState('')
@@ -99,9 +98,8 @@ export default function Dashboard() {
       const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).gte('created_at', new Date(since).toISOString()).order('created_at', { ascending: false }).limit(5)
       if (data?.length > 0) {
         clearInterval(poll)
-        loadClips(userId)
-        setStatus(`${data.length} clips ready!`)
-        setTimeout(() => setActiveTab('clips'), 1000)
+        setStatus('Redirecting to editor...')
+        window.location.href = `/editor?id=${data[0].id}`
       } else if (attempts > 720) {
         clearInterval(poll)
         loadClips(userId)
@@ -159,8 +157,14 @@ export default function Dashboard() {
           pollClipStatus(user.id, Date.now(), data.job_id)
           setTimeout(() => { setActiveTab('clips') }, 2000)
         } else {
-          setStatus(`${data.total || 1} clips generated! Check "My Clips" tab.`)
-          setTimeout(() => { loadClips(user.id); setActiveTab('clips') }, 2000)
+          setStatus('Redirecting to editor...')
+          // Navigate to editor with the first generated clip
+          const { data: newClips } = await getSupabaseClient().from('clips').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
+          if (newClips?.length > 0) {
+            window.location.href = `/editor?id=${newClips[0].id}`
+          } else {
+            setTimeout(() => { loadClips(user.id); setActiveTab('clips') }, 2000)
+          }
         }
         const { data: userData } = await getSupabaseClient().from('users').select('credits').eq('id', user.id).single()
         if (userData) setCredits(userData.credits)
@@ -311,7 +315,6 @@ export default function Dashboard() {
       const { error } = await getSupabaseClient().auth.updateUser({ password: passwordNew })
       if (error) throw error
       setSettingsStatus('Password updated successfully')
-      setPasswordCurrent('')
       setPasswordNew('')
       setPasswordConfirm('')
       setTimeout(() => setSettingsStatus(''), 3000)
@@ -322,6 +325,106 @@ export default function Dashboard() {
   }
 
   const closeSidebar = () => setSidebarOpen(false)
+
+  const handleDownload = async (clip) => {
+    const filename = `${clip.title?.slice(0, 40) || 'clip'}.mp4`
+    try {
+      const response = await fetch(`${clip.video_url}?download=${encodeURIComponent(filename)}`, { mode: 'cors' })
+      if (!response.ok) throw new Error('Download failed')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } catch {
+      const a = document.createElement('a')
+      a.href = `${clip.video_url}?download=${encodeURIComponent(filename)}`
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      a.click()
+    }
+  }
+
+  function renderClipCard(clip) {
+    return (
+      <motion.div
+        key={clip.id}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        className="dash-clip-card"
+      >
+        <div className="dash-clip-thumb">
+          {clip.thumbnail_url ? (
+            <img src={clip.thumbnail_url} alt="" onError={e => { e.target.style.display = 'none' }} />
+          ) : (
+            <div className="dash-clip-thumb-placeholder">
+              <div className="dash-clip-thumb-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+              </div>
+              <span className="dash-clip-thumb-label">{clip.status === 'processing' ? 'Processing...' : 'No preview'}</span>
+            </div>
+          )}
+          <div className="dash-clip-thumb-overlay" />
+          <span className={`dash-clip-status-badge ${clip.status === 'done' ? 'done' : clip.status === 'draft' ? 'draft' : clip.status === 'processing' ? 'processing' : 'error'}`}>
+            {clip.status === 'done' ? 'Ready' : clip.status === 'draft' ? 'Draft' : clip.status === 'processing' ? 'Processing' : 'Failed'}
+          </span>
+        </div>
+        <div className="dash-clip-info">
+          <div className="dash-clip-title">{clip.title?.slice(0, 60) || 'Untitled Clip'}</div>
+          <div className="dash-clip-meta">
+            {clip.duration && (
+              <span className="dash-clip-duration">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: 'middle' }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                {clip.duration}s
+              </span>
+            )}
+            <span className="dash-clip-date">
+              {new Date(clip.created_at).toLocaleDateString('en-US', {
+                month: 'short', day: 'numeric'
+              })}
+            </span>
+          </div>
+          <div className="dash-clip-actions">
+            {(clip.status === 'done' || clip.status === 'draft') && (
+              <>
+                <button
+                  onClick={() => window.location.href = `/editor?id=${clip.id}`}
+                  className="dash-clip-action-btn primary"
+                >
+                  Edit
+                </button>
+                {clip.video_url && (
+                  <>
+                    <a href={clip.video_url} target="_blank" rel="noopener noreferrer" className="dash-clip-action-btn secondary">
+                      View
+                    </a>
+                    <button onClick={() => handleDownload(clip)} className="dash-clip-action-btn secondary">
+                      Download
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+            {clip.status === 'processing' && (
+              <button className="dash-clip-action-btn primary" disabled style={{ opacity: 0.6 }}>
+                Processing...
+              </button>
+            )}
+            {clip.status === 'failed' && (
+              <button className="dash-clip-action-btn secondary" disabled>
+                Failed
+              </button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    )
+  }
 
   const greetingName = user?.email?.split('@')[0] || 'there'
 
@@ -972,104 +1075,4 @@ export default function Dashboard() {
     </div>
     </ErrorBoundary>
   )
-
-  const handleDownload = async (clip) => {
-    const filename = `${clip.title?.slice(0, 40) || 'clip'}.mp4`
-    try {
-      const response = await fetch(`${clip.video_url}?download=${encodeURIComponent(filename)}`, { mode: 'cors' })
-      if (!response.ok) throw new Error('Download failed')
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 60000)
-    } catch {
-      const a = document.createElement('a')
-      a.href = `${clip.video_url}?download=${encodeURIComponent(filename)}`
-      a.target = '_blank'
-      a.rel = 'noopener noreferrer'
-      a.click()
-    }
-  }
-
-  function renderClipCard(clip) {
-    return (
-      <motion.div
-        key={clip.id}
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="dash-clip-card"
-      >
-        <div className="dash-clip-thumb">
-          {clip.thumbnail_url ? (
-            <img src={clip.thumbnail_url} alt="" onError={e => { e.target.style.display = 'none' }} />
-          ) : (
-            <div className="dash-clip-thumb-placeholder">
-              <div className="dash-clip-thumb-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-              </div>
-              <span className="dash-clip-thumb-label">{clip.status === 'processing' ? 'Processing...' : 'No preview'}</span>
-            </div>
-          )}
-          <div className="dash-clip-thumb-overlay" />
-          <span className={`dash-clip-status-badge ${clip.status === 'done' ? 'done' : clip.status === 'draft' ? 'draft' : clip.status === 'processing' ? 'processing' : 'error'}`}>
-            {clip.status === 'done' ? 'Ready' : clip.status === 'draft' ? 'Draft' : clip.status === 'processing' ? 'Processing' : 'Failed'}
-          </span>
-        </div>
-        <div className="dash-clip-info">
-          <div className="dash-clip-title">{clip.title?.slice(0, 60) || 'Untitled Clip'}</div>
-          <div className="dash-clip-meta">
-            {clip.duration && (
-              <span className="dash-clip-duration">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px', verticalAlign: 'middle' }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                {clip.duration}s
-              </span>
-            )}
-            <span className="dash-clip-date">
-              {new Date(clip.created_at).toLocaleDateString('en-US', {
-                month: 'short', day: 'numeric'
-              })}
-            </span>
-          </div>
-          <div className="dash-clip-actions">
-            {(clip.status === 'done' || clip.status === 'draft') && (
-              <>
-                <button
-                  onClick={() => window.location.href = `/editor?id=${clip.id}`}
-                  className="dash-clip-action-btn primary"
-                >
-                  Edit
-                </button>
-                {clip.video_url && (
-                  <>
-                    <a href={clip.video_url} target="_blank" rel="noopener noreferrer" className="dash-clip-action-btn secondary">
-                      View
-                    </a>
-                    <button onClick={() => handleDownload(clip)} className="dash-clip-action-btn secondary">
-                      Download
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-            {clip.status === 'processing' && (
-              <button className="dash-clip-action-btn primary" disabled style={{ opacity: 0.6 }}>
-                Processing...
-              </button>
-            )}
-            {clip.status === 'failed' && (
-              <button className="dash-clip-action-btn secondary" disabled>
-                Failed
-              </button>
-            )}
-          </div>
-        </div>
-      </motion.div>
-    )
-  }
 }

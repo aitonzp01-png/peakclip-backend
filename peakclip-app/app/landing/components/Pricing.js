@@ -5,23 +5,23 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 const plans = [
   {
-    name: 'Starter',
-    desc: 'Perfect for trying PeakClip',
-    monthly: 19,
-    features: ['30 clips per month', '720p export', 'Auto-captions', 'Basic watermark'],
+    name: 'Free',
+    desc: 'Get started with basic features',
+    monthly: 0,
+    features: ['3 clips per month', '9:16 format', 'Basic subtitles', '720p export'],
   },
   {
     name: 'Creator',
     desc: 'For serious content creators',
-    monthly: 49,
+    monthly: 27,
     popular: true,
-    features: ['150 clips per month', '1080p export', 'Custom watermark', 'Multi-track audio', 'Priority support'],
+    features: ['200 clips per month', 'Animated subtitles', 'HD export', 'Gameplay overlay'],
   },
   {
     name: 'Pro',
     desc: 'For teams & agencies',
-    monthly: 99,
-    features: ['Unlimited clips', '4K export', 'Brand kits', 'API access', 'Team workspace', 'Dedicated manager'],
+    monthly: 70,
+    features: ['Unlimited clips', 'Advanced editor', 'Viral Score AI', 'Auto-publish', 'Priority support'],
   },
 ]
 
