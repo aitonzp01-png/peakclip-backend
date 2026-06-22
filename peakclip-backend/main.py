@@ -22,6 +22,7 @@ import sys
 import asyncio
 from collections import defaultdict
 from urllib.parse import urlparse
+import base64
 import jwt as pyjwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
