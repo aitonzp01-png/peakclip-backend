@@ -35,10 +35,16 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    # Try to update yt-dlp to latest version
+    # Try to update yt-dlp to latest version (master/nightly first, then stable)
     try:
-        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall', 'yt-dlp[default]'], capture_output=True, text=True, timeout=120)
-        print(f"yt-dlp upgrade: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
+        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall',
+                                 'yt-dlp[default] @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz'],
+                                capture_output=True, text=True, timeout=180)
+        print(f"yt-dlp master install: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
+        if result.returncode != 0:
+            result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall', 'yt-dlp[default]'],
+                                    capture_output=True, text=True, timeout=120)
+            print(f"yt-dlp stable install: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
         # Check version
         ver = subprocess.run([sys.executable, '-m', 'yt_dlp', '--version'], capture_output=True, text=True, timeout=10)
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
