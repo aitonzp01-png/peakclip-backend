@@ -710,9 +710,10 @@ Return JSON with this exact format:
             # ── Resolve music track (silently skip if missing) ──
             music_path = resolve_music_path(clip_mood)
 
-            # Render video with subtitles burned in, single pass (9:16 portrait, high quality)
-            srt_path_ff = srt_path.replace('\\', '/')
-            vid_filter = f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles={srt_path_ff}"
+            # Step 1: render video+audio without subtitles (9:16 portrait, high quality)
+            no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
+            local_files.append(no_subs)
+            vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
             audio_filter = ""
             inputs = ['-ss', str(clip_start), '-i', video_path]
             if music_path:
@@ -725,19 +726,44 @@ Return JSON with this exact format:
                    '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
                    '-map', '[v]', '-map', '[a]',
                    '-c:v', 'libx264', '-crf', '18', '-preset', 'medium',
-                   '-c:a', 'aac', '-b:a', '192k', '-y', output_path]
-            result = subprocess.run(cmd, capture_output=True, timeout=600)
-            if result.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                # Fallback: 720p single pass
-                vid_filter = f"scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,subtitles={srt_path_ff}"
+                   '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+            step1 = subprocess.run(cmd, capture_output=True, timeout=600)
+
+            if step1.returncode == 0 and os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
+                # Step 2: burn subtitles onto the rendered video (re-encode with CRF 18 to preserve quality)
+                srt_path_ff = srt_path.replace('\\', '/')
+                step2 = subprocess.run([
+                    'ffmpeg', '-i', no_subs,
+                    '-vf', f"subtitles={srt_path_ff}",
+                    '-c:v', 'libx264', '-crf', '18', '-preset', 'medium',
+                    '-c:a', 'aac', '-b:a', '192k', '-y', output_path
+                ], capture_output=True, timeout=300)
+                if step2.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
+                    # Fallback: use intermediate without subtitles
+                    subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-y', output_path],
+                                   capture_output=True, timeout=60)
+            else:
+                # Fallback: render at 720p (lower memory)
+                vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
                 cmd = ['ffmpeg'] + inputs + ['-t', str(duration),
                        '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
                        '-map', '[v]', '-map', '[a]',
                        '-c:v', 'libx264', '-crf', '20', '-preset', 'fast',
-                       '-c:a', 'aac', '-b:a', '192k', '-y', output_path]
+                       '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
                 subprocess.run(cmd, capture_output=True, timeout=600)
-                if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                    # Final fallback: 720p no subtitles
+                if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
+                    srt_path_ff = srt_path.replace('\\', '/')
+                    step2 = subprocess.run([
+                        'ffmpeg', '-i', no_subs,
+                        '-vf', f"subtitles={srt_path_ff}",
+                        '-c:v', 'libx264', '-crf', '20', '-preset', 'fast',
+                        '-c:a', 'aac', '-b:a', '192k', '-y', output_path
+                    ], capture_output=True, timeout=300)
+                    if step2.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
+                        subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-y', output_path],
+                                       capture_output=True, timeout=60)
+                else:
+                    # Final fallback: render sin subtítulos a 720p ultrafast
                     vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
                     cmd = ['ffmpeg'] + inputs + ['-t', str(duration),
                            '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
@@ -1209,9 +1235,10 @@ Return JSON with this exact format:
 
             music_path = resolve_music_path(clip_mood)
 
-            # Render video with subtitles burned in, single pass (9:16 portrait, high quality)
-            srt_path_ff = srt_path.replace('\\', '/')
-            vid_filter = f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles={srt_path_ff}"
+            # Step 1: render video+audio without subtitles (9:16 portrait, high quality)
+            no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
+            local_files.append(no_subs)
+            vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
             audio_filter = ""
             inputs = ['-ss', str(clip_start), '-i', video_path]
             if music_path:
@@ -1224,19 +1251,43 @@ Return JSON with this exact format:
                    '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
                    '-map', '[v]', '-map', '[a]',
                    '-c:v', 'libx264', '-crf', '18', '-preset', 'medium',
-                   '-c:a', 'aac', '-b:a', '192k', '-y', output_path]
-            result = subprocess.run(cmd, capture_output=True, timeout=600)
-            if result.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                # Fallback: 720p single pass
-                vid_filter = f"scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,subtitles={srt_path_ff}"
+                   '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+            step1 = subprocess.run(cmd, capture_output=True, timeout=600)
+
+            if step1.returncode == 0 and os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
+                # Step 2: burn subtitles onto the rendered video (re-encode with CRF 18 to preserve quality)
+                srt_path_ff = srt_path.replace('\\', '/')
+                step2 = subprocess.run([
+                    'ffmpeg', '-i', no_subs,
+                    '-vf', f"subtitles={srt_path_ff}",
+                    '-c:v', 'libx264', '-crf', '18', '-preset', 'medium',
+                    '-c:a', 'aac', '-b:a', '192k', '-y', output_path
+                ], capture_output=True, timeout=300)
+                if step2.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
+                    # Fallback: use intermediate without subtitles
+                    subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-y', output_path],
+                                   capture_output=True, timeout=60)
+            else:
+                # Fallback: render at 720p (lower memory)
+                vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
                 cmd = ['ffmpeg'] + inputs + ['-t', str(duration),
                        '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
                        '-map', '[v]', '-map', '[a]',
                        '-c:v', 'libx264', '-crf', '20', '-preset', 'fast',
-                       '-c:a', 'aac', '-b:a', '192k', '-y', output_path]
+                       '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
                 subprocess.run(cmd, capture_output=True, timeout=600)
-                if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                    # Final fallback: 720p no subtitles
+                if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
+                    srt_path_ff = srt_path.replace('\\', '/')
+                    step2 = subprocess.run([
+                        'ffmpeg', '-i', no_subs,
+                        '-vf', f"subtitles={srt_path_ff}",
+                        '-c:v', 'libx264', '-crf', '20', '-preset', 'fast',
+                        '-c:a', 'aac', '-b:a', '192k', '-y', output_path
+                    ], capture_output=True, timeout=300)
+                    if step2.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
+                        subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-y', output_path],
+                                       capture_output=True, timeout=60)
+                else:
                     vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
                     cmd = ['ffmpeg'] + inputs + ['-t', str(duration),
                            '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
