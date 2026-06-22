@@ -66,6 +66,67 @@ def extract_youtube_video_id(url: str) -> str | None:
     return None
 
 
+async def download_with_playwright(url: str, output_path: str) -> bool:
+    """Fallback downloader using Playwright browser automation for YouTube."""
+    video_id = extract_youtube_video_id(url)
+    if not video_id:
+        print("Playwright fallback: could not extract video ID")
+        return False
+    try:
+        print(f"Trying Playwright browser fallback for {url}")
+        from playwright.async_api import async_playwright
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'])
+            context = await browser.new_context(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                viewport={'width': 1920, 'height': 1080},
+                locale='en-US',
+            )
+            page = await context.new_page()
+            # Intercept video network requests
+            video_url = None
+            def handle_route(route, request):
+                nonlocal video_url
+                req_url = request.url
+                if 'googlevideo.com' in req_url and ('videoplayback' in req_url or 'itag' in req_url):
+                    if video_url is None or 'range=' not in req_url:
+                        video_url = req_url
+                route.continue_()
+            await page.route("**/*", handle_route)
+            await page.goto(f"https://www.youtube.com/watch?v={video_id}", wait_until="domcontentloaded", timeout=30000)
+            # Accept consent if present
+            try:
+                consent = await page.wait_for_selector('form[action^="https://consent.youtube.com"] button', timeout=5000)
+                if consent:
+                    await consent.click()
+                    await page.wait_for_timeout(2000)
+            except Exception:
+                pass
+            # Try to start playback to trigger video requests
+            try:
+                await page.click('button.ytp-large-play-button', timeout=5000)
+            except Exception:
+                pass
+            await page.wait_for_timeout(8000)
+            await browser.close()
+            if not video_url:
+                print("Playwright: no video URL intercepted")
+                return False
+            # Download the intercepted video URL
+            with httpx.Client(timeout=300, follow_redirects=True) as client:
+                with client.stream("GET", video_url, timeout=300) as stream:
+                    stream.raise_for_status()
+                    with open(output_path, "wb") as f:
+                        for chunk in stream.iter_bytes(chunk_size=8192):
+                            f.write(chunk)
+            if os.path.getsize(output_path) >= 1024:
+                print(f"Playwright download success: {output_path} ({os.path.getsize(output_path)} bytes)")
+                return True
+    except Exception as e:
+        print(f"Playwright fallback failed: {e}")
+    return False
+
+
 def download_with_invidious(url: str, output_path: str) -> bool:
     """Fallback downloader using Invidious instances for YouTube."""
     video_id = extract_youtube_video_id(url)
@@ -855,15 +916,27 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         print(f"YouTube issue (attempt {attempt+1}/36): {type(e).__name__} (imp={imp}), waiting {wait}s...")
                         time.sleep(wait)
                         continue
-                # Try Invidious, Piped, and cobalt.tools fallbacks before giving up
-                if download_with_invidious(url, video_path) or download_with_piped(url, video_path) or download_with_cobalt(url, video_path):
+                # Try Invidious, Piped, cobalt.tools, and Playwright fallbacks before giving up
+                fallback_success = (
+                    download_with_invidious(url, video_path) or
+                    download_with_piped(url, video_path) or
+                    download_with_cobalt(url, video_path) or
+                    asyncio.run(download_with_playwright(url, video_path))
+                )
+                if fallback_success:
                     last_err = None
                     break
-                jobs_store[job_id] = {"status": "error", "message": "YouTube blocked the download. Try a different video or provide fresh cookies/PO token."}
+                jobs_store[job_id] = {"status": "error", "message": "YouTube blocked the download. Try a different video or upload the file directly."}
                 return
 
         if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
-            if not (download_with_invidious(url, video_path) or download_with_piped(url, video_path) or download_with_cobalt(url, video_path)):
+            fallback_success = (
+                download_with_invidious(url, video_path) or
+                download_with_piped(url, video_path) or
+                download_with_cobalt(url, video_path) or
+                asyncio.run(download_with_playwright(url, video_path))
+            )
+            if not fallback_success:
                 jobs_store[job_id] = {"status": "error", "message": "Could not download video from this URL."}
                 return
 
