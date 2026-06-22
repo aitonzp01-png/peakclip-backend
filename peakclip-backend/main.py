@@ -510,15 +510,16 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
 
     # Retry download with different strategies
     strategies = [
-        {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage', 'dash']},
-        {'player_client': ['web'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['ios'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
-        {'player_client': ['android'], 'include_dash_mpd': False, 'skip': ['webpage', 'dash']},
-        {'player_client': ['tv', 'tv_embedded'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['web'], 'include_dash_mpd': False},
-        {'player_client': ['android', 'web', 'ios']},
-        {'player_client': ['android', 'tv'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage']},
+        {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage', 'dash', 'js']},
+        {'player_client': ['android', 'web_creator'], 'player_skip': ['configs']},
+        {'player_client': ['web_safari'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['ios', 'android_creator'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['tv_embedded', 'tv'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['web_creator', 'web_safari', 'web'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['android'], 'include_dash_mpd': True, 'skip': ['dash']},
+        {'player_client': ['android_creator'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['ios_creator'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['mediaconnect'], 'player_skip': ['webpage', 'configs']},
         {},
     ]
     user_agents = [
@@ -583,21 +584,25 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
             }
             if cfg:
                 ydl_opts['extractor_args'] = {'youtube': cfg}
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([req.url])
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([req.url])
+                if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
+                    raise Exception("File not downloaded or too small")
+            except Exception as e:
+                raise e
             last_err = None
             break
         except Exception as e:
             last_err = e
             err_lower = str(e).lower()
-            if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
-                if attempt < 29:
-                    base_wait = 15 if attempt < 5 else 30 if attempt < 10 else 60
-                    wait = min(base_wait * (2 ** (attempt // 5)), 180)
-                    print(f"YouTube issue (attempt {attempt+1}/30): {type(e).__name__}, waiting {wait}s...")
-                    time.sleep(wait)
-                    continue
-            raise HTTPException(status_code=400, detail=f"Download error: {last_err}")
+            if attempt < 29:
+                base_wait = 15 if attempt < 5 else 30 if attempt < 10 else 60
+                wait = min(base_wait * (2 ** (attempt // 5)), 180)
+                print(f"YouTube issue (attempt {attempt+1}/30): {err_lower[:80]}, waiting {wait}s...")
+                time.sleep(wait)
+            else:
+                raise HTTPException(status_code=400, detail=f"Download error after 30 attempts: {last_err}")
 
     # Extract audio at low bitrate to stay under Whisper's 25MB limit
     subprocess.run([
