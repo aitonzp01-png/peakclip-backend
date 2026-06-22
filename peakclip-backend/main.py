@@ -241,31 +241,35 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 def upload_to_storage(local_path: str, bucket: str, storage_path: str, content_type: str, max_retries: int = 3) -> str:
-    """Upload a local file to Supabase Storage and verify the public URL is accessible."""
-    if not os.path.exists(local_path) or os.path.getsize(local_path) < 1024:
-        print(f"UPLOAD SKIP: {local_path} missing or too small")
+    """Upload a local file to Supabase Storage and verify the public URL is accessible and non-empty."""
+    if not os.path.exists(local_path):
+        print(f"UPLOAD SKIP: {local_path} missing")
+        return ""
+    size = os.path.getsize(local_path)
+    if size < 1024:
+        print(f"UPLOAD SKIP: {local_path} too small ({size} bytes)")
         return ""
 
     url = ""
     for attempt in range(max_retries):
         try:
             with open(local_path, 'rb') as f:
-                # Reset file pointer on retries
-                f.seek(0)
-                supabase.storage.from_(bucket).upload(
-                    storage_path,
-                    f,
-                    {"content-type": content_type, "upsert": True}
-                )
+                file_bytes = f.read()
+            supabase.storage.from_(bucket).upload(
+                storage_path,
+                file_bytes,
+                {"content-type": content_type, "upsert": True}
+            )
             url = supabase.storage.from_(bucket).get_public_url(storage_path)
-            # Verify URL is accessible
+            # Verify URL is accessible and non-empty
             try:
                 r = httpx.head(url, timeout=10, follow_redirects=True)
-                if r.status_code == 200:
-                    print(f"UPLOAD OK: {url} ({r.headers.get('content-type', 'unknown')})")
+                content_length = int(r.headers.get("content-length", 0))
+                if r.status_code == 200 and content_length > 1024:
+                    print(f"UPLOAD OK: {url} ({content_length} bytes, {r.headers.get('content-type', 'unknown')})")
                     return url
                 else:
-                    print(f"UPLOAD VERIFY {r.status_code}: {url}")
+                    print(f"UPLOAD VERIFY {r.status_code} size={content_length}: {url}")
             except Exception as ve:
                 print(f"UPLOAD VERIFY ERROR: {ve}")
             if attempt < max_retries - 1:
@@ -276,6 +280,22 @@ def upload_to_storage(local_path: str, bucket: str, storage_path: str, content_t
                 time.sleep(1.5 * (attempt + 1))
     print(f"UPLOAD FAILED after {max_retries}: {storage_path}")
     return url
+
+
+def verify_video_valid(path: str) -> bool:
+    """Check that a video file is valid and non-empty using ffprobe."""
+    if not os.path.exists(path) or os.path.getsize(path) < 1024:
+        return False
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', path],
+            capture_output=True, text=True, timeout=30
+        )
+        duration = float(result.stdout.strip())
+        return duration > 0
+    except Exception as e:
+        print(f"FFPROBE ERROR: {e}")
+        return False
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -781,13 +801,19 @@ Return JSON with this exact format:
 
             local_files.append(output_path)
 
-            # Upload to Supabase Storage
-            storage_path = f"clips/{job_id}/{job_id}_clip{i+1}.mp4"
-            clip_storage_url = upload_to_storage(output_path, "clips", storage_path, "video/mp4")
+            # Validate generated video before upload
+            if not verify_video_valid(output_path):
+                print(f"GENERATED VIDEO INVALID: {output_path}")
+                clip_storage_url = ""
+                thumb_storage_url = ""
+            else:
+                # Upload to Supabase Storage
+                storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
+                clip_storage_url = upload_to_storage(output_path, "clips", storage_path, "video/mp4")
 
-            # Upload thumbnail to Supabase Storage
-            thumb_storage_path = f"thumbnails/{job_id}.jpg"
-            thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
+                # Upload thumbnail to Supabase Storage
+                thumb_storage_path = f"thumbnails/{job_id}.jpg"
+                thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
 
             supabase.table("clips").insert({
                 "user_id": user_id,
@@ -1283,11 +1309,16 @@ Return JSON with this exact format:
 
             local_files.append(output_path)
 
-            storage_path = f"clips/{job_id}/{job_id}_clip{i+1}.mp4"
-            clip_storage_url = upload_to_storage(output_path, "clips", storage_path, "video/mp4")
+            if not verify_video_valid(output_path):
+                print(f"GENERATED VIDEO INVALID: {output_path}")
+                clip_storage_url = ""
+                thumb_storage_url = ""
+            else:
+                storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
+                clip_storage_url = upload_to_storage(output_path, "clips", storage_path, "video/mp4")
 
-            thumb_storage_path = f"thumbnails/{job_id}.jpg"
-            thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
+                thumb_storage_path = f"thumbnails/{job_id}.jpg"
+                thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
 
             supabase.table("clips").insert({
                 "user_id": user_id,
