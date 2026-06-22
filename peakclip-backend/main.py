@@ -30,6 +30,30 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from contextlib import asynccontextmanager
 
 
+def get_youtube_auth_config():
+    """Load YouTube cookies/PO token from environment variables to bypass bot checks."""
+    config = {"cookies_path": None, "extractor_args": {}}
+    cookies_b64 = os.getenv("YOUTUBE_COOKIES_B64")
+    if cookies_b64:
+        try:
+            import base64
+            cookies_content = base64.b64decode(cookies_b64).decode('utf-8')
+            path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(cookies_content)
+            config["cookies_path"] = path
+            print(f"YouTube cookies loaded ({len(cookies_content)} chars)")
+        except Exception as e:
+            print(f"YouTube cookies decode error: {e}")
+    po_token = os.getenv("YOUTUBE_PO_TOKEN")
+    visitor_data = os.getenv("YOUTUBE_VISITOR_DATA")
+    if po_token:
+        config["extractor_args"]["po_token"] = po_token
+    if visitor_data:
+        config["extractor_args"]["visitor_data"] = visitor_data
+    return config
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -570,6 +594,7 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     local_files = [video_path, audio_path]
 
     # Retry download with different strategies
+    auth_cfg = get_youtube_auth_config()
     strategies = [
         {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage', 'dash']},
         {'player_client': ['web'], 'player_skip': ['webpage', 'configs']},
@@ -580,6 +605,11 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
         {'player_client': ['web'], 'include_dash_mpd': False},
         {'player_client': ['android', 'web', 'ios']},
         {'player_client': ['android', 'tv'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage']},
+        {'player_client': ['web_music'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['web_creator'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['android_music'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['android_producer'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['web_embedded'], 'player_skip': ['webpage', 'configs']},
         {},
     ]
     user_agents = [
@@ -627,10 +657,10 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 'quiet': True,
                 'no_warnings': True,
                 'extract_flat': False,
-                'sleep_interval': 15,
-                'sleep_interval_requests': 3,
-                'extractor_retries': 15,
-                'file_access_retries': 8,
+                'sleep_interval': 2,
+                'sleep_interval_requests': 1,
+                'extractor_retries': 5,
+                'file_access_retries': 5,
                 'throttledratelimit': 100000,
                 'ignore_no_formats_error': True,
                 'allow_unplayable_formats': True,
@@ -642,8 +672,13 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                     'Accept-Language': 'en-US,en;q=0.5',
                 },
             }
-            if cfg:
-                ydl_opts['extractor_args'] = {'youtube': cfg}
+            if auth_cfg["cookies_path"]:
+                ydl_opts['cookiefile'] = auth_cfg["cookies_path"]
+            extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
+            if auth_cfg["extractor_args"]:
+                extractor_args['youtube'].update(auth_cfg["extractor_args"])
+            if extractor_args['youtube']:
+                ydl_opts['extractor_args'] = extractor_args
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([req.url])
             last_err = None
@@ -653,8 +688,7 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
             err_lower = str(e).lower()
             if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
                 if attempt < 29:
-                    base_wait = 15 if attempt < 5 else 30 if attempt < 10 else 60
-                    wait = min(base_wait * (2 ** (attempt // 5)), 180)
+                    wait = min(5 + attempt * 2, 60)
                     print(f"YouTube issue (attempt {attempt+1}/30): {type(e).__name__}, waiting {wait}s...")
                     time.sleep(wait)
                     continue
