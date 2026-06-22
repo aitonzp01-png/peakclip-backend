@@ -399,9 +399,20 @@ class ExportRequest(BaseModel):
     fps: int = 30
 
 
+try:
+    _GIT_COMMIT = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], text=True).strip()
+except Exception:
+    _GIT_COMMIT = "unknown"
+
+
 @app.get("/")
 def root():
-    return {"status": "PeakClip API running"}
+    return {"status": "PeakClip API running", "commit": _GIT_COMMIT}
+
+
+@app.get("/version")
+def version():
+    return {"commit": _GIT_COMMIT}
 
 
 @app.get("/health")
