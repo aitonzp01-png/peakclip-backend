@@ -38,3 +38,4 @@ __pycache__/
 peakclip-backend/downloads/
 peakclip-backend/outputs/
 peakclip-backend/thumbnails/
+KEYS.md

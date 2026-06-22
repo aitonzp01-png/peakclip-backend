@@ -96,10 +96,11 @@ export default function Dashboard() {
         } catch {}
       }
       const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).gte('created_at', new Date(since).toISOString()).order('created_at', { ascending: false }).limit(5)
-      if (data?.length > 0) {
+      const ready = data?.find(c => c.video_url && c.status === 'done')
+      if (ready) {
         clearInterval(poll)
         setStatus('Redirecting to editor...')
-        window.location.href = `/editor?id=${data[0].id}`
+        window.location.href = `/editor?id=${ready.id}`
       } else if (attempts > 720) {
         clearInterval(poll)
         loadClips(userId)
@@ -159,10 +160,12 @@ export default function Dashboard() {
         } else {
           setStatus('Redirecting to editor...')
           // Navigate to editor with the first generated clip
-          const { data: newClips } = await getSupabaseClient().from('clips').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
-          if (newClips?.length > 0) {
-            window.location.href = `/editor?id=${newClips[0].id}`
+          const { data: newClips } = await getSupabaseClient().from('clips').select('id, video_url, status').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
+          const first = newClips?.[0]
+          if (first?.video_url && first?.status === 'done') {
+            window.location.href = `/editor?id=${first.id}`
           } else {
+            setStatus(first?.status === 'error' ? 'Clip processing failed. Try again.' : 'Clip is still uploading. Check "My Clips".')
             setTimeout(() => { loadClips(user.id); setActiveTab('clips') }, 2000)
           }
         }

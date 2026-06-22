@@ -240,6 +240,52 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
+def upload_to_storage(local_path: str, bucket: str, storage_path: str, content_type: str, max_retries: int = 3) -> str:
+    """Upload a local file to Supabase Storage and verify the public URL is accessible."""
+    if not os.path.exists(local_path) or os.path.getsize(local_path) < 1024:
+        print(f"UPLOAD SKIP: {local_path} missing or too small")
+        return ""
+
+    url = ""
+    for attempt in range(max_retries):
+        try:
+            with open(local_path, 'rb') as f:
+                # Reset file pointer on retries
+                f.seek(0)
+                supabase.storage.from_(bucket).upload(
+                    storage_path,
+                    f,
+                    {"content-type": content_type, "upsert": True}
+                )
+            url = supabase.storage.from_(bucket).get_public_url(storage_path)
+            # Verify URL is accessible
+            try:
+                r = httpx.head(url, timeout=10, follow_redirects=True)
+                if r.status_code == 200:
+                    print(f"UPLOAD OK: {url} ({r.headers.get('content-type', 'unknown')})")
+                    return url
+                else:
+                    print(f"UPLOAD VERIFY {r.status_code}: {url}")
+            except Exception as ve:
+                print(f"UPLOAD VERIFY ERROR: {ve}")
+            if attempt < max_retries - 1:
+                time.sleep(1.5 * (attempt + 1))
+        except Exception as e:
+            print(f"UPLOAD ATTEMPT {attempt + 1} FAILED: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(1.5 * (attempt + 1))
+    print(f"UPLOAD FAILED after {max_retries}: {storage_path}")
+    return url
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    elapsed = time.time() - start
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {request.method} {request.url.path} -> {response.status_code} ({elapsed:.2f}s)")
+    return response
+
+
 os.makedirs("downloads", exist_ok=True)
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("thumbnails", exist_ok=True)
@@ -736,29 +782,17 @@ Return JSON with this exact format:
             local_files.append(output_path)
 
             # Upload to Supabase Storage
-            clip_storage_url = ""
-            try:
-                with open(output_path, 'rb') as f:
-                    storage_path = f"clips/{job_id}/{job_id}_clip{i+1}.mp4"
-                    supabase.storage.from_("clips").upload(storage_path, f, {"content-type": "video/mp4", "upsert": "true"})
-                    clip_storage_url = supabase.storage.from_("clips").get_public_url(storage_path)
-            except Exception as e:
-                print(f"Storage upload failed: {e}")
+            storage_path = f"clips/{job_id}/{job_id}_clip{i+1}.mp4"
+            clip_storage_url = upload_to_storage(output_path, "clips", storage_path, "video/mp4")
 
             # Upload thumbnail to Supabase Storage
-            thumb_storage_url = ""
-            try:
-                with open(thumb_path, 'rb') as f:
-                    thumb_storage_path = f"thumbnails/{job_id}.jpg"
-                    supabase.storage.from_("clips").upload(thumb_storage_path, f, {"content-type": "image/jpeg", "upsert": "true"})
-                    thumb_storage_url = supabase.storage.from_("clips").get_public_url(thumb_storage_path)
-            except Exception as e:
-                print(f"Thumbnail storage upload failed: {e}")
+            thumb_storage_path = f"thumbnails/{job_id}.jpg"
+            thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
 
             supabase.table("clips").insert({
                 "user_id": user_id,
                 "title": clip["title"],
-                "status": "done",
+                "status": "done" if clip_storage_url else "error",
                 "video_url": clip_storage_url,
                 "thumbnail_url": thumb_storage_url,
                 "duration": round(duration, 1),
@@ -955,14 +989,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         local_files.append(output_path)
 
         # Upload to Supabase Storage
-        public_url = ""
-        try:
-            with open(output_path, 'rb') as f:
-                storage_path = f"exports/{output_filename}"
-                supabase.storage.from_("clips").upload(storage_path, f, {"content-type": f"video/{output_ext}", "upsert": "true"})
-                public_url = supabase.storage.from_("clips").get_public_url(storage_path)
-        except Exception as e:
-            print(f"Storage upload failed: {e}")
+        storage_path = f"exports/{output_filename}"
+        public_url = upload_to_storage(output_path, "clips", storage_path, f"video/{output_ext}")
 
         # Update clip record
         supabase.table("clips").update({
@@ -1255,28 +1283,16 @@ Return JSON with this exact format:
 
             local_files.append(output_path)
 
-            clip_storage_url = ""
-            try:
-                with open(output_path, 'rb') as f:
-                    storage_path = f"clips/{job_id}/{job_id}_clip{i+1}.mp4"
-                    supabase.storage.from_("clips").upload(storage_path, f, {"content-type": "video/mp4", "upsert": "true"})
-                    clip_storage_url = supabase.storage.from_("clips").get_public_url(storage_path)
-            except Exception as e:
-                print(f"Storage upload failed: {e}")
+            storage_path = f"clips/{job_id}/{job_id}_clip{i+1}.mp4"
+            clip_storage_url = upload_to_storage(output_path, "clips", storage_path, "video/mp4")
 
-            thumb_storage_url = ""
-            try:
-                with open(thumb_path, 'rb') as f:
-                    thumb_storage_path = f"thumbnails/{job_id}.jpg"
-                    supabase.storage.from_("clips").upload(thumb_storage_path, f, {"content-type": "image/jpeg", "upsert": "true"})
-                    thumb_storage_url = supabase.storage.from_("clips").get_public_url(thumb_storage_path)
-            except Exception as e:
-                print(f"Thumbnail storage upload failed: {e}")
+            thumb_storage_path = f"thumbnails/{job_id}.jpg"
+            thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
 
             supabase.table("clips").insert({
                 "user_id": user_id,
                 "title": clip["title"],
-                "status": "done",
+                "status": "done" if clip_storage_url else "error",
                 "video_url": clip_storage_url,
                 "thumbnail_url": thumb_storage_url,
                 "duration": round(duration, 1),
