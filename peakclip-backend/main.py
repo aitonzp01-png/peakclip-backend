@@ -25,10 +25,9 @@ from urllib.parse import urlparse
 import jwt as pyjwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-import base64
+
 from contextlib import asynccontextmanager
 
-COOKIES_B64_HARDCODED = "IyBOZXRzY2FwZSBIVFRQIENvb2tpZSBGaWxlCiMgaHR0cHM6Ly9jdXJsLmhheHguc2UvcmZjL2Nvb2tpZV9zcGVjLmh0bWwKIyBUaGlzIGlzIGEgZ2VuZXJhdGVkIGZpbGUhIERvIG5vdCBlZGl0LgoKLnlvdXR1YmUuY29tCVRSVUUJLwlGQUxTRQkxODA1ODM0NDY4CV9nYQlHQTEuMS41MDczMjEwMDUuMTc3MTI3NDQ2OAoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MDU4MzQ0NzYJX2dhX1ZDR0VQWTQwVkIJR1MyLjEuczE3NzEyNzQ0NjgkbzEkZzEkdDE3NzEyNzQ0NzYkajUyJGwwJGgwCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxNzkyMTg3NDU0CV9fU2VjdXJlLUJVQ0tFVAlDS01ECi55b3V0dWJlLmNvbQlUUlVFCS8JRkFMU0UJMTc4NTY0NDU0NwlfZ2NsX2F1CTEuMS4xMjI3OTYyNjczLjE3Nzc4Njg1NDcKLnlvdXR1YmUuY29tCVRSVUUJLwlGQUxTRQkxODE1NTA5NjgxCUhTSUQJQXBHSDE3QjlFbVN3SGZjSVkKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MTU1MDk2ODEJU1NJRAlBQk5GSjlKSWNQdndhVWZWYwoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MTU1MDk2ODEJQVBJU0lECTk1Vm5rY05jWUljWTlsOEUvQW41eXRiUmdSU0Zsd19YMW8KLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MTU1MDk2ODEJU0FQSVNJRAl2a1E5VGdSekpVSktmOHBzL0FDaTl0MUltT2duUGROSFVTCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODE1NTA5NjgxCV9fU2VjdXJlLTFQQVBJU0lECXZrUTlUZ1J6SlVKS2Y4cHMvQUNpOXQxSW1PZ25QZE5IVVMKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MTU2MDM4MjYJX19TZWN1cmUtM1BBUElTSUQJdmtROVRnUnpKVUpLZjhwcy9BQ2k5dDFJbU9nblBkTkhVUwoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MTU1MDk2ODEJU0lECWcuYTAwMC13aW9oVUNkR2JuNFVxU0lSYU9mc1c3aV9HTHVoN0NqZVVranVic21QN0ZTemozX1B3NWdWTVYtUXpvLWJGOGttTnpJYUFBQ2dZS0FUWVNBUlVTRlFIR1gyTWlTWHZ2OTViREVBRFFlZUdLR3V4WWRSb1ZBVUY4eUtyeUY3eG90OEN3R2lGajZucTFMa3hUMDA3NgoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgxNTUwOTY4MQlfX1NlY3VyZS0xUFNJRAlnLmEwMDAtd2lvaFVDZEdibjRVcVNJUmFPZnNXN2lfR0x1aDdDamVVa2p1YnNtUDdGU3pqM19vOUNQS01xUEVZWXJ1VldaaFZ2RURnQUNnWUtBZElTQVJVU0ZRSEdYMk1pREF1SzVPcmVGUlNjQy1uaGhtQjhEeG9WQVVGOHlLcHpoQ0FnMjhibnVxcm5TMnlRc3hrbDAwNzYKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MTU2MDM4MjYJX19TZWN1cmUtM1BTSUQJZy5hMDAwLXdpb2hVQ2RHYm40VXFTSVJhT2ZzVzdpX0dMdWg3Q2plVWtqdWJzbVA3RlN6ajNfdldwNGxSUVR1THBGSnNxSU1lOVBFd0FDZ1lLQWZBU0FSVVNGUUhHWDJNaUR6aWdSd09IT3NEVUdycldhYkU4MkJvVkFVRjh5S3JlaFZOVUN0cEs3MTNxdFpaaENzejUwMDc2Ci55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODE1NjQzMTg1CUxPR0lOX0lORk8JQUZtbUYyc3dSUUloQU9kS3NZSktSa0NYQ0diM3pWWFJ5bFNkcVlTZVdFUlFReFVTZXZhNWQ5T1BBaUJnejl5M3Q4a3ZKZmYyT1hGdVdjRG9YVG5TWXU2SE90OW5XWERVTEpJYUhnOlFVUTNNak5tZVZKT1kwTlBUM0JWYUd4cFRrOWZPV1Y0UjJkUVVEZDVjM1ZNU2xSb1QwUm1SM1JOYVRKaU1XNTRVRFpMT0VObmFHTk9OMXAwWm1GNWNVa3pWeTFVVkRoVGFraHFORTUwVG1kUVJUQlBURXRtTmxGalVsZzVkbFpHWlcxMlltcExRMDV0VVVoclIxQkVaa1ZCZVZwWFVtWlJlV3BZYjBsUlZHMDVhVXBTV0Zsd1IxWkNlR0YwUVhjemJGVkpObE14ZVZSUVRESktXbmx1YWtKQgoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTc5NzA1NDM3OAlWSVNJVE9SX0lORk8xX0xJVkUJQWNCQkRqSlJfSjgKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE3OTcwNTQzNzgJVklTSVRPUl9QUklWQUNZX01FVEFEQVRBCUNnSkRUeElFR2dBZ0RBJTNEJTNECi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODE2NDg0OTExCVBSRUYJZjY9NDAwMDAwODAmdm9sdW1lPTE4JmY3PTEwMCZ0ej1BbWVyaWNhLkJvZ290YSZyZXBlYXQ9Tk9ORSZhdXRvcGxheT10cnVlCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODEzNDYwNTQ1CV9fU2VjdXJlLTFQU0lEVFMJc2lkdHMtQ2pVQnlvalFVN3prUldaWnhXZjlmMVlQWXRULVdDZVd6bWZRN2N2eDlGUUVZLVFhelFZNlJJV2dkaFVOeEp2QjNVbzJneXFRTUJBQQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgxMzQ2MDU0NQlfX1NlY3VyZS0zUFNJRFRTCXNpZHRzLUNqVUJ5b2pRVTd6a1JXWlp4V2Y5ZjFZUFl0VC1XQ2VXem1mUTdjdng5RlFFWS1RYXpRWTZSSVdnZGhVTnhKdkIzVW8yZ3lxUU1CQUEKLnlvdXR1YmUuY29tCVRSVUUJLwlGQUxTRQkxODEzNDYwOTE4CVNJRENDCUFLRXlYeldRX2x6SGo4VHk2cHFpWTRXRGw0X3Mzd0dNa2F3ck5yd1BSS2VrZU5sZDIxR2lERjNiODFhUWN6OVRicDEzOUdZc1BwdwoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgxMzQ2MDkxOAlfX1NlY3VyZS0xUFNJRENDCUFLRXlYelc2WWZQV0ZPaEFGSFhUc0E5OUNqWWV1d0V5XzRRaVI1Yi1MMHBSVjNqLVNfaHRCaDJPeVJUeWpzSUtLWnZ4MnhzLXZBCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODEzNDYwOTE4CV9fU2VjdXJlLTNQU0lEQ0MJQUtFeVh6V3g3cGcyRnBxUUlqeW45M3JTQV90a3RSakdHOExwcV9DUFZTVUpTaHliU28tbkVwOHhyM1UxV0ZLSER6eWlZZ1E3alBNCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxNzk3NDc2OTA2CVZJU0lUT1JfSU5GTzFfTElWRQl3R1pkSkJtR2F0QQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTc5NzQ3NjkwNglWSVNJVE9SX1BSSVZBQ1lfTUVUQURBVEEJQ2dKRFR4SUVHZ0FnSlElM0QlM0QKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTAJWVNDCURtM1hnY1JGN0NnCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxNzk3NDcyOTczCV9fU2VjdXJlLVlOSUQJMTkuWVQ9VGVxS0lXamlmd1lvWnJXM2xSNWlsZzBJcjZEaWd5UXJzMEhFTlhmNVd5ZXFvX0FrWjJlaEI3dzQxLW1kSGNFX3Z6dlhzLTRiQjdoTEs5YXFpdE9jbnJYZWl3RXo1aDY5WVZ5d0wyZWxBSDZsNjI4UzMyT1V4LUV5bWg0NkNqVkVETnFPSDRnZnRIcHhPNmNUMTlZYU4wb2tUUmR1Wi1yeFA3UDd1eGJUcmc4OE1ybXljT3YtNzIxMHYzeTJrMjZTbDlnZU1kU21mOE9YWjQwUmFyVmNfM3lKYjIwbk5OQ1ZvYkJsZ3FhWENhdlR5aDdQWWk1eFdMSGlCbHN5V0F4SWNEa1FsSmVaalV2eEJQSVNqSDZDMzFBRlhZd25sZE95QTJpUGN2LVF5TlZsNFdHZ2gzcnFEQ2tnOFNrV2Y5a3B3MmFKVE1WeXlPRWVDZHZhUGNGY2ZBCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxNzk3NDcyOTczCV9fU2VjdXJlLVJPTExPVVRfVE9LRU4JQ1BHem9jT2E5TmNmRUpMbXhQZng5WlFER1BiVDdmVGNsSlVECi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxNzk3NDcyOTk1CV9fU2VjdXJlLVlOSUQJMTkuWVQ9UXlvTHc3dTNva2dfVEpsLXpwVTNFMXpaeHpFRXRTSkpNWDhrMmdOS3EtMDBSNG5MWFlyR04wS0UtRnlwc3dvQUw4RnhFRWJqc2loLWRiclVDNnB1Zmc0Vk5kcVJtQ01fTHRkUmVuSFd1RFhJWGlDNzgxM1Q2Si1DczNkR3J5UkEtZTZ0RENwSGR6ZWZ1MlJ6TWd1OWE4d1Y2bVBidkNJaU1nY1A0ZFR0Tmt0NmppTldjY2RHUTdERDVjUk1PekJXYW9oQTJBaDRjTU5TWkk3Q0RLVVBPSlVoWlk2V3RDVnRTNWM5S1ROUHZHNWZ5S1B3OFd0RmQ1VTFSNVl1bzRCbWE2M252WkdMRzdoYWJ0UE54UGk3MExhY2w0WXlzWTR4WUpiY1R5cGduYzJ2aFpJYlNXTWQzY0pWSmxhOUxLQWcwQnRFT0dxamlybk9KczRQRUJpNmtBCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkwCVlTQwkwWERQTE05SVZOSQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTc5NzQ3Mjk5NQlfX1NlY3VyZS1ST0xMT1VUX1RPS0VOCUNJXzd5ZnZBX3Zqb3NRRVF6T2pGXzl5VWxRTVl6T2pGXzl5VWxRTSUzRAo="
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -42,13 +41,6 @@ async def lifespan(app: FastAPI):
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
-    try:
-        data = base64.b64decode(COOKIES_B64_HARDCODED).decode("utf-8")
-        with open("cookies.txt", "w", encoding="utf-8") as f:
-            f.write(data)
-        print(f"COOKIES: written {len(data)} bytes to cookies.txt")
-    except Exception as e:
-        print(f"COOKIES: failed to write: {e}")
     await run_migrations()
     await fetch_jwks()
     yield
@@ -524,24 +516,27 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
 
     # Retry download with different strategies — skip expired cookies
     strategies = [
-        {'player_client': ['android'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage', 'dash']},
         {'player_client': ['web'], 'player_skip': ['webpage', 'configs']},
         {'player_client': ['ios'], 'player_skip': ['webpage', 'configs']},
         {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
-        {'player_client': ['android'], 'include_dash_mpd': False},
+        {'player_client': ['android'], 'include_dash_mpd': False, 'skip': ['webpage', 'dash']},
+        {'player_client': ['tv', 'tv_embedded'], 'player_skip': ['webpage', 'configs']},
         {'player_client': ['web'], 'include_dash_mpd': False},
         {'player_client': ['android', 'web', 'ios']},
+        {'player_client': ['android', 'tv'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage']},
         {},
     ]
     user_agents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36',
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0',
-        'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
+        'Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+        'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
     ]
     format_fallbacks = [
         'worst[ext=mp4]/worst',
@@ -552,10 +547,21 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
         'worstvideo+bestaudio/worst',
         'bestaudio/best',
         'worst',
+        'worstvideo[ext=mp4]/worst[ext=mp4]/worst',
+        'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
+        'bv*+ba/b',
+        '17',
+        '36',
+        '5',
+        '18',
+        '34',
+        '35',
+        '43',
+        '247+140',
     ]
 
     last_err = None
-    for attempt in range(12):
+    for attempt in range(30):
         cfg = strategies[attempt % len(strategies)]
         ua = user_agents[attempt % len(user_agents)]
         fmt = format_fallbacks[attempt % len(format_fallbacks)]
@@ -566,14 +572,15 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 'quiet': True,
                 'no_warnings': True,
                 'extract_flat': False,
-                'sleep_interval': 10,
-                'sleep_interval_requests': 2,
-                'extractor_retries': 10,
-                'file_access_retries': 5,
+                'sleep_interval': 15,
+                'sleep_interval_requests': 3,
+                'extractor_retries': 15,
+                'file_access_retries': 8,
                 'throttledratelimit': 100000,
                 'ignore_no_formats_error': True,
                 'allow_unplayable_formats': True,
-                'cookiefile': 'cookies.txt',
+                'no_check_certificate': True,
+                'socket_timeout': 60,
                 'http_headers': {
                     'User-Agent': ua,
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -590,9 +597,10 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
             last_err = e
             err_lower = str(e).lower()
             if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
-                if attempt < 11:
-                    wait = min(10 * (2 ** attempt), 120)
-                    print(f"YouTube issue (attempt {attempt+1}/12): {type(e).__name__}, waiting {wait}s...")
+                if attempt < 29:
+                    base_wait = 15 if attempt < 5 else 30 if attempt < 10 else 60
+                    wait = min(base_wait * (2 ** (attempt // 5)), 180)
+                    print(f"YouTube issue (attempt {attempt+1}/30): {type(e).__name__}, waiting {wait}s...")
                     time.sleep(wait)
                     continue
             raise HTTPException(status_code=400, detail=f"Download error: {last_err}")
