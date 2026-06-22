@@ -729,6 +729,7 @@ Return JSON with this exact format:
                 else:
                     # Final fallback: output is just the raw-seeked segment, no frills
                     subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                                    '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
                                     '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', output_path],
                                    capture_output=True, timeout=300)
 
@@ -1248,6 +1249,7 @@ Return JSON with this exact format:
                         shutil.copy2(no_subs, output_path)
                 else:
                     subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                                    '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
                                     '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', output_path],
                                    capture_output=True, timeout=300)
 
