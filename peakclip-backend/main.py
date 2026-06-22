@@ -76,38 +76,64 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
         print(f"Trying Playwright browser fallback for {url}")
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'])
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-web-security',
+                    '--disable-features=IsolateOrigins,site-per-process',
+                ]
+            )
             context = await browser.new_context(
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
                 viewport={'width': 1920, 'height': 1080},
                 locale='en-US',
+                timezone_id='America/New_York',
+                color_scheme='light',
             )
             page = await context.new_page()
+            # Hide webdriver
+            await page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+                window.chrome = { runtime: {} };
+            """)
             # Intercept video network requests
             video_url = None
-            def handle_route(route, request):
+            async def handle_route(route, request):
                 nonlocal video_url
                 req_url = request.url
                 if 'googlevideo.com' in req_url and ('videoplayback' in req_url or 'itag' in req_url):
                     if video_url is None or 'range=' not in req_url:
                         video_url = req_url
-                route.continue_()
+                await route.continue_()
             await page.route("**/*", handle_route)
-            await page.goto(f"https://www.youtube.com/watch?v={video_id}", wait_until="domcontentloaded", timeout=30000)
+            # Try embed page first (lighter, less bot detection)
+            try:
+                await page.goto(f"https://www.youtube.com/embed/{video_id}", wait_until="networkidle", timeout=60000)
+            except Exception:
+                # Fall back to mobile watch page
+                try:
+                    await page.goto(f"https://m.youtube.com/watch?v={video_id}", wait_until="domcontentloaded", timeout=60000)
+                except Exception:
+                    await page.goto(f"https://www.youtube.com/watch?v={video_id}", wait_until="domcontentloaded", timeout=60000)
             # Accept consent if present
             try:
-                consent = await page.wait_for_selector('form[action^="https://consent.youtube.com"] button', timeout=5000)
-                if consent:
-                    await consent.click()
-                    await page.wait_for_timeout(2000)
+                consent_button = await page.wait_for_selector('button[aria-label*="Accept"], form[action*="consent"] button', timeout=8000)
+                if consent_button:
+                    await consent_button.click()
+                    await page.wait_for_timeout(3000)
             except Exception:
                 pass
             # Try to start playback to trigger video requests
             try:
-                await page.click('button.ytp-large-play-button', timeout=5000)
+                await page.click('button.ytp-large-play-button, .ytp-button[aria-label="Play"]', timeout=8000)
+                await page.wait_for_timeout(5000)
             except Exception:
-                pass
-            await page.wait_for_timeout(8000)
+                await page.wait_for_timeout(12000)
             await browser.close()
             if not video_url:
                 print("Playwright: no video URL intercepted")
