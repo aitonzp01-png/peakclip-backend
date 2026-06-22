@@ -792,8 +792,8 @@ Return JSON with this exact format:
             cmd = ['ffmpeg'] + inputs + ['-t', str(duration),
                    '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
                    '-map', '[v]', '-map', '[a]',
-                   '-c:v', 'libx264', '-crf', '18', '-preset', 'medium',
-                   '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                   '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-preset', 'medium',
+                   '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
             step1 = subprocess.run(cmd, capture_output=True, timeout=600)
 
             if step1.returncode == 0 and os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
@@ -802,12 +802,12 @@ Return JSON with this exact format:
                 step2 = subprocess.run([
                     'ffmpeg', '-i', no_subs,
                     '-vf', f"subtitles={srt_path_ff}",
-                    '-c:v', 'libx264', '-crf', '18', '-preset', 'medium',
-                    '-c:a', 'aac', '-b:a', '192k', '-y', output_path
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-preset', 'medium',
+                    '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', output_path
                 ], capture_output=True, timeout=300)
                 if step2.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                     # Fallback: use intermediate without subtitles
-                    subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-y', output_path],
+                    subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-movflags', '+faststart', '-y', output_path],
                                    capture_output=True, timeout=60)
             else:
                 # Fallback: render at 720p (lower memory)
@@ -815,19 +815,19 @@ Return JSON with this exact format:
                 cmd = ['ffmpeg'] + inputs + ['-t', str(duration),
                        '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
                        '-map', '[v]', '-map', '[a]',
-                       '-c:v', 'libx264', '-crf', '20', '-preset', 'fast',
-                       '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-preset', 'fast',
+                       '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 subprocess.run(cmd, capture_output=True, timeout=600)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     srt_path_ff = srt_path.replace('\\', '/')
                     step2 = subprocess.run([
                         'ffmpeg', '-i', no_subs,
                         '-vf', f"subtitles={srt_path_ff}",
-                        '-c:v', 'libx264', '-crf', '20', '-preset', 'fast',
-                        '-c:a', 'aac', '-b:a', '192k', '-y', output_path
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-preset', 'fast',
+                        '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', output_path
                     ], capture_output=True, timeout=300)
                     if step2.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                        subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-y', output_path],
+                        subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-movflags', '+faststart', '-y', output_path],
                                        capture_output=True, timeout=60)
                 else:
                     # Final fallback: render sin subtítulos a 720p ultrafast
@@ -835,8 +835,8 @@ Return JSON with this exact format:
                     cmd = ['ffmpeg'] + inputs + ['-t', str(duration),
                            '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
                            '-map', '[v]', '-map', '[a]',
-                           '-c:v', 'libx264', '-preset', 'ultrafast',
-                           '-c:a', 'aac', '-y', output_path]
+                           '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast',
+                           '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path]
                     subprocess.run(cmd, capture_output=True, timeout=300)
 
             local_files.append(output_path)
@@ -1325,8 +1325,8 @@ Return JSON with this exact format:
             cmd = ['ffmpeg'] + inputs + ['-t', str(duration),
                    '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
                    '-map', '[v]', '-map', '[a]',
-                   '-c:v', 'libx264', '-crf', '18', '-preset', 'medium',
-                   '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                   '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-preset', 'medium',
+                   '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
             step1 = subprocess.run(cmd, capture_output=True, timeout=600)
 
             if step1.returncode == 0 and os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
@@ -1335,12 +1335,12 @@ Return JSON with this exact format:
                 step2 = subprocess.run([
                     'ffmpeg', '-i', no_subs,
                     '-vf', f"subtitles={srt_path_ff}",
-                    '-c:v', 'libx264', '-crf', '18', '-preset', 'medium',
-                    '-c:a', 'aac', '-b:a', '192k', '-y', output_path
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-preset', 'medium',
+                    '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', output_path
                 ], capture_output=True, timeout=300)
                 if step2.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                     # Fallback: use intermediate without subtitles
-                    subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-y', output_path],
+                    subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-movflags', '+faststart', '-y', output_path],
                                    capture_output=True, timeout=60)
             else:
                 # Fallback: render at 720p (lower memory)
@@ -1348,27 +1348,27 @@ Return JSON with this exact format:
                 cmd = ['ffmpeg'] + inputs + ['-t', str(duration),
                        '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
                        '-map', '[v]', '-map', '[a]',
-                       '-c:v', 'libx264', '-crf', '20', '-preset', 'fast',
-                       '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-preset', 'fast',
+                       '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 subprocess.run(cmd, capture_output=True, timeout=600)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     srt_path_ff = srt_path.replace('\\', '/')
                     step2 = subprocess.run([
                         'ffmpeg', '-i', no_subs,
                         '-vf', f"subtitles={srt_path_ff}",
-                        '-c:v', 'libx264', '-crf', '20', '-preset', 'fast',
-                        '-c:a', 'aac', '-b:a', '192k', '-y', output_path
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-preset', 'fast',
+                        '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', output_path
                     ], capture_output=True, timeout=300)
                     if step2.returncode != 0 or not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                        subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-y', output_path],
+                        subprocess.run(['ffmpeg', '-i', no_subs, '-c', 'copy', '-movflags', '+faststart', '-y', output_path],
                                        capture_output=True, timeout=60)
                 else:
                     vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
                     cmd = ['ffmpeg'] + inputs + ['-t', str(duration),
                            '-filter_complex', f"[0:v]{vid_filter}[v];{audio_filter}",
                            '-map', '[v]', '-map', '[a]',
-                           '-c:v', 'libx264', '-preset', 'ultrafast',
-                           '-c:a', 'aac', '-y', output_path]
+                           '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast',
+                           '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path]
                     subprocess.run(cmd, capture_output=True, timeout=300)
 
             local_files.append(output_path)
