@@ -596,7 +596,19 @@ def process_video_background(job_id: str, user_id: str, url: str):
             {'player_client': ['android_music'], 'player_skip': ['webpage', 'configs']},
             {'player_client': ['android_producer'], 'player_skip': ['webpage', 'configs']},
             {'player_client': ['web_embedded'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['web'], 'player_skip': ['webpage', 'configs', 'js'], 'include_incomplete_formats': True},
+            {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
+            {'player_client': ['ios'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
+            {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
             {},
+        ]
+        impersonate_profiles = [
+            None,
+            'chrome',
+            'safari',
+            'chrome-120',
+            'chrome-119',
+            'safari-17',
         ]
         user_agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -632,10 +644,11 @@ def process_video_background(job_id: str, user_id: str, url: str):
         ]
 
         last_err = None
-        for attempt in range(30):
+        for attempt in range(36):
             cfg = strategies[attempt % len(strategies)]
             ua = user_agents[attempt % len(user_agents)]
             fmt = format_fallbacks[attempt % len(format_fallbacks)]
+            imp = impersonate_profiles[attempt % len(impersonate_profiles)]
             try:
                 ydl_opts = {
                     'format': fmt,
@@ -643,10 +656,10 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     'quiet': True,
                     'no_warnings': True,
                     'extract_flat': False,
-                    'sleep_interval': 2,
+                    'sleep_interval': 1,
                     'sleep_interval_requests': 1,
-                    'extractor_retries': 5,
-                    'file_access_retries': 5,
+                    'extractor_retries': 3,
+                    'file_access_retries': 3,
                     'throttledratelimit': 100000,
                     'ignore_no_formats_error': True,
                     'allow_unplayable_formats': True,
@@ -658,6 +671,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         'Accept-Language': 'en-US,en;q=0.5',
                     },
                 }
+                if imp:
+                    ydl_opts['impersonate'] = imp
                 if auth_cfg["cookies_path"]:
                     ydl_opts['cookiefile'] = auth_cfg["cookies_path"]
                 extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
@@ -673,12 +688,12 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 last_err = e
                 err_lower = str(e).lower()
                 if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
-                    if attempt < 29:
-                        wait = min(5 + attempt * 2, 60)
-                        print(f"YouTube issue (attempt {attempt+1}/30): {type(e).__name__}, waiting {wait}s...")
+                    if attempt < 35:
+                        wait = min(3 + attempt, 30)
+                        print(f"YouTube issue (attempt {attempt+1}/36): {type(e).__name__} (imp={imp}), waiting {wait}s...")
                         time.sleep(wait)
                         continue
-                jobs_store[job_id] = {"status": "error", "message": f"Download error: {last_err}"}
+                jobs_store[job_id] = {"status": "error", "message": "YouTube blocked the download. Try providing YouTube cookies via YOUTUBE_COOKIES_B64 env var."}
                 return
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
