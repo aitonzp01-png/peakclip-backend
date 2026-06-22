@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 import traceback
-from fastapi import FastAPI, HTTPException, Depends, Header, Request, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -571,170 +571,160 @@ def resolve_music_path(mood: str) -> str | None:
 # ──────────────────────────────────────────────────────────────
 
 
-@app.post("/process")
-async def process_video(req: VideoRequest, user: dict = Depends(get_current_user)):
-    await check_rate_limit(f"process:{user['sub']}")
-    user_id = user["sub"]
-    job_id = str(uuid.uuid4())
-
-    validate_video_url(req.url)
-
-    user_result = supabase.table("users").select("credits,plan").eq("id", user_id).execute()
-    if not user_result.data:
-        raise HTTPException(status_code=404, detail="User not found")
-    user_data = user_result.data[0]
-    if user_data["plan"] != "pro" and user_data["credits"] <= 0:
-        raise HTTPException(status_code=402, detail="No credits remaining")
-
-    if user_data["plan"] != "pro":
-        dedent_credits(user_id)
-
+def process_video_background(job_id: str, user_id: str, url: str):
+    """Background task: download video, transcribe, generate clips, upload to storage."""
+    jobs_store[job_id] = {"status": "processing", "message": "Starting download..."}
     video_path = f"downloads/{job_id}.mp4"
     audio_path = f"downloads/{job_id}.mp3"
     local_files = [video_path, audio_path]
 
-    # Retry download with different strategies
-    auth_cfg = get_youtube_auth_config()
-    strategies = [
-        {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage', 'dash']},
-        {'player_client': ['web'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['ios'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
-        {'player_client': ['android'], 'include_dash_mpd': False, 'skip': ['webpage', 'dash']},
-        {'player_client': ['tv', 'tv_embedded'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['web'], 'include_dash_mpd': False},
-        {'player_client': ['android', 'web', 'ios']},
-        {'player_client': ['android', 'tv'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage']},
-        {'player_client': ['web_music'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['web_creator'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['android_music'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['android_producer'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['web_embedded'], 'player_skip': ['webpage', 'configs']},
-        {},
-    ]
-    user_agents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
-        'Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-        'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
-    ]
-    format_fallbacks = [
-        'worst[ext=mp4]/worst',
-        'worstvideo+worstaudio/worst',
-        'best[ext=mp4]/best',
-        'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        'bestvideo+bestaudio/best',
-        'worstvideo+bestaudio/worst',
-        'bestaudio/best',
-        'worst',
-        'worstvideo[ext=mp4]/worst[ext=mp4]/worst',
-        'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
-        'bv*+ba/b',
-        '17',
-        '36',
-        '5',
-        '18',
-        '34',
-        '35',
-        '43',
-        '247+140',
-    ]
+    try:
+        # Retry download with different strategies
+        auth_cfg = get_youtube_auth_config()
+        strategies = [
+            {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage', 'dash']},
+            {'player_client': ['web'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['ios'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
+            {'player_client': ['android'], 'include_dash_mpd': False, 'skip': ['webpage', 'dash']},
+            {'player_client': ['tv', 'tv_embedded'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['web'], 'include_dash_mpd': False},
+            {'player_client': ['android', 'web', 'ios']},
+            {'player_client': ['android', 'tv'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage']},
+            {'player_client': ['web_music'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['web_creator'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['android_music'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['android_producer'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['web_embedded'], 'player_skip': ['webpage', 'configs']},
+            {},
+        ]
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
+            'Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+            'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
+        ]
+        format_fallbacks = [
+            'worst[ext=mp4]/worst',
+            'worstvideo+worstaudio/worst',
+            'best[ext=mp4]/best',
+            'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'bestvideo+bestaudio/best',
+            'worstvideo+bestaudio/worst',
+            'bestaudio/best',
+            'worst',
+            'worstvideo[ext=mp4]/worst[ext=mp4]/worst',
+            'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
+            'bv*+ba/b',
+            '17',
+            '36',
+            '5',
+            '18',
+            '34',
+            '35',
+            '43',
+            '247+140',
+        ]
 
-    last_err = None
-    for attempt in range(30):
-        cfg = strategies[attempt % len(strategies)]
-        ua = user_agents[attempt % len(user_agents)]
-        fmt = format_fallbacks[attempt % len(format_fallbacks)]
-        try:
-            ydl_opts = {
-                'format': fmt,
-                'outtmpl': video_path,
-                'quiet': True,
-                'no_warnings': True,
-                'extract_flat': False,
-                'sleep_interval': 2,
-                'sleep_interval_requests': 1,
-                'extractor_retries': 5,
-                'file_access_retries': 5,
-                'throttledratelimit': 100000,
-                'ignore_no_formats_error': True,
-                'allow_unplayable_formats': True,
-                'no_check_certificate': True,
-                'socket_timeout': 60,
-                'http_headers': {
-                    'User-Agent': ua,
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                },
-            }
-            if auth_cfg["cookies_path"]:
-                ydl_opts['cookiefile'] = auth_cfg["cookies_path"]
-            extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
-            if auth_cfg["extractor_args"]:
-                extractor_args['youtube'].update(auth_cfg["extractor_args"])
-            if extractor_args['youtube']:
-                ydl_opts['extractor_args'] = extractor_args
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([req.url])
-            last_err = None
-            break
-        except Exception as e:
-            last_err = e
-            err_lower = str(e).lower()
-            if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
-                if attempt < 29:
-                    wait = min(5 + attempt * 2, 60)
-                    print(f"YouTube issue (attempt {attempt+1}/30): {type(e).__name__}, waiting {wait}s...")
-                    time.sleep(wait)
-                    continue
-            raise HTTPException(status_code=400, detail=f"Download error: {last_err}")
+        last_err = None
+        for attempt in range(30):
+            cfg = strategies[attempt % len(strategies)]
+            ua = user_agents[attempt % len(user_agents)]
+            fmt = format_fallbacks[attempt % len(format_fallbacks)]
+            try:
+                ydl_opts = {
+                    'format': fmt,
+                    'outtmpl': video_path,
+                    'quiet': True,
+                    'no_warnings': True,
+                    'extract_flat': False,
+                    'sleep_interval': 2,
+                    'sleep_interval_requests': 1,
+                    'extractor_retries': 5,
+                    'file_access_retries': 5,
+                    'throttledratelimit': 100000,
+                    'ignore_no_formats_error': True,
+                    'allow_unplayable_formats': True,
+                    'no_check_certificate': True,
+                    'socket_timeout': 60,
+                    'http_headers': {
+                        'User-Agent': ua,
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                    },
+                }
+                if auth_cfg["cookies_path"]:
+                    ydl_opts['cookiefile'] = auth_cfg["cookies_path"]
+                extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
+                if auth_cfg["extractor_args"]:
+                    extractor_args['youtube'].update(auth_cfg["extractor_args"])
+                if extractor_args['youtube']:
+                    ydl_opts['extractor_args'] = extractor_args
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                err_lower = str(e).lower()
+                if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
+                    if attempt < 29:
+                        wait = min(5 + attempt * 2, 60)
+                        print(f"YouTube issue (attempt {attempt+1}/30): {type(e).__name__}, waiting {wait}s...")
+                        time.sleep(wait)
+                        continue
+                jobs_store[job_id] = {"status": "error", "message": f"Download error: {last_err}"}
+                return
 
-    # Extract audio at low bitrate to stay under Whisper's 25MB limit
-    subprocess.run([
-        'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '24k', audio_path, '-y'
-    ], capture_output=True)
+        jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
+        # Extract audio at low bitrate to stay under Whisper's 25MB limit
+        subprocess.run([
+            'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '24k', audio_path, '-y'
+        ], capture_output=True)
 
-    # Generate a thumbnail for the source video
-    thumb_path = f"thumbnails/{job_id}.jpg"
-    generate_thumbnail(video_path, thumb_path)
-    local_files.append(thumb_path)
+        # Generate a thumbnail for the source video
+        thumb_path = f"thumbnails/{job_id}.jpg"
+        generate_thumbnail(video_path, thumb_path)
+        local_files.append(thumb_path)
 
-    with open(audio_path, 'rb') as f:
-        transcript = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=f,
-            response_format="verbose_json",
-            timestamp_granularities=["word", "segment"]
-        )
+        jobs_store[job_id] = {"status": "processing", "message": "Transcribing with Whisper..."}
+        with open(audio_path, 'rb') as f:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+                response_format="verbose_json",
+                timestamp_granularities=["word", "segment"]
+            )
 
-    words_data = []
-    if hasattr(transcript, 'words') and transcript.words:
-        for w in transcript.words:
-            word_text = getattr(w, 'word', '') or ''
-            w_start = getattr(w, 'start', None)
-            w_end = getattr(w, 'end', None)
-            if w_start is not None and w_end is not None and word_text.strip():
-                words_data.append({"word": word_text, "start": w_start, "end": w_end})
+        words_data = []
+        if hasattr(transcript, 'words') and transcript.words:
+            for w in transcript.words:
+                word_text = getattr(w, 'word', '') or ''
+                w_start = getattr(w, 'start', None)
+                w_end = getattr(w, 'end', None)
+                if w_start is not None and w_end is not None and word_text.strip():
+                    words_data.append({"word": word_text, "start": w_start, "end": w_end})
 
-    segments_text = "\n".join([
-        f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}"
-        for s in transcript.segments
-    ])
+        segments_text = "\n".join([
+            f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}"
+            for s in transcript.segments
+        ])
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        response_format={"type": "json_object"},
-        messages=[{
-            "role": "system",
-            "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
-        }, {
-            "role": "user",
-            "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
+        jobs_store[job_id] = {"status": "processing", "message": "Analyzing viral moments with AI..."}
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            response_format={"type": "json_object"},
+            messages=[{
+                "role": "system",
+                "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
+            }, {
+                "role": "user",
+                "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
 {segments_text}
@@ -751,74 +741,44 @@ Return JSON with this exact format:
   {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
   {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
 ]}}"""
-        }]
-    )
+            }]
+        )
 
-    raw = response.choices[0].message.content.strip()
-    # Strip markdown code fences if present
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[-1].rsplit("\n", 1)[0]
-        if raw.endswith("```"):
-            raw = raw[:-3]
-    clips_data = json.loads(raw)
+        raw = response.choices[0].message.content.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1].rsplit("\n", 1)[0]
+            if raw.endswith("```"):
+                raw = raw[:-3]
+        clips_data = json.loads(raw)
+        clips_data["clips"].sort(key=lambda c: c.get("hook_score", 5), reverse=True)
 
-    # Sort clips by hook_score descending (best viral moment first)
-    clips_data["clips"].sort(key=lambda c: c.get("hook_score", 5), reverse=True)
+        output_clips = []
+        temp_files_extra = []
 
-    output_clips = []
-    temp_files_extra = []
+        try:
+            for i, clip in enumerate(clips_data["clips"]):
+                output_path = f"outputs/{job_id}_clip{i+1}.mp4"
+                clip_start = clip["start"]
+                raw_duration = clip["end"] - clip["start"]
+                duration = max(15, min(raw_duration, 60))
+                clip["end"] = clip_start + duration
+                clip_mood = clip.get("mood", "chill")
 
-    try:
-        for i, clip in enumerate(clips_data["clips"]):
-            output_path = f"outputs/{job_id}_clip{i+1}.mp4"
-            clip_start = clip["start"]
-            raw_duration = clip["end"] - clip["start"]
-            # Enforce shorts-friendly duration: 15-60 seconds
-            duration = max(15, min(raw_duration, 60))
-            clip["end"] = clip_start + duration
-            clip_mood = clip.get("mood", "chill")
+                srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}.srt")
+                generate_srt_subtitle(words_data, clip_start, clip["end"], srt_path)
+                temp_files_extra.append(srt_path)
 
-            # ── Generate SRT subtitles (word-by-word, relative to clip start) ──
-            srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}.srt")
-            generate_srt_subtitle(words_data, clip_start, clip["end"], srt_path)
-            temp_files_extra.append(srt_path)
+                music_path = resolve_music_path(clip_mood)
 
-            # ── Resolve music track (silently skip if missing) ──
-            music_path = resolve_music_path(clip_mood)
-
-            # Step 1: render video+audio without subtitles (h264, 9:16 portrait)
-            no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
-            local_files.append(no_subs)
-            vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-            audio_filter = ""
-            if music_path:
-                music_path_ff = music_path.replace('\\', '/')
-                audio_filter = "[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]"
-            else:
-                audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
-            parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-            step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-            if music_path:
-                step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-            step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
-                      '-map', '[v]', '-map', '[a]',
-                      '-c:v', 'libx264', '-preset', 'fast',
-                      '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
-            subprocess.run(step1, capture_output=True, timeout=600)
-
-            if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                # Step 2: burn subtitles onto the rendered video
-                srt_path_ff = srt_path.replace('\\', '/')
-                step2 = ['ffmpeg', '-i', no_subs,
-                         '-vf', f"subtitles={srt_path_ff}",
-                         '-c:v', 'libx264', '-preset', 'fast',
-                         '-c:a', 'copy', '-y', output_path]
-                subprocess.run(step2, capture_output=True, timeout=300)
-                if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                    shutil.copy2(no_subs, output_path)
-            else:
-                # Fallback: render at 720p (lower memory)
-                vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
+                no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
+                local_files.append(no_subs)
+                vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
+                audio_filter = ""
+                if music_path:
+                    music_path_ff = music_path.replace('\\', '/')
+                    audio_filter = "[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]"
+                else:
+                    audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
                 parts = [f"[0:v]{vid_filter}[v]", audio_filter]
                 step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
                 if music_path:
@@ -828,6 +788,7 @@ Return JSON with this exact format:
                           '-c:v', 'libx264', '-preset', 'fast',
                           '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
                 subprocess.run(step1, capture_output=True, timeout=600)
+
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     srt_path_ff = srt_path.replace('\\', '/')
                     step2 = ['ffmpeg', '-i', no_subs,
@@ -838,63 +799,102 @@ Return JSON with this exact format:
                     if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                         shutil.copy2(no_subs, output_path)
                 else:
-                    # Final fallback: output is just the raw-seeked segment, no frills
-                    subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
-                                    '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
-                                    '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', output_path],
-                                   capture_output=True, timeout=300)
+                    vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
+                    parts = [f"[0:v]{vid_filter}[v]", audio_filter]
+                    step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
+                    if music_path:
+                        step1 += ['-stream_loop', '-1', '-i', music_path_ff]
+                    step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
+                              '-map', '[v]', '-map', '[a]',
+                              '-c:v', 'libx264', '-preset', 'fast',
+                              '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                    subprocess.run(step1, capture_output=True, timeout=600)
+                    if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
+                        srt_path_ff = srt_path.replace('\\', '/')
+                        step2 = ['ffmpeg', '-i', no_subs,
+                                 '-vf', f"subtitles={srt_path_ff}",
+                                 '-c:v', 'libx264', '-preset', 'fast',
+                                 '-c:a', 'copy', '-y', output_path]
+                        subprocess.run(step2, capture_output=True, timeout=300)
+                        if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
+                            shutil.copy2(no_subs, output_path)
+                    else:
+                        subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                                        '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
+                                        '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', output_path],
+                                       capture_output=True, timeout=300)
 
-            local_files.append(output_path)
+                local_files.append(output_path)
 
-            # Validate generated video before upload
-            if not verify_video_valid(output_path):
-                print(f"GENERATED VIDEO INVALID: {output_path}")
-                clip_storage_url = ""
-                thumb_storage_url = ""
-            else:
-                # Upload to Supabase Storage
-                storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
-                clip_storage_url = upload_to_storage(output_path, "clips", storage_path, "video/mp4")
+                jobs_store[job_id] = {"status": "processing", "message": f"Uploading clip {i+1}..."}
+                if not verify_video_valid(output_path):
+                    print(f"GENERATED VIDEO INVALID: {output_path}")
+                    clip_storage_url = ""
+                    thumb_storage_url = ""
+                else:
+                    storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
+                    clip_storage_url = upload_to_storage(output_path, "clips", storage_path, "video/mp4")
+                    thumb_storage_path = f"thumbnails/{job_id}.jpg"
+                    thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
 
-                # Upload thumbnail to Supabase Storage
-                thumb_storage_path = f"thumbnails/{job_id}.jpg"
-                thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
+                supabase.table("clips").insert({
+                    "user_id": user_id,
+                    "title": clip["title"],
+                    "status": "done" if clip_storage_url else "error",
+                    "video_url": clip_storage_url,
+                    "thumbnail_url": thumb_storage_url,
+                    "duration": round(duration, 1),
+                    "start_time": clip_start,
+                    "end_time": clip["end"]
+                }).execute()
 
-            supabase.table("clips").insert({
-                "user_id": user_id,
-                "title": clip["title"],
-                "status": "done" if clip_storage_url else "error",
-                "video_url": clip_storage_url,
-                "thumbnail_url": thumb_storage_url,
-                "duration": round(duration, 1),
-                "start_time": clip_start,
-                "end_time": clip["end"]
-            }).execute()
+                output_clips.append({
+                    "clip": i + 1,
+                    "title": clip["title"],
+                    "reason": clip["reason"],
+                    "mood": clip_mood,
+                    "start": clip["start"],
+                    "end": clip["end"],
+                    "hook_score": clip.get("hook_score", 5),
+                    "file": clip_storage_url,
+                    "thumbnail_url": thumb_storage_url
+                })
+        finally:
+            for f in local_files:
+                try: os.unlink(f)
+                except OSError: pass
+            for f in temp_files_extra:
+                try: os.unlink(f)
+                except OSError: pass
 
-            output_clips.append({
-                "clip": i + 1,
-                "title": clip["title"],
-                "reason": clip["reason"],
-                "mood": clip_mood,
-                "start": clip["start"],
-                "end": clip["end"],
-                "hook_score": clip.get("hook_score", 5),
-                "file": clip_storage_url,
-                "thumbnail_url": thumb_storage_url
-            })
-    finally:
-        for f in local_files:
-            try: os.unlink(f)
-            except OSError: pass
-        for f in temp_files_extra:
-            try: os.unlink(f)
-            except OSError: pass
+        jobs_store[job_id] = {"status": "done", "message": f"{len(output_clips)} clips ready", "clips": output_clips}
+    except Exception as e:
+        print(f"PROCESS ERROR: {e}")
+        traceback.print_exc()
+        jobs_store[job_id] = {"status": "error", "message": str(e)[:200]}
 
-    return {
-        "job_id": job_id,
-        "clips": output_clips,
-        "total": len(output_clips)
-    }
+
+@app.post("/process")
+async def process_video(req: VideoRequest, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
+    await check_rate_limit(f"process:{user['sub']}")
+    user_id = user["sub"]
+    job_id = str(uuid.uuid4())
+
+    validate_video_url(req.url)
+
+    user_result = supabase.table("users").select("credits,plan").eq("id", user_id).execute()
+    if not user_result.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_data = user_result.data[0]
+    if user_data["plan"] != "pro" and user_data["credits"] <= 0:
+        raise HTTPException(status_code=402, detail="No credits remaining")
+
+    if user_data["plan"] != "pro":
+        dedent_credits(user_id)
+
+    background_tasks.add_task(process_video_background, job_id, user_id, req.url)
+    jobs_store[job_id] = {"status": "processing", "message": "Started processing"}
+    return {"status": "processing", "job_id": job_id}
 
 
 @app.post("/export")
