@@ -54,6 +54,43 @@ def get_youtube_auth_config():
     return config
 
 
+def download_with_cobalt(url: str, output_path: str) -> bool:
+    """Fallback downloader using cobalt.tools API for YouTube/TikTok/etc."""
+    try:
+        print(f"Trying cobalt.tools fallback for {url}")
+        with httpx.Client(timeout=120) as client:
+            r = client.post(
+                "https://api.cobalt.tools/api/json",
+                headers={"Accept": "application/json", "Content-Type": "application/json"},
+                json={"url": url, "downloadMode": "audio+video", "videoQuality": "720", "filenamePattern": "classic"}
+            )
+            if r.status_code != 200:
+                print(f"cobalt.tools error: {r.status_code} {r.text[:200]}")
+                return False
+            data = r.json()
+            print(f"cobalt.tools response: {data.get('status')}")
+            if data.get("status") == "error":
+                print(f"cobalt.tools error: {data.get('text')}")
+                return False
+            download_url = data.get("url")
+            if not download_url:
+                print("cobalt.tools no download url")
+                return False
+            # Download the file
+            with client.stream("GET", download_url, timeout=300) as stream:
+                stream.raise_for_status()
+                with open(output_path, "wb") as f:
+                    for chunk in stream.iter_bytes(chunk_size=8192):
+                        f.write(chunk)
+            if os.path.getsize(output_path) >= 1024:
+                print(f"cobalt.tools download success: {output_path} ({os.path.getsize(output_path)} bytes)")
+                return True
+        return False
+    except Exception as e:
+        print(f"cobalt.tools fallback failed: {e}")
+        return False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -693,7 +730,16 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         print(f"YouTube issue (attempt {attempt+1}/36): {type(e).__name__} (imp={imp}), waiting {wait}s...")
                         time.sleep(wait)
                         continue
-                jobs_store[job_id] = {"status": "error", "message": "YouTube blocked the download. Try providing YouTube cookies via YOUTUBE_COOKIES_B64 env var."}
+                # Try cobalt.tools fallback before giving up
+                if download_with_cobalt(url, video_path):
+                    last_err = None
+                    break
+                jobs_store[job_id] = {"status": "error", "message": "YouTube blocked the download. Try a different video or provide fresh cookies/PO token."}
+                return
+
+        if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
+            if not download_with_cobalt(url, video_path):
+                jobs_store[job_id] = {"status": "error", "message": "Could not download video from this URL."}
                 return
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
