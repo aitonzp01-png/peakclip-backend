@@ -83,11 +83,19 @@ export default function Dashboard() {
 
   const pollClipStatus = async (userId, since, jobId) => {
     let attempts = 0
+    let token = null
+    try {
+      const { data: { session } } = await getSupabaseClient().auth.getSession()
+      token = session?.access_token
+    } catch {}
     const poll = setInterval(async () => {
       attempts++
-      if (jobId) {
+      if (jobId && token) {
         try {
-          const r = await fetch(`${BACKEND_URL}/status/${jobId}`, { signal: AbortSignal.timeout(3000) })
+          const r = await fetch(`${BACKEND_URL}/status/${jobId}`, {
+            signal: AbortSignal.timeout(3000),
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
           if (r.ok) {
             const d = await r.json()
             if (d.status === 'error') { setStatus(`Error: ${d.message || 'Processing failed'}`); clearInterval(poll); return }
