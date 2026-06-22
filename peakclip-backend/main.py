@@ -16,6 +16,8 @@ import json
 import stripe
 import tempfile
 import re
+import struct
+import math
 import time
 import httpx
 import sys
@@ -497,6 +499,63 @@ def resolve_music_path(mood: str) -> str | None:
     return path if os.path.isfile(path) else None
 
 
+def get_energy_peaks(video_path: str, num_peaks: int = 8, window_seconds: float = 0.5) -> list[dict]:
+    """Analyze audio energy and return top peak timestamps with intensity."""
+    import shutil
+    if not shutil.which('ffmpeg'):
+        return []
+    try:
+        raw = f"{video_path}_raw.pcm"
+        subprocess.run([
+            'ffmpeg', '-i', video_path,
+            '-vn', '-acodec', 'pcm_s16le',
+            '-ar', '16000', '-ac', '1',
+            '-f', 's16le', '-y', raw
+        ], capture_output=True, timeout=120)
+        if not os.path.exists(raw) or os.path.getsize(raw) < 2:
+            return []
+        with open(raw, 'rb') as f:
+            data = f.read()
+        os.remove(raw)
+        samples = len(data) // 2
+        window_size = int(16000 * window_seconds)
+        energies = []
+        for i in range(0, samples - window_size, window_size):
+            chunk = data[i*2:(i + window_size)*2]
+            # RMS energy
+            s = 0
+            for j in range(0, len(chunk), 2):
+                val = struct.unpack('<h', chunk[j:j+2])[0] / 32768.0
+                s += val * val
+            rms = math.sqrt(s / (len(chunk) // 2)) if chunk else 0
+            energies.append({'time': i / 16000, 'energy': rms})
+        if not energies:
+            return []
+        # Smooth with simple moving average
+        for i in range(len(energies)):
+            left = max(0, i - 2)
+            right = min(len(energies), i + 3)
+            energies[i]['energy'] = sum(e['energy'] for e in energies[left:right]) / (right - left)
+        # Find local maxima
+        peaks = []
+        for i in range(1, len(energies) - 1):
+            if energies[i]['energy'] > energies[i-1]['energy'] and energies[i]['energy'] > energies[i+1]['energy']:
+                peaks.append(energies[i])
+        peaks.sort(key=lambda p: p['energy'], reverse=True)
+        # Spread peaks: at least 3s apart
+        selected = []
+        for p in peaks:
+            if len(selected) >= num_peaks:
+                break
+            if all(abs(p['time'] - s['time']) >= 3.0 for s in selected):
+                selected.append(p)
+        selected.sort(key=lambda p: p['time'])
+        return [{'time_seconds': round(p['time'], 1), 'energy_intensity': round(p['energy'], 4)} for p in selected]
+    except Exception as e:
+        print(f"Energy peak analysis error: {e}")
+        return []
+
+
 # ──────────────────────────────────────────────────────────────
 
 
@@ -650,6 +709,14 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
         for s in transcript.segments
     ])
 
+    # Detect audio energy peaks (high-energy moments beyond the first hook)
+    energy_peaks = get_energy_peaks(video_path)
+    energy_hint = ""
+    if energy_peaks:
+        energy_hint = "\nAudio energy peaks (likely exciting moments) at: " + ", ".join(
+            f"{p['time_seconds']}s (intensity {p['energy_intensity']})" for p in energy_peaks
+        ) + "\nPrioritize clips around these peaks."
+
     response = client.chat.completions.create(
         model="gpt-4o",
         response_format={"type": "json_object"},
@@ -661,7 +728,7 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
             "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
-{segments_text}
+{segments_text}{energy_hint}
 
 RULES:
 - Each clip MUST be 30-60 seconds long (ideal for shorts).
@@ -1179,6 +1246,14 @@ async def upload_video(
         for s in transcript.segments
     ])
 
+    # Detect audio energy peaks (high-energy moments beyond the first hook)
+    energy_peaks = get_energy_peaks(video_path)
+    energy_hint = ""
+    if energy_peaks:
+        energy_hint = "\nAudio energy peaks (likely exciting moments) at: " + ", ".join(
+            f"{p['time_seconds']}s (intensity {p['energy_intensity']})" for p in energy_peaks
+        ) + "\nPrioritize clips around these peaks."
+
     jobs_store[job_id] = {"status": "processing", "message": "Analyzing viral moments with AI..."}
 
     response = client.chat.completions.create(
@@ -1192,7 +1267,7 @@ async def upload_video(
             "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
-{segments_text}
+{segments_text}{energy_hint}
 
 RULES:
 - Each clip MUST be 30-60 seconds long (ideal for shorts).
