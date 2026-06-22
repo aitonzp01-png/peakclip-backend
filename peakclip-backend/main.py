@@ -145,8 +145,8 @@ async def run_migrations():
 
     # Add start_time / end_time columns to clips table if missing
     try:
-        supabase.table("clips").select("start_time").limit(1).execute()
-        print("SQL MIGRATION: start_time column already exists (OK)")
+        supabase.table("clips").select("start_time,end_time").limit(1).execute()
+        print("SQL MIGRATION: start_time/end_time columns already exist (OK)")
     except Exception:
         async with httpx.AsyncClient(timeout=15) as client:
             headers = {
@@ -704,7 +704,7 @@ Return JSON with this exact format:
             # Step 1: render video+audio without subtitles (h264, 9:16 portrait)
             no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
             local_files.append(no_subs)
-            vid_filter = "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
+            vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
             audio_filter = ""
             if music_path:
                 music_path_ff = music_path.replace('\\', '/')
@@ -733,7 +733,7 @@ Return JSON with this exact format:
                     shutil.copy2(no_subs, output_path)
             else:
                 # Fallback: render at 720p (lower memory)
-                vid_filter = "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2"
+                vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
                 parts = [f"[0:v]{vid_filter}[v]", audio_filter]
                 step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
                 if music_path:
@@ -856,7 +856,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
 
     try:
         # Build filter chain
-        vf = f"scale={target_res}:force_original_aspect_ratio=decrease,pad={target_res}:(ow-iw)/2:(oh-ih)/2"
+        vf = f"scale={target_res}:force_original_aspect_ratio=increase,crop={target_res}"
 
         if req.filter_style == "vivid":
             vf = f"{vf},eq=saturation=1.5:contrast=1.1"
@@ -1224,7 +1224,7 @@ Return JSON with this exact format:
             # Step 1: render video+audio without subtitles (h264, 9:16 portrait)
             no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
             local_files.append(no_subs)
-            vid_filter = "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
+            vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
             audio_filter = ""
             if music_path:
                 music_path_ff = music_path.replace('\\', '/')
@@ -1253,7 +1253,7 @@ Return JSON with this exact format:
                     shutil.copy2(no_subs, output_path)
             else:
                 # Fallback: render at 720p (lower memory)
-                vid_filter = "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2"
+                vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
                 parts = [f"[0:v]{vid_filter}[v]", audio_filter]
                 step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
                 if music_path:
