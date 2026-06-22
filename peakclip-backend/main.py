@@ -23,6 +23,7 @@ import asyncio
 from collections import defaultdict
 from urllib.parse import urlparse
 import base64
+import random
 import jwt as pyjwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -52,6 +53,27 @@ def get_youtube_auth_config():
     if visitor_data:
         config["extractor_args"]["visitor_data"] = visitor_data
     return config
+
+
+def get_working_proxy() -> str | None:
+    """Return configured proxy or try a free proxy."""
+    configured = os.getenv("YOUTUBE_PROXY")
+    if configured:
+        print(f"Using configured proxy: {configured[:30]}...")
+        return configured
+    # Try free proxy list
+    try:
+        with httpx.Client(timeout=15) as client:
+            r = client.get("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all")
+            if r.status_code == 200:
+                proxies = [p.strip() for p in r.text.strip().split("\n") if p.strip()]
+                if proxies:
+                    proxy = random.choice(proxies)
+                    print(f"Trying free proxy: {proxy}")
+                    return f"http://{proxy}"
+    except Exception as e:
+        print(f"Free proxy fetch failed: {e}")
+    return None
 
 
 def extract_youtube_video_id(url: str) -> str | None:
@@ -893,6 +915,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
         ]
 
         last_err = None
+        proxy = get_working_proxy()
         for attempt in range(36):
             cfg = strategies[attempt % len(strategies)]
             ua = user_agents[attempt % len(user_agents)]
@@ -920,6 +943,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         'Accept-Language': 'en-US,en;q=0.5',
                     },
                 }
+                if proxy:
+                    ydl_opts['proxy'] = proxy
                 if imp:
                     ydl_opts['impersonate'] = imp
                 if auth_cfg["cookies_path"]:
@@ -939,7 +964,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
                     if attempt < 35:
                         wait = min(3 + attempt, 30)
-                        print(f"YouTube issue (attempt {attempt+1}/36): {type(e).__name__} (imp={imp}), waiting {wait}s...")
+                        print(f"YouTube issue (attempt {attempt+1}/36): {type(e).__name__} (imp={imp}, proxy={proxy[:40] if proxy else 'none'}), waiting {wait}s...")
                         time.sleep(wait)
                         continue
                 # Try Invidious, Piped, cobalt.tools, and Playwright fallbacks before giving up
