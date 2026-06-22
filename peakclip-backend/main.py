@@ -366,13 +366,8 @@ def root():
 
 @app.get("/health")
 def health():
-    import subprocess
-    try:
-        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=5).stdout.strip()
-    except:
-        commit = "unknown"
     return {
-        "commit": commit,
+        "status": "PeakClip API running",
         "jwks_keys": len(_jwks_keys),
         "jwks_loaded": len(_jwks_keys) > 0,
         "supabase_url": supabase_url,
@@ -523,7 +518,7 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     audio_path = f"downloads/{job_id}.mp3"
     local_files = [video_path, audio_path]
 
-    # Retry download with different strategies — skip expired cookies
+    # Retry download with different strategies
     strategies = [
         {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage', 'dash']},
         {'player_client': ['web'], 'player_skip': ['webpage', 'configs']},

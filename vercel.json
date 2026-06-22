@@ -3,18 +3,5 @@
   "github": {
     "silent": true,
     "autoJobCancelation": true
-  },
-  "experimentalServices": {
-    "peakclip-app": {
-      "root": "peakclip-app",
-      "routePrefix": "/",
-      "framework": "nextjs",
-      "buildCommand": "npm run build"
-    },
-    "peakclip-backend": {
-      "root": "peakclip-backend",
-      "entrypoint": "main:app",
-      "routePrefix": "/_/peakclip-backend"
-    }
   }
 }
