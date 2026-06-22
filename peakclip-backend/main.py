@@ -217,12 +217,15 @@ async def check_rate_limit(key: str):
 # In-memory job store for status tracking
 jobs_store: dict = {}
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-ALLOWED_ORIGINS = [FRONTEND_URL]
+FRONTEND_URL = os.getenv("FRONTEND_URL", "")
+ALLOWED_ORIGINS = [o.strip() for o in FRONTEND_URL.split(",") if o.strip()] or [
+    "http://localhost:3000",
+    "https://peakclip-studio.vercel.app"
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -565,11 +568,12 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 'extract_flat': False,
                 'sleep_interval': 10,
                 'sleep_interval_requests': 2,
-                'extractor_retries': 3,
-                'file_access_retries': 3,
+                'extractor_retries': 10,
+                'file_access_retries': 5,
                 'throttledratelimit': 100000,
                 'ignore_no_formats_error': True,
                 'allow_unplayable_formats': True,
+                'cookiefile': 'cookies.txt',
                 'http_headers': {
                     'User-Agent': ua,
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
