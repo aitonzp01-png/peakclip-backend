@@ -792,7 +792,7 @@ Return JSON with this exact format:
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     srt_path_ff = srt_path.replace('\\', '/')
                     step2 = ['ffmpeg', '-i', no_subs,
-                             '-vf', f"subtitles={srt_path_ff}",
+                             '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
                              '-c:v', 'libx264', '-preset', 'fast',
                              '-c:a', 'copy', '-y', output_path]
                     subprocess.run(step2, capture_output=True, timeout=300)
@@ -812,7 +812,7 @@ Return JSON with this exact format:
                     if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                         srt_path_ff = srt_path.replace('\\', '/')
                         step2 = ['ffmpeg', '-i', no_subs,
-                                 '-vf', f"subtitles={srt_path_ff}",
+                                 '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
                                  '-c:v', 'libx264', '-preset', 'fast',
                                  '-c:a', 'copy', '-y', output_path]
                         subprocess.run(step2, capture_output=True, timeout=300)
@@ -1319,7 +1319,7 @@ Return JSON with this exact format:
                 # Step 2: burn subtitles onto the rendered video
                 srt_path_ff = srt_path.replace('\\', '/')
                 step2 = ['ffmpeg', '-i', no_subs,
-                         '-vf', f"subtitles={srt_path_ff}",
+                         '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
                          '-c:v', 'libx264', '-preset', 'fast',
                          '-c:a', 'copy', '-y', output_path]
                 subprocess.run(step2, capture_output=True, timeout=300)
@@ -1340,7 +1340,7 @@ Return JSON with this exact format:
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     srt_path_ff = srt_path.replace('\\', '/')
                     step2 = ['ffmpeg', '-i', no_subs,
-                             '-vf', f"subtitles={srt_path_ff}",
+                             '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
                              '-c:v', 'libx264', '-preset', 'fast',
                              '-c:a', 'copy', '-y', output_path]
                     subprocess.run(step2, capture_output=True, timeout=300)
