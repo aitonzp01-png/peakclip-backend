@@ -225,23 +225,6 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def add_security_headers(request: Request, call_next):
-    response = await call_next(request)
-    origin = request.headers.get("origin", "")
-    if origin in ALLOWED_ORIGINS:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "0"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Cache-Control"] = "no-store"
-    return response
-
-
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     origin = request.headers.get("origin", "")
@@ -255,15 +238,6 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": f"Internal server error: {type(exc).__name__}: {str(exc)[:200]}"},
         headers=headers,
     )
-
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    start = time.time()
-    response = await call_next(request)
-    elapsed = time.time() - start
-    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {request.method} {request.url.path} -> {response.status_code} ({elapsed:.2f}s)")
-    return response
 
 
 os.makedirs("downloads", exist_ok=True)
