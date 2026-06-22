@@ -66,6 +66,65 @@ def extract_youtube_video_id(url: str) -> str | None:
     return None
 
 
+def download_with_invidious(url: str, output_path: str) -> bool:
+    """Fallback downloader using Invidious instances for YouTube."""
+    video_id = extract_youtube_video_id(url)
+    if not video_id:
+        print("Invidious fallback: could not extract video ID")
+        return False
+
+    invidious_instances = [
+        "https://iv.nboeck.de",
+        "https://iv.datura.network",
+        "https://iv.nboeck.de",
+        "https://iv.melmac.space",
+        "https://yt.artemislena.eu",
+        "https://iv.datura.network",
+    ]
+
+    with httpx.Client(timeout=60, follow_redirects=True) as client:
+        for base in invidious_instances:
+            try:
+                print(f"Trying Invidious instance {base} for {video_id}")
+                r = client.get(f"{base}/api/v1/videos/{video_id}")
+                if r.status_code != 200:
+                    print(f"Invidious {base} status: {r.status_code}")
+                    continue
+                data = r.json()
+                # Prefer adaptive formats with both video and audio
+                formats = data.get("adaptiveFormats", []) + data.get("formatStreams", [])
+                download_url = None
+                for fmt in formats:
+                    if fmt.get("type", "").startswith("video") and "audio" in fmt.get("type", ""):
+                        url_candidate = fmt.get("url")
+                        if url_candidate:
+                            download_url = url_candidate
+                            break
+                if not download_url and formats:
+                    # Fall back to any format
+                    for fmt in formats:
+                        url_candidate = fmt.get("url")
+                        if url_candidate:
+                            download_url = url_candidate
+                            break
+                if not download_url:
+                    print(f"Invidious {base}: no download url")
+                    continue
+                with client.stream("GET", download_url, timeout=300) as stream:
+                    stream.raise_for_status()
+                    with open(output_path, "wb") as f:
+                        for chunk in stream.iter_bytes(chunk_size=8192):
+                            f.write(chunk)
+                if os.path.getsize(output_path) >= 1024:
+                    print(f"Invidious download success from {base}: {output_path} ({os.path.getsize(output_path)} bytes)")
+                    return True
+            except Exception as e:
+                print(f"Invidious {base} failed: {e}")
+                continue
+    print("All Invidious instances failed")
+    return False
+
+
 def download_with_piped(url: str, output_path: str) -> bool:
     """Fallback downloader using Piped/Invidious instances for YouTube."""
     video_id = extract_youtube_video_id(url)
@@ -796,15 +855,15 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         print(f"YouTube issue (attempt {attempt+1}/36): {type(e).__name__} (imp={imp}), waiting {wait}s...")
                         time.sleep(wait)
                         continue
-                # Try Piped/Invidious and cobalt.tools fallbacks before giving up
-                if download_with_piped(url, video_path) or download_with_cobalt(url, video_path):
+                # Try Invidious, Piped, and cobalt.tools fallbacks before giving up
+                if download_with_invidious(url, video_path) or download_with_piped(url, video_path) or download_with_cobalt(url, video_path):
                     last_err = None
                     break
                 jobs_store[job_id] = {"status": "error", "message": "YouTube blocked the download. Try a different video or provide fresh cookies/PO token."}
                 return
 
         if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
-            if not (download_with_piped(url, video_path) or download_with_cobalt(url, video_path)):
+            if not (download_with_invidious(url, video_path) or download_with_piped(url, video_path) or download_with_cobalt(url, video_path)):
                 jobs_store[job_id] = {"status": "error", "message": "Could not download video from this URL."}
                 return
 
