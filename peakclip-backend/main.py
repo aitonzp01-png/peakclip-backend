@@ -37,8 +37,8 @@ async def lifespan(app: FastAPI):
     # Startup
     # Try to update yt-dlp to latest version
     try:
-        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'], capture_output=True, text=True, timeout=60)
-        print(f"yt-dlp upgrade: {result.returncode == 0}")
+        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall', 'yt-dlp[default]'], capture_output=True, text=True, timeout=120)
+        print(f"yt-dlp upgrade: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
         # Check version
         ver = subprocess.run([sys.executable, '-m', 'yt_dlp', '--version'], capture_output=True, text=True, timeout=10)
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
@@ -581,19 +581,18 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     audio_path = f"downloads/{job_id}.mp3"
     local_files = [video_path, audio_path]
 
-    # Retry download with different strategies
+    # Retry download with different strategies (clients that typically don't need PO tokens)
     strategies = [
-        {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage', 'dash', 'js']},
-        {'player_client': ['android', 'web_creator'], 'player_skip': ['configs']},
-        {'player_client': ['web_safari'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['ios', 'android_creator'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['tv_embedded', 'tv'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['web_creator', 'web_safari', 'web'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['android'], 'include_dash_mpd': True, 'skip': ['dash']},
-        {'player_client': ['android_creator'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['ios_creator'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['mediaconnect'], 'player_skip': ['webpage', 'configs']},
-        {},
+        {},  # default
+        {'player_client': ['ios']},
+        {'player_client': ['android']},
+        {'player_client': ['android_vr']},
+        {'player_client': ['web_creator']},
+        {'player_client': ['android_creator']},
+        {'player_client': ['ios_creator']},
+        {'player_client': ['tv_embedded']},
+        {'player_client': ['ios', 'android'], 'player_skip': ['webpage', 'configs']},
+        {'player_client': ['web_creator', 'ios'], 'player_skip': ['webpage', 'configs']},
     ]
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -607,24 +606,15 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
         'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
     ]
     format_fallbacks = [
-        'worst[ext=mp4]/worst',
-        'worstvideo+worstaudio/worst',
         'best[ext=mp4]/best',
         'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'bestvideo+bestaudio/best',
-        'worstvideo+bestaudio/worst',
+        'worst[ext=mp4]/worst',
+        'worstvideo+worstaudio/worst',
         'bestaudio/best',
         'worst',
-        'worstvideo[ext=mp4]/worst[ext=mp4]/worst',
-        'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
         'bv*+ba/b',
-        '17',
-        '36',
-        '5',
         '18',
-        '34',
-        '35',
-        '43',
         '247+140',
     ]
 
@@ -640,13 +630,14 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 'quiet': True,
                 'no_warnings': True,
                 'extract_flat': False,
-                'sleep_interval': 15,
-                'sleep_interval_requests': 3,
-                'extractor_retries': 15,
+                'noplaylist': True,
+                'sleep_interval': 5,
+                'sleep_interval_requests': 2,
+                'extractor_retries': 10,
                 'file_access_retries': 8,
                 'throttledratelimit': 100000,
                 'ignore_no_formats_error': True,
-                'allow_unplayable_formats': True,
+                'allow_unplayable_formats': False,
                 'no_check_certificate': True,
                 'socket_timeout': 60,
                 'http_headers': {
@@ -657,6 +648,7 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
             }
             if cfg:
                 ydl_opts['extractor_args'] = {'youtube': cfg}
+            print(f"yt-dlp attempt {attempt+1} strategy={cfg} format={fmt}")
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([req.url])
