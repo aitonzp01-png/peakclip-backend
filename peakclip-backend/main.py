@@ -3,7 +3,7 @@ load_dotenv()
 import traceback
 from fastapi import FastAPI, HTTPException, Depends, Header, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 from pydantic import BaseModel
 from supabase import create_client
@@ -223,6 +223,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.options("/{path:path}")
+async def preflight_handler(request: Request, path: str):
+    origin = request.headers.get("origin", "")
+    if origin in ALLOWED_ORIGINS:
+        return Response(
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                "Access-Control-Allow-Headers": "authorization, content-type, x-requested-with",
+                "Access-Control-Max-Age": "86400",
+            }
+        )
+    return Response(status_code=400)
 
 
 @app.exception_handler(Exception)
