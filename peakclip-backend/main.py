@@ -279,11 +279,11 @@ def upload_to_storage(local_path: str, bucket: str, storage_path: str, content_t
         try:
             with open(local_path, 'rb') as f:
                 file_bytes = f.read()
-            supabase.storage.from_(bucket).upload(
-                storage_path,
-                file_bytes,
-                {"content-type": content_type, "upsert": True}
-            )
+                supabase.storage.from_(bucket).upload(
+                    storage_path,
+                    file_bytes,
+                    {"content-type": content_type, "upsert": "true"}
+                )
             url = supabase.storage.from_(bucket).get_public_url(storage_path)
             # Verify URL is accessible and non-empty
             try:
