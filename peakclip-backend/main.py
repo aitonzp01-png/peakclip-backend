@@ -296,6 +296,7 @@ async def fetch_jwks():
         print(f"JWKS fetch error: {e}")
 
 async def get_current_user(authorization: str = Header(...)):
+    import base64
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing authorization header")
     token = authorization.replace("Bearer ", "").strip()
