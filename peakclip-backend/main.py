@@ -313,8 +313,9 @@ async def get_current_user(authorization: str = Header(...)):
     if not jwk:
         raise HTTPException(status_code=401, detail=f"Invalid token (unknown kid: {kid})")
     try:
-        x = base64.urlsafe_b64decode(jwk["x"] + "==")
-        y = base64.urlsafe_b64decode(jwk["y"] + "==")
+        from base64 import urlsafe_b64decode
+        x = urlsafe_b64decode(jwk["x"] + "==")
+        y = urlsafe_b64decode(jwk["y"] + "==")
         pub_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), b"\x04" + x + y)
         pem = pub_key.public_bytes(
             serialization.Encoding.PEM,
@@ -365,7 +366,13 @@ def root():
 
 @app.get("/health")
 def health():
+    import subprocess
+    try:
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=5).stdout.strip()
+    except:
+        commit = "unknown"
     return {
+        "commit": commit,
         "jwks_keys": len(_jwks_keys),
         "jwks_loaded": len(_jwks_keys) > 0,
         "supabase_url": supabase_url,
