@@ -54,6 +54,72 @@ def get_youtube_auth_config():
     return config
 
 
+def extract_youtube_video_id(url: str) -> str | None:
+    """Extract YouTube video ID from various URL formats."""
+    patterns = [
+        r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/v/|youtube\.com/shorts/)([a-zA-Z0-9_-]{11})',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+
+def download_with_piped(url: str, output_path: str) -> bool:
+    """Fallback downloader using Piped/Invidious instances for YouTube."""
+    video_id = extract_youtube_video_id(url)
+    if not video_id:
+        print("Piped fallback: could not extract video ID")
+        return False
+
+    piped_instances = [
+        "https://pipedapi.kavin.rocks",
+        "https://api.piped.projecthipbone.dev",
+        "https://pipedapi.moomoo.me",
+        "https://api.piped.privacydev.net",
+        "https://pipedapi.adminforge.de",
+    ]
+
+    with httpx.Client(timeout=60, follow_redirects=True) as client:
+        for base in piped_instances:
+            try:
+                print(f"Trying Piped instance {base} for {video_id}")
+                r = client.get(f"{base}/streams/{video_id}")
+                if r.status_code != 200:
+                    print(f"Piped {base} status: {r.status_code}")
+                    continue
+                data = r.json()
+                # Try video streams first, then audio+video
+                streams = data.get("videoStreams", []) + data.get("audioStreams", [])
+                # Prefer format with both video and audio
+                download_url = None
+                for s in streams:
+                    if s.get("videoOnly"):
+                        continue
+                    url_candidate = s.get("url") or s.get("playbackUrl")
+                    if url_candidate and (download_url is None or s.get("quality") == "720p"):
+                        download_url = url_candidate
+                if not download_url and streams:
+                    download_url = streams[0].get("url") or streams[0].get("playbackUrl")
+                if not download_url:
+                    print(f"Piped {base}: no download url")
+                    continue
+                with client.stream("GET", download_url, timeout=300) as stream:
+                    stream.raise_for_status()
+                    with open(output_path, "wb") as f:
+                        for chunk in stream.iter_bytes(chunk_size=8192):
+                            f.write(chunk)
+                if os.path.getsize(output_path) >= 1024:
+                    print(f"Piped download success from {base}: {output_path} ({os.path.getsize(output_path)} bytes)")
+                    return True
+            except Exception as e:
+                print(f"Piped {base} failed: {e}")
+                continue
+    print("All Piped instances failed")
+    return False
+
+
 def download_with_cobalt(url: str, output_path: str) -> bool:
     """Fallback downloader using cobalt.tools API for YouTube/TikTok/etc."""
     try:
@@ -730,15 +796,15 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         print(f"YouTube issue (attempt {attempt+1}/36): {type(e).__name__} (imp={imp}), waiting {wait}s...")
                         time.sleep(wait)
                         continue
-                # Try cobalt.tools fallback before giving up
-                if download_with_cobalt(url, video_path):
+                # Try Piped/Invidious and cobalt.tools fallbacks before giving up
+                if download_with_piped(url, video_path) or download_with_cobalt(url, video_path):
                     last_err = None
                     break
                 jobs_store[job_id] = {"status": "error", "message": "YouTube blocked the download. Try a different video or provide fresh cookies/PO token."}
                 return
 
         if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
-            if not download_with_cobalt(url, video_path):
+            if not (download_with_piped(url, video_path) or download_with_cobalt(url, video_path)):
                 jobs_store[job_id] = {"status": "error", "message": "Could not download video from this URL."}
                 return
 
