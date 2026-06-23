@@ -940,6 +940,11 @@ def process_video_background(job_id: str, user_id: str, url: str):
             {'player_client': ['ios'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
             {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
         ]
+        # When cookies are available, tv and web_creator can bypass IP blocks
+        if auth_cfg.get("cookies_path"):
+            strategies.insert(0, {'player_client': ['web_creator']})
+            strategies.insert(1, {'player_client': ['tv']})  # tv uses cookies, no PO token needed
+            strategies.insert(2, {'player_client': ['web']})  # web with cookies
         impersonate_profiles = [
             None,
             'chrome',
