@@ -262,31 +262,44 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                 print("Playwright: no video URL extracted")
                 await browser.close()
                 return False
-            # Download using Playwright's own request context (same cookies/headers as browser)
-            print(f"Playwright downloading via browser context...")
-            response = await page.request.get(video_url, timeout=600000, headers={
-                'Referer': 'https://www.youtube.com/',
-                'Origin': 'https://www.youtube.com',
-                'Range': 'bytes=0-',
-                'Accept': '*/*',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'cross-site',
-            })
-            if response.ok:
-                body = await response.body()
+            # Download using Chromium's real network stack (not Playwright's Node.js HTTP client)
+            # page.request.get() uses Node.js HTTP -> wrong TLS fingerprint -> 403 from googlevideo
+            # Solution: use page.goto() to the video URL, intercept the response via page.on('response')
+            print(f"Playwright downloading via browser navigation...")
+            download_data = bytearray()
+            errors = []
+            async def capture_response(response):
+                nonlocal download_data
+                if '/videoplayback' in response.url and response.request.url == video_url:
+                    try:
+                        body = await response.body()
+                        if body and len(body) > len(download_data):
+                            download_data = bytearray(body)
+                    except Exception as e:
+                        errors.append(str(e))
+
+            page.on('response', capture_response)
+
+            try:
+                await page.goto(video_url, wait_until='commit', timeout=60000)
+                await page.wait_for_timeout(15000)
+            except Exception as e:
+                print(f"Playwright navigation (expected): {str(e)[:80]}")
+
+            page.remove_listener('response', capture_response)
+
+            if len(download_data) >= 1024:
                 with open(output_path, "wb") as f:
-                    f.write(body)
-            else:
-                print(f"Playwright download failed: HTTP {response.status}")
+                    f.write(download_data)
+                print(f"Playwright download success via browser: {os.path.getsize(output_path)} bytes")
                 await browser.close()
-                return False
-            await browser.close()
-            if os.path.getsize(output_path) >= 1024:
-                print(f"Playwright download success: {os.path.getsize(output_path)} bytes")
                 return True
             else:
-                print(f"Playwright download too small: {os.path.getsize(output_path)} bytes")
+                if errors:
+                    print(f"Playwright response errors: {errors}")
+                print(f"Playwright download failed: got {len(download_data)} bytes")
+                await browser.close()
+                return False
     except Exception as e:
         print(f"Playwright fallback failed: {e}")
     return False
