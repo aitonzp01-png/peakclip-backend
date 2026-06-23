@@ -216,26 +216,22 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                 except Exception as e:
                     print(f"Playwright page load failed for {target_url}: {e}")
                     continue
-            await browser.close()
             if not video_url:
                 print("Playwright: no video URL extracted")
+                await browser.close()
                 return False
-            # Download with proper YouTube headers
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-                'Accept': '*/*',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Referer': f'https://www.youtube.com/watch?v={video_id}',
-                'Origin': 'https://www.youtube.com',
-            }
-            with httpx.Client(timeout=600, follow_redirects=True, headers=headers) as client:
-                with client.stream("GET", video_url, timeout=600) as stream:
-                    stream.raise_for_status()
-                    with open(output_path, "wb") as f:
-                        total = 0
-                        for chunk in stream.iter_bytes(chunk_size=65536):
-                            f.write(chunk)
-                            total += len(chunk)
+            # Download using Playwright's own request context (same cookies/headers as browser)
+            print(f"Playwright downloading via browser context...")
+            response = await page.request.get(video_url, timeout=600000)
+            if response.ok:
+                body = await response.body()
+                with open(output_path, "wb") as f:
+                    f.write(body)
+            else:
+                print(f"Playwright download failed: HTTP {response.status}")
+                await browser.close()
+                return False
+            await browser.close()
             if os.path.getsize(output_path) >= 1024:
                 print(f"Playwright download success: {os.path.getsize(output_path)} bytes")
                 return True
@@ -399,16 +395,16 @@ def download_with_cobalt(url: str, output_path: str) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    # Try to update yt-dlp to latest nightly build (updated daily, has newest YouTube fixes)
+    # Install latest yt-dlp from git master (always has newest YouTube fixes)
     try:
         result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall',
-                                 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/nightly/yt_dlp-nightly-py3-none-any.whl'],
-                                capture_output=True, text=True, timeout=180)
-        print(f"yt-dlp nightly install: {result.returncode == 0}")
+                                 'git+https://github.com/yt-dlp/yt-dlp.git'],
+                                capture_output=True, text=True, timeout=300)
+        print(f"yt-dlp git install: {result.returncode == 0}")
         if result.returncode != 0:
             result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'],
                                     capture_output=True, text=True, timeout=120)
-            print(f"yt-dlp stable install: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
+            print(f"yt-dlp stable install: {result.returncode == 0}")
         ver = subprocess.run([sys.executable, '-m', 'yt_dlp', '--version'], capture_output=True, text=True, timeout=10)
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
         # Re-install bgutil plugin after yt-dlp update to ensure compatibility
