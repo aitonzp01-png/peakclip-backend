@@ -861,6 +861,47 @@ def resolve_music_path(mood: str) -> str | None:
     return path if os.path.isfile(path) else None
 
 
+def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, timeout: int = 300) -> bool:
+    """Burn subtitles onto a video, trying multiple fallback styles."""
+    if not os.path.exists(input_path) or os.path.getsize(input_path) < 1024:
+        return False
+    srt_path_ff = srt_path.replace('\\', '/')
+    # Ensure output directory exists
+    os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
+    styles = [
+        f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
+        f"subtitles={srt_path_ff}:force_style='Fontname=Arial,Fontsize=52,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
+        f"subtitles={srt_path_ff}:force_style='Fontname=FreeSans,Fontsize=52,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
+        f"subtitles={srt_path_ff}",
+    ]
+    for style in styles:
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+        cmd = [
+            'ffmpeg', '-i', input_path,
+            '-vf', style,
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+            '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+        if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) >= 1024:
+            print(f"Subtitles burned successfully with style: {style[:60]}...")
+            return True
+        else:
+            err = result.stderr.decode('utf-8', errors='replace')[:200] if result.stderr else 'unknown'
+            print(f"Subtitle burn failed for style '{style[:40]}...': {err[:120]}")
+    # Last resort: copy without subtitles
+    try:
+        shutil.copy2(input_path, output_path)
+        print(f"WARNING: subtitles could not be burned, copied without subtitles: {output_path}")
+    except Exception as e:
+        print(f"ERROR: could not copy fallback video: {e}")
+    return False
+
+
 # ──────────────────────────────────────────────────────────────
 
 
@@ -1130,14 +1171,7 @@ Return JSON with this exact format:
                 subprocess.run(step1, capture_output=True, timeout=600)
 
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                    srt_path_ff = srt_path.replace('\\', '/')
-                    step2 = ['ffmpeg', '-i', no_subs,
-                             '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
-                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                             '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                    subprocess.run(step2, capture_output=True, timeout=300)
-                    if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                        shutil.copy2(no_subs, output_path)
+                    burn_subtitles_onto_video(no_subs, srt_path, output_path)
                 else:
                     vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
                     parts = [f"[0:v]{vid_filter}[v]", audio_filter]
@@ -1682,14 +1716,7 @@ Return JSON with this exact format:
                           '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 subprocess.run(step1, capture_output=True, timeout=600)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                    srt_path_ff = srt_path.replace('\\', '/')
-                    step2 = ['ffmpeg', '-i', no_subs,
-                             '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
-                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                             '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                    subprocess.run(step2, capture_output=True, timeout=300)
-                    if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                        shutil.copy2(no_subs, output_path)
+                    burn_subtitles_onto_video(no_subs, srt_path, output_path)
                 else:
                     subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
                                     '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
