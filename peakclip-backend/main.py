@@ -394,43 +394,17 @@ def download_with_cobalt(url: str, output_path: str) -> bool:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    # Install latest yt-dlp from git master (always has newest YouTube fixes)
+    # Startup - fast yt-dlp upgrade only
     try:
-        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall',
-                                 'git+https://github.com/yt-dlp/yt-dlp.git'],
-                                capture_output=True, text=True, timeout=300)
-        print(f"yt-dlp git install: {result.returncode == 0}")
-        if result.returncode != 0:
-            result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'],
-                                    capture_output=True, text=True, timeout=120)
-            print(f"yt-dlp stable install: {result.returncode == 0}")
+        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'],
+                                capture_output=True, text=True, timeout=60)
+        print(f"yt-dlp upgrade: {result.returncode == 0}")
         ver = subprocess.run([sys.executable, '-m', 'yt_dlp', '--version'], capture_output=True, text=True, timeout=10)
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
-        # Re-install bgutil plugin after yt-dlp update to ensure compatibility
-        try:
-            bg = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall', 'bgutil-ytdlp-pot-provider'],
-                                capture_output=True, text=True, timeout=120)
-            print(f"bgutil reinstall: {bg.returncode == 0} {bg.stdout.strip()[-120:]} {bg.stderr.strip()[-120:]}")
-        except Exception as e:
-            print(f"bgutil reinstall skipped: {e}")
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
-    # Verify bgutil PO token provider
-    try:
-        bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
-        if os.path.isdir(bgutil_home):
-            print(f"bgutil provider dir exists: {bgutil_home}")
-        else:
-            print("bgutil provider dir missing")
-        # Check if yt-dlp sees the plugin
-        plug = subprocess.run([sys.executable, '-m', 'yt_dlp', '--verbose', '--help'], capture_output=True, text=True, timeout=30)
-        if 'bgutil' in (plug.stdout + plug.stderr).lower():
-            print("bgutil plugin detected by yt-dlp")
-        else:
-            print("bgutil plugin NOT detected by yt-dlp")
-    except Exception as e:
-        print(f"bgutil verification error: {e}")
+    await run_migrations()
+    await fetch_jwks()
     await run_migrations()
     await fetch_jwks()
     yield
