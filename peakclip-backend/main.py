@@ -328,11 +328,16 @@ def download_with_cobalt(url: str, output_path: str) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    # Try to update yt-dlp to latest version
+    # Try to update yt-dlp to latest nightly/master version first, then stable
     try:
-        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'], capture_output=True, text=True, timeout=60)
-        print(f"yt-dlp upgrade: {result.returncode == 0}")
-        # Check version
+        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall',
+                                 'yt-dlp[default] @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz'],
+                                capture_output=True, text=True, timeout=180)
+        print(f"yt-dlp master install: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
+        if result.returncode != 0:
+            result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'],
+                                    capture_output=True, text=True, timeout=120)
+            print(f"yt-dlp stable install: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
         ver = subprocess.run([sys.executable, '-m', 'yt_dlp', '--version'], capture_output=True, text=True, timeout=10)
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
     except Exception as e:
@@ -853,25 +858,29 @@ def process_video_background(job_id: str, user_id: str, url: str):
         # Retry download with different strategies
         auth_cfg = get_youtube_auth_config()
         strategies = [
-            {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage', 'dash']},
-            {'player_client': ['web'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['ios'], 'player_skip': ['webpage', 'configs']},
+            # Clients that do NOT require PO tokens (per yt-dlp PO Token Guide)
+            {'player_client': ['tv_embedded']},
+            {'player_client': ['web_embedded']},
+            {'player_client': ['android_vr']},
+            {'player_client': ['tv']},
+            {'player_client': ['mweb']},
+            {},
+            # Clients that may require PO tokens for GVS/Player
+            {'player_client': ['ios']},
+            {'player_client': ['android']},
+            {'player_client': ['web_creator']},
+            {'player_client': ['web_music'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['android_music'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['android_producer'], 'player_skip': ['webpage', 'configs']},
             {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
             {'player_client': ['android'], 'include_dash_mpd': False, 'skip': ['webpage', 'dash']},
-            {'player_client': ['tv', 'tv_embedded'], 'player_skip': ['webpage', 'configs']},
             {'player_client': ['web'], 'include_dash_mpd': False},
             {'player_client': ['android', 'web', 'ios']},
             {'player_client': ['android', 'tv'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage']},
-            {'player_client': ['web_music'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['web_creator'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['android_music'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['android_producer'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['web_embedded'], 'player_skip': ['webpage', 'configs']},
             {'player_client': ['web'], 'player_skip': ['webpage', 'configs', 'js'], 'include_incomplete_formats': True},
             {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
             {'player_client': ['ios'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
             {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
-            {},
         ]
         impersonate_profiles = [
             None,
@@ -956,15 +965,17 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     ydl_opts['extractor_args'] = extractor_args
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
+                if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
+                    raise Exception("File not downloaded or too small")
                 last_err = None
                 break
             except Exception as e:
                 last_err = e
                 err_lower = str(e).lower()
-                if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
+                if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small"]):
                     if attempt < 35:
                         wait = min(3 + attempt, 30)
-                        print(f"YouTube issue (attempt {attempt+1}/36): {type(e).__name__} (imp={imp}, proxy={proxy[:40] if proxy else 'none'}), waiting {wait}s...")
+                        print(f"YouTube issue (attempt {attempt+1}/36): {err_lower[:80]} (strategy={cfg}, imp={imp}, proxy={proxy[:40] if proxy else 'none'}), waiting {wait}s...")
                         time.sleep(wait)
                         continue
                 # Try Invidious, Piped, cobalt.tools, and Playwright fallbacks before giving up
@@ -1095,16 +1106,16 @@ Return JSON with this exact format:
                     step1 += ['-stream_loop', '-1', '-i', music_path_ff]
                 step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
                           '-map', '[v]', '-map', '[a]',
-                          '-c:v', 'libx264', '-preset', 'fast',
-                          '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                          '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 subprocess.run(step1, capture_output=True, timeout=600)
 
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     srt_path_ff = srt_path.replace('\\', '/')
                     step2 = ['ffmpeg', '-i', no_subs,
                              '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
-                             '-c:v', 'libx264', '-preset', 'fast',
-                             '-c:a', 'copy', '-y', output_path]
+                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                             '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
                     subprocess.run(step2, capture_output=True, timeout=300)
                     if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                         shutil.copy2(no_subs, output_path)
@@ -1116,22 +1127,22 @@ Return JSON with this exact format:
                         step1 += ['-stream_loop', '-1', '-i', music_path_ff]
                     step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
                               '-map', '[v]', '-map', '[a]',
-                              '-c:v', 'libx264', '-preset', 'fast',
-                              '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                              '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                              '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                     subprocess.run(step1, capture_output=True, timeout=600)
                     if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                         srt_path_ff = srt_path.replace('\\', '/')
                         step2 = ['ffmpeg', '-i', no_subs,
                                  '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
-                                 '-c:v', 'libx264', '-preset', 'fast',
-                                 '-c:a', 'copy', '-y', output_path]
+                                 '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                                 '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
                         subprocess.run(step2, capture_output=True, timeout=300)
                         if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                             shutil.copy2(no_subs, output_path)
                     else:
                         subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
                                         '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
-                                        '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', output_path],
+                                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path],
                                        capture_output=True, timeout=300)
 
                 local_files.append(output_path)
@@ -1357,6 +1368,10 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             '-vf', vf,
             '-r', str(req.fps),
             '-c:v', vcodec,
+        ])
+        if vcodec == 'libx264':
+            cmd.extend(['-pix_fmt', 'yuv420p', '-movflags', '+faststart'])
+        cmd.extend([
             '-preset', 'fast',
             '-c:a', acodec,
         ])
@@ -1621,8 +1636,8 @@ Return JSON with this exact format:
                 step1 += ['-stream_loop', '-1', '-i', music_path_ff]
             step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
                       '-map', '[v]', '-map', '[a]',
-                      '-c:v', 'libx264', '-preset', 'fast',
-                      '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                      '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
             subprocess.run(step1, capture_output=True, timeout=600)
 
             if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
@@ -1630,8 +1645,8 @@ Return JSON with this exact format:
                 srt_path_ff = srt_path.replace('\\', '/')
                 step2 = ['ffmpeg', '-i', no_subs,
                          '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
-                         '-c:v', 'libx264', '-preset', 'fast',
-                         '-c:a', 'copy', '-y', output_path]
+                         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                         '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
                 subprocess.run(step2, capture_output=True, timeout=300)
                 if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                     shutil.copy2(no_subs, output_path)
@@ -1644,22 +1659,22 @@ Return JSON with this exact format:
                     step1 += ['-stream_loop', '-1', '-i', music_path_ff]
                 step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
                           '-map', '[v]', '-map', '[a]',
-                          '-c:v', 'libx264', '-preset', 'fast',
-                          '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                          '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 subprocess.run(step1, capture_output=True, timeout=600)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     srt_path_ff = srt_path.replace('\\', '/')
                     step2 = ['ffmpeg', '-i', no_subs,
                              '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
-                             '-c:v', 'libx264', '-preset', 'fast',
-                             '-c:a', 'copy', '-y', output_path]
+                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                             '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
                     subprocess.run(step2, capture_output=True, timeout=300)
                     if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                         shutil.copy2(no_subs, output_path)
                 else:
                     subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
                                     '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
-                                    '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', output_path],
+                                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path],
                                    capture_output=True, timeout=300)
 
             local_files.append(output_path)
