@@ -562,6 +562,27 @@ def get_energy_peaks(video_path: str, num_peaks: int = 8, window_seconds: float 
         return []
 
 
+def get_youtube_cookies_path() -> str | None:
+    """Load YouTube cookies from env vars if provided. Returns path to cookies file."""
+    import base64
+    # Option 1: path to existing Netscape cookies file
+    cookie_file = os.environ.get('YOUTUBE_COOKIES_FILE')
+    if cookie_file and os.path.isfile(cookie_file):
+        return cookie_file
+    # Option 2: base64-encoded Netscape cookies content
+    cookie_b64 = os.environ.get('YOUTUBE_COOKIES_B64')
+    if cookie_b64:
+        try:
+            content = base64.b64decode(cookie_b64).decode('utf-8', errors='replace')
+            tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+            tmp.write(content)
+            tmp.close()
+            return tmp.name
+        except Exception as e:
+            print(f"Failed to decode YOUTUBE_COOKIES_B64: {e}")
+    return None
+
+
 # ──────────────────────────────────────────────────────────────
 
 
@@ -587,6 +608,12 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     audio_path = f"downloads/{job_id}.mp3"
     local_files = [video_path, audio_path]
 
+    # Load YouTube cookies if provided via env vars
+    youtube_cookies_path = get_youtube_cookies_path()
+    if youtube_cookies_path:
+        local_files.append(youtube_cookies_path)
+        print(f"Using YouTube cookies: {youtube_cookies_path}")
+
     # Retry download with different strategies (clients that typically don't need PO tokens)
     strategies = [
         {},  # default
@@ -600,6 +627,10 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
         {'player_client': ['ios', 'android'], 'player_skip': ['webpage', 'configs']},
         {'player_client': ['web_creator', 'ios'], 'player_skip': ['webpage', 'configs']},
     ]
+    if youtube_cookies_path:
+        # With cookies the web client is often the most reliable
+        strategies.insert(0, {'player_client': ['web']})
+        strategies.insert(1, {'player_client': ['web', 'ios']})
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
         'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
@@ -654,6 +685,8 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
             }
             if cfg:
                 ydl_opts['extractor_args'] = {'youtube': cfg}
+            if youtube_cookies_path:
+                ydl_opts['cookies'] = youtube_cookies_path
             print(f"yt-dlp attempt {attempt+1} strategy={cfg} format={fmt}")
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
