@@ -83,8 +83,61 @@ def extract_youtube_video_id(url: str) -> str | None:
     return None
 
 
+def refresh_youtube_cookies_sync() -> bool:
+    """Use Playwright to refresh YouTube cookies. Called before download if cookies exist."""
+    return asyncio.run(refresh_youtube_cookies())
+
+async def refresh_youtube_cookies() -> bool:
+    """Use Playwright to refresh YouTube cookies from an existing session."""
+    cookie_b64 = os.environ.get('YOUTUBE_COOKIES_B64')
+    if not cookie_b64:
+        return False
+    try:
+        import base64 as _b64
+        cookies_content = _b64.b64decode(cookie_b64).decode('utf-8')
+        playwright_cookies = []
+        for line in cookies_content.split('\n'):
+            if line.startswith('#') or not line.strip():
+                continue
+            parts = line.split('\t')
+            if len(parts) >= 7:
+                playwright_cookies.append({
+                    'name': parts[5], 'value': parts[6],
+                    'domain': parts[0], 'path': parts[2],
+                    'secure': parts[3] == 'TRUE',
+                    'httpOnly': False,
+                })
+        if not playwright_cookies:
+            return False
+        from playwright.async_api import async_playwright
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-dev-shm-usage'])
+            context = await browser.new_context()
+            await context.add_cookies(playwright_cookies)
+            page = await context.new_page()
+            await page.goto('https://www.youtube.com', timeout=30000)
+            await page.wait_for_timeout(4000)
+            cookies = await context.cookies()
+            netscape_lines = ["# Netscape HTTP Cookie File", ""]
+            for c in cookies:
+                domain = c.get('domain', '')
+                secure = 'TRUE' if c.get('secure') else 'FALSE'
+                path = c.get('path', '/')
+                expiry = str(int(c.get('expires', 0))) if c.get('expires', -1) != -1 else '0'
+                name = c.get('name', '')
+                value = c.get('value', '')
+                netscape_lines.append(f"{domain}\t{'TRUE' if domain.startswith('.') else 'FALSE'}\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
+            with open('cookies.txt', 'w', encoding='utf-8') as f:
+                f.write('\n'.join(netscape_lines))
+            await browser.close()
+            print(f"Cookies auto-refreshed: {len(cookies)} cookies")
+            return True
+    except Exception as e:
+        print(f"Cookie auto-refresh failed (non-fatal): {e}")
+        return False
+
 async def download_with_playwright(url: str, output_path: str) -> bool:
-    """Download YouTube video using Playwright to extract player response from page JS."""
+    """Download YouTube video using Playwright with cookies for auth."""
     video_id = extract_youtube_video_id(url)
     if not video_id:
         print("Playwright: could not extract video ID")
@@ -93,41 +146,51 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
         print(f"Trying Playwright v2 for {url}")
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
-            # Use proxy if configured
-            proxy_url = os.environ.get('YOUTUBE_PROXY') or ''
-            launch_kwargs = {
-                'headless': True,
-                'args': ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-                         '--disable-blink-features=AutomationControlled']
-            }
-            if proxy_url:
-                launch_kwargs['proxy'] = {'server': proxy_url}
-            browser = await p.chromium.launch(**launch_kwargs)
+            browser = await p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'])
             context = await browser.new_context(
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
                 viewport={'width': 1920, 'height': 1080},
-                locale='en-US',
             )
+            # Load cookies from env var if available
+            cookie_b64 = os.environ.get('YOUTUBE_COOKIES_B64', '')
+            if cookie_b64:
+                try:
+                    import base64 as _b64
+                    cookies_content = _b64.b64decode(cookie_b64).decode('utf-8')
+                    pw_cookies = []
+                    for line in cookies_content.split('\n'):
+                        if line.startswith('#') or not line.strip():
+                            continue
+                        parts = line.split('\t')
+                        if len(parts) >= 7:
+                            pw_cookies.append({
+                                'name': parts[5], 'value': parts[6],
+                                'domain': parts[0], 'path': parts[2],
+                                'secure': parts[3] == 'TRUE',
+                                'httpOnly': False,
+                            })
+                    if pw_cookies:
+                        await context.add_cookies(pw_cookies)
+                        print(f"Playwright: loaded {len(pw_cookies)} cookies")
+                except Exception as e:
+                    print(f"Playwright cookie load failed: {e}")
+
             page = await context.new_page()
-            # Hide webdriver
             await page.add_init_script("""
                 Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
                 Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
                 window.chrome = { runtime: {} };
             """)
-
-            # Extract ytInitialPlayerResponse from page HTML (contains video format URLs)
+            # Try to load video page and extract player response
             video_url = None
             for target_url in [
                 f"https://www.youtube.com/watch?v={video_id}",
                 f"https://m.youtube.com/watch?v={video_id}",
-                f"https://www.youtube.com/embed/{video_id}",
             ]:
                 try:
                     await page.goto(target_url, wait_until='domcontentloaded', timeout=30000)
-                    # Wait a bit for JS to initialize
                     await page.wait_for_timeout(5000)
-                    # Click consent if present
+                    # Accept consent
                     try:
                         btn = await page.wait_for_selector('button[aria-label*="Accept"], form[action*="consent"] button', timeout=3000)
                         if btn:
@@ -135,7 +198,6 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                             await page.wait_for_timeout(2000)
                     except Exception:
                         pass
-                    # Extract ytInitialPlayerResponse from page
                     html = await page.content()
                     import re as _re
                     match = _re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});\s*var\s+', html, _re.DOTALL)
@@ -145,8 +207,7 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                         data = json.loads(match.group(1))
                         all_fmts = data.get('streamingData', {}).get('formats', []) + \
                                    data.get('streamingData', {}).get('adaptiveFormats', [])
-                        # Pick best downloadable mp4 format
-                        dl_fmts = [f for f in all_fmts if f.get('url') and 'mimeType' in str(f) and 'mp4' in str(f.get('mimeType', ''))]
+                        dl_fmts = [f for f in all_fmts if f.get('url') and 'mp4' in str(f.get('mimeType', ''))]
                         dl_fmts.sort(key=lambda f: f.get('height', 0) or 0, reverse=True)
                         if dl_fmts:
                             video_url = dl_fmts[0]['url']
@@ -155,10 +216,9 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                 except Exception as e:
                     print(f"Playwright page load failed for {target_url}: {e}")
                     continue
-
             await browser.close()
             if not video_url:
-                print("Playwright: no video URL extracted from page")
+                print("Playwright: no video URL extracted")
                 return False
             # Download
             with httpx.Client(timeout=300, follow_redirects=True) as client:
@@ -168,7 +228,7 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                         for chunk in stream.iter_bytes(chunk_size=8192):
                             f.write(chunk)
             if os.path.getsize(output_path) >= 1024:
-                print(f"Playwright download success: {output_path} ({os.path.getsize(output_path)} bytes)")
+                print(f"Playwright download success: {os.path.getsize(output_path)} bytes")
                 return True
     except Exception as e:
         print(f"Playwright fallback failed: {e}")
@@ -919,6 +979,9 @@ def process_video_background(job_id: str, user_id: str, url: str):
 
     try:
         # Retry download with different strategies
+        # Auto-refresh cookies if they exist (keeps session alive)
+        if os.environ.get('YOUTUBE_COOKIES_B64'):
+            refresh_youtube_cookies_sync()
         auth_cfg = get_youtube_auth_config()
         strategies = [
             # Clients that handle proxy best: tv (no PO token), web_creator
