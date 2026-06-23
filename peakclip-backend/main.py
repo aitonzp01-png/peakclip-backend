@@ -127,7 +127,8 @@ async def refresh_youtube_cookies() -> bool:
                 name = c.get('name', '')
                 value = c.get('value', '')
                 netscape_lines.append(f"{domain}\t{'TRUE' if domain.startswith('.') else 'FALSE'}\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
-            with open('cookies.txt', 'w', encoding='utf-8') as f:
+            cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
+            with open(cookie_path, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(netscape_lines))
             await browser.close()
             print(f"Cookies auto-refreshed: {len(cookies)} cookies")
@@ -151,12 +152,15 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
                 viewport={'width': 1920, 'height': 1080},
             )
-            # Load cookies from env var if available
-            cookie_b64 = os.environ.get('YOUTUBE_COOKIES_B64', '')
-            if cookie_b64:
+            # Load cookies from file if available (after auto-refresh)
+            cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
+            if not os.path.exists(cookie_path):
+                cookie_path = "cookies.txt"
+            if os.path.exists(cookie_path):
                 try:
+                    with open(cookie_path, 'r') as f:
+                        cookies_content = f.read()
                     import base64 as _b64
-                    cookies_content = _b64.b64decode(cookie_b64).decode('utf-8')
                     pw_cookies = []
                     for line in cookies_content.split('\n'):
                         if line.startswith('#') or not line.strip():
@@ -171,9 +175,11 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                             })
                     if pw_cookies:
                         await context.add_cookies(pw_cookies)
-                        print(f"Playwright: loaded {len(pw_cookies)} cookies")
+                        print(f"Playwright: loaded {len(pw_cookies)} cookies from {cookie_path}")
                 except Exception as e:
                     print(f"Playwright cookie load failed: {e}")
+            else:
+                print("Playwright: no cookie file found")
 
             page = await context.new_page()
             await page.add_init_script("""
