@@ -48,6 +48,76 @@ const useEditorStore = create((set, get) => ({
   aspectRatio: '9:16',
   keyboardHint: '',
 
+  // Undo/Redo history
+  _history: [],
+  _historyIndex: -1,
+  _maxHistory: 50,
+
+  _pushHistory: () => {
+    const state = get()
+    const snapshot = {
+      trimStart: state.trimStart,
+      trimEnd: state.trimEnd,
+      subtitleText: state.subtitleText,
+      subtitleStyle: state.subtitleStyle,
+      subtitlePosition: state.subtitlePosition,
+      fontSize: state.fontSize,
+      watermark: state.watermark,
+      watermarkPosition: state.watermarkPosition,
+      music: state.music,
+      musicVolume: state.musicVolume,
+      activeFilter: state.activeFilter,
+      selectedTransition: state.selectedTransition,
+      tracks: JSON.parse(JSON.stringify(state.tracks)),
+    }
+    const newHistory = state._history.slice(0, state._historyIndex + 1)
+    newHistory.push(snapshot)
+    if (newHistory.length > state._maxHistory) newHistory.shift()
+    set({ _history: newHistory, _historyIndex: newHistory.length - 1 })
+  },
+
+  undo: () => {
+    const state = get()
+    if (state._historyIndex <= 0) {
+      set({ keyboardHint: 'Nothing to undo' })
+      setTimeout(() => set({ keyboardHint: '' }), 1500)
+      return
+    }
+    const newIndex = state._historyIndex - 1
+    const snap = state._history[newIndex]
+    set({
+      _historyIndex: newIndex,
+      trimStart: snap.trimStart, trimEnd: snap.trimEnd,
+      subtitleText: snap.subtitleText, subtitleStyle: snap.subtitleStyle,
+      subtitlePosition: snap.subtitlePosition, fontSize: snap.fontSize,
+      watermark: snap.watermark, watermarkPosition: snap.watermarkPosition,
+      music: snap.music, musicVolume: snap.musicVolume,
+      activeFilter: snap.activeFilter, selectedTransition: snap.selectedTransition,
+      tracks: JSON.parse(JSON.stringify(snap.tracks)),
+    })
+  },
+
+  redo: () => {
+    const state = get()
+    if (state._historyIndex >= state._history.length - 1) {
+      set({ keyboardHint: 'Nothing to redo' })
+      setTimeout(() => set({ keyboardHint: '' }), 1500)
+      return
+    }
+    const newIndex = state._historyIndex + 1
+    const snap = state._history[newIndex]
+    set({
+      _historyIndex: newIndex,
+      trimStart: snap.trimStart, trimEnd: snap.trimEnd,
+      subtitleText: snap.subtitleText, subtitleStyle: snap.subtitleStyle,
+      subtitlePosition: snap.subtitlePosition, fontSize: snap.fontSize,
+      watermark: snap.watermark, watermarkPosition: snap.watermarkPosition,
+      music: snap.music, musicVolume: snap.musicVolume,
+      activeFilter: snap.activeFilter, selectedTransition: snap.selectedTransition,
+      tracks: JSON.parse(JSON.stringify(snap.tracks)),
+    })
+  },
+
   setClip: (clip) => set({ clip }),
   setClipId: (clipId) => set({ clipId }),
   setUser: (user) => set({ user }),
@@ -62,28 +132,55 @@ const useEditorStore = create((set, get) => ({
   setVideoLoading: (videoLoading) => set({ videoLoading }),
   setVideoLoaded: (videoLoaded) => set({ videoLoaded, videoLoading: false, videoError: null }),
 
-  setTrimStart: (trimStart) => set({ trimStart }),
-  setTrimEnd: (trimEnd) => set({ trimEnd }),
-  setSubtitleText: (subtitleText) => set((state) => {
-    const tracks = state.tracks.map(t => t.id === 'text' ? {
-      ...t, items: subtitleText ? [{ id: 'txt1', start: 0, end: 100, label: subtitleText.slice(0, 20) }] : []
-    } : t)
-    return { subtitleText, tracks }
-  }),
-  setSubtitleStyle: (subtitleStyle) => set({ subtitleStyle }),
+  setTrimStart: (trimStart) => {
+    get()._pushHistory()
+    set({ trimStart })
+  },
+  setTrimEnd: (trimEnd) => {
+    get()._pushHistory()
+    set({ trimEnd })
+  },
+  setSubtitleText: (subtitleText) => {
+    get()._pushHistory()
+    set((state) => {
+      const tracks = state.tracks.map(t => t.id === 'text' ? {
+        ...t, items: subtitleText ? [{ id: 'txt1', start: 0, end: 100, label: subtitleText.slice(0, 20) }] : []
+      } : t)
+      return { subtitleText, tracks }
+    })
+  },
+  setSubtitleStyle: (subtitleStyle) => {
+    get()._pushHistory()
+    set({ subtitleStyle })
+  },
   setSubtitlePosition: (subtitlePosition) => set({ subtitlePosition }),
-  setFontSize: (fontSize) => set({ fontSize }),
+  setFontSize: (fontSize) => {
+    get()._pushHistory()
+    set({ fontSize })
+  },
   setWatermark: (watermark) => set({ watermark }),
   setWatermarkPosition: (watermarkPosition) => set({ watermarkPosition }),
-  setMusic: (music) => set((state) => {
-    const tracks = state.tracks.map(t => t.id === 'music' ? {
-      ...t, items: music !== 'none' ? [{ id: 'm1', start: 0, end: 100, label: music }] : []
-    } : t)
-    return { music, tracks }
-  }),
-  setMusicVolume: (musicVolume) => set({ musicVolume }),
-  setActiveFilter: (activeFilter) => set({ activeFilter }),
-  setSelectedTransition: (selectedTransition) => set({ selectedTransition }),
+  setMusic: (music) => {
+    get()._pushHistory()
+    set((state) => {
+      const tracks = state.tracks.map(t => t.id === 'music' ? {
+        ...t, items: music !== 'none' ? [{ id: 'm1', start: 0, end: 100, label: music }] : []
+      } : t)
+      return { music, tracks }
+    })
+  },
+  setMusicVolume: (musicVolume) => {
+    get()._pushHistory()
+    set({ musicVolume })
+  },
+  setActiveFilter: (activeFilter) => {
+    get()._pushHistory()
+    set({ activeFilter })
+  },
+  setSelectedTransition: (selectedTransition) => {
+    get()._pushHistory()
+    set({ selectedTransition })
+  },
   setActiveTool: (activeTool) => set({ activeTool }),
   setActiveInspectorTab: (activeInspectorTab) => set({ activeInspectorTab }),
 

@@ -50,59 +50,90 @@ const aiTools = [
 export default function AIPanel() {
   const [processing, setProcessing] = useState(null)
   const store = useEditorStore()
+  const clip = store.clip
 
   const handleAIAction = async (toolId) => {
     setProcessing(toolId)
-    setTimeout(() => {
-      const s = useEditorStore.getState()
-      switch (toolId) {
-        case 'auto-captions':
-          s.setSubtitleText('AI-generated subtitles for maximum engagement')
-          s.setSubtitleStyle('bold-yellow')
-          s.showHint('Auto-captions applied')
-          break
-        case 'hook-detection':
+    const s = useEditorStore.getState()
+    const dur = clip?.duration || videoDuration(s) || 60
+
+    const scoreFromClip = () => {
+      if (clip?.hook_score != null) return `${clip.hook_score}/10`
+      if (clip?.viral_score != null) return `${clip.viral_score}%`
+      return null
+    }
+
+    switch (toolId) {
+      case 'auto-captions': {
+        const text = s.subtitleText || clip?.title || clip?.reason || 'Add your caption text'
+        s.setSubtitleText(text)
+        s.setSubtitleStyle('bold-yellow')
+        s.showHint('Captions ready — edit in Text panel')
+        break
+      }
+      case 'hook-detection': {
+        if (clip?.start_time != null && clip?.end_time != null && dur > 0) {
+          s.setTrimStart(Math.max(0, (clip.start_time / dur) * 100))
+          s.setTrimEnd(Math.min(100, (clip.end_time / dur) * 100))
+          s.showHint(`Best hook: ${clip.start_time}s–${clip.end_time}s`)
+        } else {
           s.setTrimStart(2)
           s.setTrimEnd(45)
-          s.showHint('Best hook detected at 0:02')
-          break
-        case 'remove-silence':
-          s.setTrimStart(5)
-          s.setTrimEnd(85)
-          s.showHint('Silence removed')
-          break
-        case 'auto-broll':
-          s.showHint('B-roll footage added')
-          break
-        case 'face-tracking':
-          s.showHint('Face tracking enabled')
-          break
-        case 'smart-crop':
-          s.showHint('Smart crop applied')
-          break
-        case 'color-enhance':
-          s.setActiveFilter('cinema')
-          s.showHint('Color enhanced')
-          break
-        case 'generate-shorts':
-          s.setTrimStart(0)
-          s.setTrimEnd(60)
-          s.showHint('Short generated')
-          break
-        case 'thumbnail-gen':
-          s.showHint('3 thumbnails generated')
-          break
-        case 'viral-score':
-          s.showHint('Viral Score: 87/100')
-          break
+          s.showHint('Hook detected at 0:02 (estimated)')
+        }
+        break
       }
-      try {
-        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/ai/${toolId}`, { method: 'POST' })
-          .catch(() => {})
-      } catch {}
-      setProcessing(null)
-    }, 2000)
+      case 'remove-silence':
+        s.setTrimStart(5)
+        s.setTrimEnd(85)
+        s.showHint('Silence removed')
+        break
+      case 'auto-broll':
+        s.showHint('B-roll footage added')
+        break
+      case 'face-tracking':
+        s.showHint('Face tracking enabled')
+        break
+      case 'smart-crop':
+        s.showHint('Smart crop applied')
+        break
+      case 'color-enhance':
+        s.setActiveFilter('cinema')
+        s.showHint('Color enhanced')
+        break
+      case 'generate-shorts': {
+        if (clip?.start_time != null && clip?.end_time != null && dur > 0) {
+          s.setTrimStart(Math.max(0, (clip.start_time / dur) * 100))
+          s.setTrimEnd(Math.min(100, (clip.end_time / dur) * 100))
+        } else {
+          s.setTrimStart(0)
+          s.setTrimEnd(Math.min(100, (60 / dur) * 100))
+        }
+        if (clip?.mood) s.setMusic(clip.mood)
+        s.showHint('Short generated from best moment')
+        break
+      }
+      case 'thumbnail-gen':
+        s.showHint('Thumbnail generated')
+        break
+      case 'viral-score': {
+        const score = scoreFromClip()
+        if (score) {
+          s.showHint(`Viral Score: ${score} ${clip?.reason ? '— ' + clip.reason.slice(0, 60) : ''}`)
+        } else {
+          s.showHint('Viral Score: run full analysis first')
+        }
+        break
+      }
+    }
+    setProcessing(null)
   }
+
+  const score = (() => {
+    if (clip?.hook_score != null) return `${clip.hook_score}/10`
+    if (clip?.viral_score != null) return `${clip.viral_score}%`
+    return null
+  })()
 
   return (
     <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -114,9 +145,20 @@ export default function AIPanel() {
           <span style={{ color: brand, display: 'flex' }}>{icons.sparkles}</span>
           <span style={{ fontSize: '11px', fontWeight: '600', color: brand, fontFamily: fonts.body }}>AI STUDIO</span>
         </div>
-        <div style={{ fontSize: '11px', color: textDim, lineHeight: '1.4', fontFamily: fonts.body }}>
-          Select an AI tool to enhance your clip
-        </div>
+        {score ? (
+          <div style={{ fontSize: '13px', fontWeight: '700', color: brand, fontFamily: fonts.mono, marginTop: '4px' }}>
+            Viral Score: {score}
+          </div>
+        ) : (
+          <div style={{ fontSize: '11px', color: textDim, lineHeight: '1.4', fontFamily: fonts.body }}>
+            Select an AI tool to enhance your clip
+          </div>
+        )}
+        {clip?.mood && (
+          <div style={{ fontSize: '10px', color: textDim, marginTop: '2px', fontFamily: fonts.body }}>
+            Mood: {clip.mood} {clip?.reason ? `— ${clip.reason.slice(0, 80)}` : ''}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
@@ -150,4 +192,10 @@ export default function AIPanel() {
       </div>
     </div>
   )
+}
+
+function videoDuration(store) {
+  const video = document.querySelector('video')
+  if (video && video.duration && isFinite(video.duration)) return video.duration
+  return null
 }

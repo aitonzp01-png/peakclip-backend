@@ -12,6 +12,7 @@ export default function EditorTopBar({ videoRef }) {
     aspectRatio, user,
     setVolume, setPlaybackSpeed,
     setAspectRatio, setShowExportModal, setKeyboardHint, showHint,
+    undo, redo,
   } = useEditorStore()
 
   const [editingTitle, setEditingTitle] = useState(false)
@@ -170,11 +171,11 @@ export default function EditorTopBar({ videoRef }) {
         <button style={{ background: 'none', border: 'none', color: textDim, cursor: 'pointer', padding: '4px', display: 'flex', borderRadius: '6px' }}
           onMouseEnter={e => e.currentTarget.style.background = bgSecondary}
           onMouseLeave={e => e.currentTarget.style.background = 'none'}
-          onClick={() => showHint('Undo (Ctrl+Z)')}>{icons.undo}</button>
+          onClick={() => undo()}>{icons.undo}</button>
         <button style={{ background: 'none', border: 'none', color: textDim, cursor: 'pointer', padding: '4px', display: 'flex', borderRadius: '6px' }}
           onMouseEnter={e => e.currentTarget.style.background = bgSecondary}
           onMouseLeave={e => e.currentTarget.style.background = 'none'}
-          onClick={() => showHint('Redo (Ctrl+Shift+Z)')}>{icons.redo}</button>
+          onClick={() => redo()}>{icons.redo}</button>
 
         <div style={{ width: '1px', height: '24px', background: borderSoft }} />
 

@@ -112,11 +112,8 @@ export default function EditorPage() {
           setClipId(realId)
           store.setSubtitleText(title)
         } else {
-          store.setSubtitleText('Demo clip loaded')
+          store.setSubtitleText('New project — add media to start')
         }
-        store.setSubtitleStyle('bold-yellow')
-        store.setMusic('chill')
-        store.setMusicVolume(30)
         setLoading(false)
         return
       }
@@ -134,33 +131,24 @@ export default function EditorPage() {
         store.setSubtitleText(title)
       }
 
-      // Auto-generate AI subtitles after clip loads
-      const t1 = setTimeout(() => {
-        store.setSubtitleText('AI subtitles generated automatically')
-        store.setSubtitleStyle('bold-yellow')
-        store.showHint('Auto-captions generated')
-      }, 1200)
+      // Apply real clip data from backend processing
+      const dur = Number(data?.duration) || 60
+      if (data?.start_time != null && data?.end_time != null && dur > 0) {
+        store.setTrimStart(Math.max(0, (Number(data.start_time) / dur) * 100))
+        store.setTrimEnd(Math.min(100, (Number(data.end_time) / dur) * 100))
+      } else {
+        store.setTrimStart(0)
+        store.setTrimEnd(100)
+      }
 
-      // Auto-set background music
-      const t2 = setTimeout(() => {
-        store.setMusic('chill')
+      // Set music based on clip mood if available
+      if (data?.mood) {
+        store.setMusic(data.mood)
         store.setMusicVolume(30)
-      }, 2000)
-
-      // Auto-set trim handles to viral moment boundaries
-      const t3 = setTimeout(() => {
-        if (data?.start_time != null && data?.end_time != null && data?.duration) {
-          const dur = Number(data.duration)
-          if (dur > 0) {
-            store.setTrimStart((Number(data.start_time) / dur) * 100)
-            store.setTrimEnd((Number(data.end_time) / dur) * 100)
-          }
-        } else {
-          store.setTrimStart(0)
-          store.setTrimEnd(100)
-        }
-      }, 2800)
-      timeoutsRef.current.push(t1, t2, t3)
+      } else {
+        store.setMusic('none')
+        store.setMusicVolume(30)
+      }
 
     } catch (err) {
       console.error('Failed to load clip:', err)
@@ -192,6 +180,16 @@ export default function EditorPage() {
     const store = useEditorStore.getState()
 
     switch (e.key) {
+      case 'z':
+      case 'Z':
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault()
+          const store = useEditorStore.getState()
+          if (e.shiftKey) store.redo()
+          else store.undo()
+          return
+        }
+        break
       case ' ':
         e.preventDefault()
         if (videoRef.current) {

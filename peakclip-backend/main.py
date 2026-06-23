@@ -1056,21 +1056,53 @@ def format_srt_time(seconds: float) -> str:
 
 
 def generate_srt_subtitle(words, clip_start, clip_end, output_path):
-    """Generate SRT word-by-word subtitles with timestamps relative to clip_start."""
+    """Generate SRT subtitles grouped into readable phrases with timestamps relative to clip_start."""
     clip_words = [w for w in words if w['start'] >= clip_start and w['end'] <= clip_end]
-    lines = []
-    idx = 1
+    if not clip_words:
+        return
+
+    # Group words into phrases (3-7 words each, break on punctuation or max length)
+    phrases = []
+    current_phrase = []
     for w in clip_words:
         word_text = w['word'].strip()
         if not word_text:
             continue
-        rel_start = max(0.0, w['start'] - clip_start)
-        rel_end = w['end'] - clip_start
+        current_phrase.append(w)
+        # Break phrase on sentence-ending punctuation or max 7 words
+        if len(current_phrase) >= 7 or word_text.endswith(('.', '!', '?', ',')):
+            phrases.append(current_phrase)
+            current_phrase = []
+    if current_phrase:
+        phrases.append(current_phrase)
+
+    # Merge very short phrases (less than 3 words) with the next one
+    merged = []
+    i = 0
+    while i < len(phrases):
+        group = phrases[i]
+        while len(group) < 3 and i + 1 < len(phrases):
+            i += 1
+            group.extend(phrases[i])
+        merged.append(group)
+        i += 1
+
+    lines = []
+    idx = 1
+    for phrase in merged:
+        phrase_text = ' '.join(w['word'] for w in phrase)
+        if not phrase_text.strip():
+            continue
+        rel_start = max(0.0, phrase[0]['start'] - clip_start)
+        rel_end = phrase[-1]['end'] - clip_start
+        if rel_end <= rel_start:
+            rel_end = rel_start + 0.5
         lines.append(str(idx))
         lines.append(f"{format_srt_time(rel_start)} --> {format_srt_time(rel_end)}")
-        lines.append(word_text)
+        lines.append(phrase_text)
         lines.append("")
         idx += 1
+
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("\n".join(lines))
 
@@ -1325,14 +1357,23 @@ Transcript:
 RULES:
 - Each clip MUST be 30-60 seconds long (ideal for shorts).
 - Prioritize: strong hooks in first 3s, emotional peaks, surprising twists, humor, high-energy moments, or controversy.
+- NEVER reuse the same timestamp range for multiple clips.
 - Classify mood as: epic, hype, chill, funny, emotional, suspense.
-- Include a hook_score from 1-10 ranking virality potential.
+
+HOOK SCORE RUBRIC (1-10):
+- 1-3: Low energy, no clear hook, would not retain scrollers.
+- 4-5: Decent moment but slow start or weak payoff.
+- 6-7: Good hook, solid engagement, decent retention potential.
+- 8-9: Strong hook in first 3s, emotional/surprising payoff, very rewatchable.
+- 10: Perfect viral hook, instant emotional impact, would explode on FYP.
+
+VARY THE SCORES: The 3 clips should have clearly different scores reflecting their relative virality. Not all clips are equally viral.
 
 Return JSON with this exact format:
 {{"clips": [
-  {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype", "hook_score": 9}},
-  {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
-  {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
+  {{"start": 10.5, "end": 45.0, "title": "Short punchy title", "reason": "Specific reason this is viral — what emotion, twist, or hook makes it work", "mood": "hype", "hook_score": 8}},
+  {{"start": 120.0, "end": 155.0, "title": "Another title", "reason": "Another specific reason", "mood": "funny", "hook_score": 6}},
+  {{"start": 200.0, "end": 235.0, "title": "Third title", "reason": "Third specific reason", "mood": "emotional", "hook_score": 4}}
 ]}}"""
             }]
         )
@@ -1844,14 +1885,23 @@ Transcript:
 RULES:
 - Each clip MUST be 30-60 seconds long (ideal for shorts).
 - Prioritize: strong hooks in first 3s, emotional peaks, surprising twists, humor, high-energy moments, or controversy.
+- NEVER reuse the same timestamp range for multiple clips.
 - Classify mood as: epic, hype, chill, funny, emotional, suspense.
-- Include a hook_score from 1-10 ranking virality potential.
+
+HOOK SCORE RUBRIC (1-10):
+- 1-3: Low energy, no clear hook, would not retain scrollers.
+- 4-5: Decent moment but slow start or weak payoff.
+- 6-7: Good hook, solid engagement, decent retention potential.
+- 8-9: Strong hook in first 3s, emotional/surprising payoff, very rewatchable.
+- 10: Perfect viral hook, instant emotional impact, would explode on FYP.
+
+VARY THE SCORES: The 3 clips should have clearly different scores reflecting their relative virality. Not all clips are equally viral.
 
 Return JSON with this exact format:
 {{"clips": [
-  {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype", "hook_score": 9}},
-  {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
-  {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
+  {{"start": 10.5, "end": 45.0, "title": "Short punchy title", "reason": "Specific reason this is viral", "mood": "hype", "hook_score": 8}},
+  {{"start": 120.0, "end": 155.0, "title": "Another title", "reason": "Another specific reason", "mood": "funny", "hook_score": 6}},
+  {{"start": 200.0, "end": 235.0, "title": "Third title", "reason": "Third specific reason", "mood": "emotional", "hook_score": 4}}
 ]}}"""
         }]
     )

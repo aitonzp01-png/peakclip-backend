@@ -7,7 +7,7 @@ export default function EditorTimeline({ videoRef }) {
   const timelineRef = useRef(null)
   const {
     tracks, selectedTrackId, playheadPos, trimStart, trimEnd,
-    timelineZoom, isPlaying, setPlayheadPos, setSelectedTrackId,
+    timelineZoom, isPlaying, duration, setPlayheadPos, setSelectedTrackId,
     setTimelineZoom, setIsPlaying,
   } = useEditorStore()
 
@@ -44,11 +44,17 @@ export default function EditorTimeline({ videoRef }) {
 
   const timeMarkers = useMemo(() => {
     const markers = []
-    for (let i = 0; i <= 20; i++) {
-      markers.push({ pos: i * 5, label: `0:${(i * 3).toString().padStart(2, '0')}` })
+    const totalSecs = duration || 60
+    const steps = Math.min(20, Math.ceil(totalSecs / 3))
+    const stepSec = totalSecs / steps
+    for (let i = 0; i <= steps; i++) {
+      const secs = Math.round(i * stepSec)
+      const min = Math.floor(secs / 60)
+      const sec = secs % 60
+      markers.push({ pos: (i / steps) * 100, label: `${min}:${sec.toString().padStart(2, '0')}` })
     }
     return markers
-  }, [])
+  }, [duration])
 
   return (
     <div className="editor-timeline" style={{

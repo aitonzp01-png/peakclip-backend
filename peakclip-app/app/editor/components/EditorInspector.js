@@ -22,8 +22,13 @@ export default function EditorInspector({ videoRef }) {
     watermark, setWatermark, watermarkPosition, setWatermarkPosition,
     music, setMusic, musicVolume, setMusicVolume,
     activeFilter, setActiveFilter, selectedTransition, setSelectedTransition,
-    playbackSpeed, setPlaybackSpeed, tracks,
+    playbackSpeed, setPlaybackSpeed, tracks, duration,
   } = useEditorStore()
+
+  const clipDurationSecs = () => {
+    const dur = duration || 60
+    return Math.round(((trimEnd - trimStart) / 100) * dur)
+  }
 
   const renderEditPanel = () => {
     switch (activeTool) {
@@ -57,7 +62,7 @@ export default function EditorInspector({ videoRef }) {
           background: bgSecondary, borderRadius: '8px', padding: '10px',
           fontSize: '11px', color: textDim, textAlign: 'center',
         }}>
-          Duration: <span style={{ color: brand, fontWeight: '700' }}>{Math.round((trimEnd - trimStart) * 0.45)}s</span>
+          Duration: <span style={{ color: brand, fontWeight: '700' }}>{clipDurationSecs()}s</span>
         </div>
       </Section>
       <Section label="Quick Presets">
