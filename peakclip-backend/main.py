@@ -869,9 +869,9 @@ def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, 
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
     styles = [
-        f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
-        f"subtitles={srt_path_ff}:force_style='Fontname=Arial,Fontsize=52,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
-        f"subtitles={srt_path_ff}:force_style='Fontname=FreeSans,Fontsize=52,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
+        f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=36,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=20'",
+        f"subtitles={srt_path_ff}:force_style='Fontname=Arial,Fontsize=36,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=20'",
+        f"subtitles={srt_path_ff}:force_style='Fontname=FreeSans,Fontsize=36,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=20'",
         f"subtitles={srt_path_ff}",
     ]
     for style in styles:
@@ -1694,7 +1694,7 @@ Return JSON with this exact format:
                 # Step 2: burn subtitles onto the rendered video
                 srt_path_ff = srt_path.replace('\\', '/')
                 step2 = ['ffmpeg', '-i', no_subs,
-                         '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
+                         '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=36,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=20'",
                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
                          '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
                 subprocess.run(step2, capture_output=True, timeout=300)
