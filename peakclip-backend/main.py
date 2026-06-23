@@ -323,12 +323,12 @@ def download_with_cobalt(url: str, output_path: str) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    # Try to update yt-dlp to latest nightly/master version first, then stable
+    # Try to update yt-dlp to latest nightly build (updated daily, has newest YouTube fixes)
     try:
         result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall',
-                                 'yt-dlp[default] @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz'],
+                                 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt_dlp-nightly-py3-none-any.whl'],
                                 capture_output=True, text=True, timeout=180)
-        print(f"yt-dlp master install: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
+        print(f"yt-dlp nightly install: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
         if result.returncode != 0:
             result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'],
                                     capture_output=True, text=True, timeout=120)
