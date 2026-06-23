@@ -185,7 +185,17 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             await page.add_init_script("""
                 Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
                 Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-                window.chrome = { runtime: {} };
+                Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+                Object.defineProperty(navigator, 'hardwareConcurrency', {get: () => 8});
+                Object.defineProperty(navigator, 'deviceMemory', {get: () => 8});
+                Object.defineProperty(navigator, 'maxTouchPoints', {get: () => 0});
+                window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                );
             """)
             # Try to load video page and extract player response
             video_url = None
@@ -194,16 +204,26 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                 f"https://m.youtube.com/watch?v={video_id}",
             ]:
                 try:
-                    await page.goto(target_url, wait_until='domcontentloaded', timeout=30000)
-                    await page.wait_for_timeout(5000)
-                    # Accept consent
-                    try:
-                        btn = await page.wait_for_selector('button[aria-label*="Accept"], form[action*="consent"] button', timeout=3000)
-                        if btn:
-                            await btn.click()
-                            await page.wait_for_timeout(2000)
-                    except Exception:
-                        pass
+                    await page.goto(target_url, wait_until='networkidle', timeout=30000)
+                    await page.wait_for_timeout(3000)
+                    # Handle YouTube consent / sign-in / age gate overlays
+                    for selector in [
+                        'button[aria-label*="Accept"]',
+                        'form[action*="consent"] button',
+                        'ytd-button-renderer button',
+                        'tp-yt-paper-dialog button',
+                        'button:has-text("Accept all")',
+                        'button:has-text("I agree")',
+                        'button:has-text("Reject all")',
+                        'button:has-text("No thanks")',
+                    ]:
+                        try:
+                            btn = await page.wait_for_selector(selector, timeout=2000)
+                            if btn:
+                                await btn.click()
+                                await page.wait_for_timeout(2000)
+                        except Exception:
+                            pass
                     html = await page.content()
                     import re as _re
                     match = _re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});\s*var\s+', html, _re.DOTALL)
@@ -219,6 +239,22 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                             video_url = dl_fmts[0]['url']
                             print(f"Playwright extracted URL: {video_url[:80]}...")
                             break
+                        else:
+                            print("Playwright: ytInitialPlayerResponse found but no mp4 formats")
+                    else:
+                        # Debug: print page info to diagnose what YouTube is serving
+                        page_title = await page.title()
+                        body_snippet = html[:500]
+                        print(f"Playwright page title: '{page_title}'")
+                        # Check for known block pages
+                        if 'sign in' in html.lower() and 'confirm you' in html.lower():
+                            print("Playwright: YouTube serving sign-in challenge page")
+                        elif 'unavailable' in html.lower():
+                            print("Playwright: video unavailable")
+                        elif 'age' in html.lower() and 'restrict' in html.lower():
+                            print("Playwright: age-restricted video")
+                        else:
+                            print(f"Playwright: no ytInitialPlayerResponse in HTML ({len(html)} bytes html)")
                 except Exception as e:
                     print(f"Playwright page load failed for {target_url}: {e}")
                     continue
@@ -263,15 +299,36 @@ def download_with_invidious(url: str, output_path: str) -> bool:
         print("Invidious fallback: could not extract video ID")
         return False
 
-    invidious_instances = [
-        "https://inv.nadeko.net",
-        "https://invidious.fdn.fr",
-        "https://inv.tux.pizza",
-        "https://yewtu.be",
-        "https://invidious.perennialte.ch",
-        "https://vid.puffyan.us",
-        "https://yt.artemislena.eu",
-    ]
+    invidious_instances = []
+
+    # Try fetching the official Invidious instance list first
+    try:
+        with httpx.Client(timeout=15, follow_redirects=True) as fc:
+            r = fc.get("https://api.invidious.io/instances.json")
+            if r.status_code == 200:
+                for inst in r.json():
+                    if isinstance(inst, list) and len(inst) >= 2:
+                        monitor = inst[1]
+                        if monitor.get("type") == "https" and monitor.get("api") and not monitor.get("broken"):
+                            uri = monitor.get("uri", "")
+                            if uri and uri.startswith("https://"):
+                                invidious_instances.append(uri)
+                print(f"Invidious: fetched {len(invidious_instances)} instances from official list")
+    except Exception as e:
+        print(f"Invidious: could not fetch official list: {e}")
+
+    # Fallback static list
+    if not invidious_instances:
+        invidious_instances = [
+            "https://inv.nadeko.net",
+            "https://yewtu.be",
+            "https://invidious.fdn.fr",
+            "https://inv.tux.pizza",
+            "https://invidious.perennialte.ch",
+            "https://vid.puffyan.us",
+            "https://invidious.nerdvpn.de",
+            "https://yt.artemislena.eu",
+        ]
 
     with httpx.Client(timeout=60, follow_redirects=True) as client:
         for base in invidious_instances:
@@ -317,21 +374,39 @@ def download_with_invidious(url: str, output_path: str) -> bool:
 
 
 def download_with_piped(url: str, output_path: str) -> bool:
-    """Fallback downloader using Piped/Invidious instances for YouTube."""
+    """Fallback downloader using Piped instances for YouTube."""
     video_id = extract_youtube_video_id(url)
     if not video_id:
         print("Piped fallback: could not extract video ID")
         return False
 
-    piped_instances = [
-        "https://pipedapi.kavin.rocks",
-        "https://pipedapi.moomoo.me",
-        "https://pipedapi.adminforge.de",
-        "https://pipedapi.ducks.party",
-        "https://pipedapi.lunar.icu",
-        "https://pipedapi.tokhmi.xyz",
-        "https://pipedapi.syncpundit.io",
-    ]
+    piped_instances = []
+
+    # Try fetching the official Piped instance list first
+    try:
+        with httpx.Client(timeout=15, follow_redirects=True) as fc:
+            r = fc.get("https://piped-instances.kavin.rocks/")
+            if r.status_code == 200:
+                for inst in r.json():
+                    api_url = inst.get("api_url", "")
+                    if api_url and api_url.startswith("https://"):
+                        piped_instances.append(api_url)
+                piped_instances.sort(key=lambda u: 0 if "kavin.rocks" in u else 1)  # prioritize kavin
+                print(f"Piped: fetched {len(piped_instances)} instances from official list")
+    except Exception as e:
+        print(f"Piped: could not fetch official list: {e}")
+
+    # Fallback static list
+    if not piped_instances:
+        piped_instances = [
+            "https://pipedapi.kavin.rocks",
+            "https://pipedapi.moomoo.me",
+            "https://pipedapi.adminforge.de",
+            "https://pipedapi.ducks.party",
+            "https://pipedapi.lunar.icu",
+            "https://pipedapi.tokhmi.xyz",
+            "https://pipedapi.syncpundit.io",
+        ]
 
     with httpx.Client(timeout=60, follow_redirects=True) as client:
         for base in piped_instances:
