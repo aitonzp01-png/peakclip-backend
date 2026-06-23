@@ -1531,16 +1531,47 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
     output_path = f"outputs/{output_filename}"
     local_files = []
 
-    validate_video_url(req.video_url)
+    # Determine source: use processed clip from Supabase if available, otherwise download
+    source_path = None
 
-    source_path = f"downloads/{job_id}_source.mp4"
-    subprocess.run([
-        'ffmpeg', '-i', req.video_url, '-c', 'copy', source_path, '-y'
-    ], capture_output=True)
+    # 1) Try getting the clip's processed video from Supabase Storage
+    try:
+        supabase_url = supabase.table("clips").select("url").eq("id", req.clip_id).eq("user_id", user_id).execute()
+        clip_data = supabase_url.data
+        if clip_data and clip_data[0].get("url"):
+            stored_url = clip_data[0]["url"]
+            source_path = f"downloads/{job_id}_source.mp4"
+            r = httpx.get(stored_url, timeout=120)
+            if r.status_code == 200:
+                with open(source_path, "wb") as f:
+                    f.write(r.content)
+                print(f"Export: using stored clip from Supabase ({os.path.getsize(source_path)} bytes)")
+            else:
+                source_path = None
+    except Exception:
+        source_path = None
 
-    if not os.path.exists(source_path):
-        raise HTTPException(status_code=400, detail="Could not download source video")
-    local_files.append(source_path)
+    # 2) Fallback: download from the provided URL (works for direct MP4 URLs)
+    if not source_path:
+        video_url = req.video_url.strip()
+        if not video_url:
+            raise HTTPException(status_code=400, detail="No video URL provided and no processed clip found. Please process the video first.")
+
+        is_yt = extract_youtube_video_id(video_url)
+        if is_yt:
+            raise HTTPException(
+                status_code=400,
+                detail="YouTube URL not yet processed. Submit this video via Dashboard first so it can be downloaded and analyzed."
+            )
+
+        source_path = f"downloads/{job_id}_source.mp4"
+        result = subprocess.run([
+            'ffmpeg', '-i', video_url, '-c', 'copy', source_path, '-y'
+        ], capture_output=True, text=True)
+        if not os.path.exists(source_path) or os.path.getsize(source_path) < 1024:
+            err_msg = result.stderr.strip().split('\n')[-5:] if result.stderr else ["unknown ffmpeg error"]
+            raise HTTPException(status_code=400, detail=f"Could not download source video: {' '.join(err_msg)[:300]}")
+        local_files.append(source_path)
 
     probe = subprocess.run([
         'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
@@ -1684,7 +1715,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            raise HTTPException(status_code=400, detail=f"Export error: {result.stderr[:500]}")
+            err_lines = result.stderr.strip().split('\n')[-10:] if result.stderr else ["unknown ffmpeg error"]
+            raise HTTPException(status_code=400, detail=f"Export error: {' | '.join(err_lines)[:500]}")
         local_files.append(output_path)
 
         # Upload to Supabase Storage
