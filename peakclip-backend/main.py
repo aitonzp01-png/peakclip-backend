@@ -84,32 +84,29 @@ def extract_youtube_video_id(url: str) -> str | None:
 
 
 async def download_with_playwright(url: str, output_path: str) -> bool:
-    """Fallback downloader using Playwright browser automation for YouTube."""
+    """Download YouTube video using Playwright to extract player response from page JS."""
     video_id = extract_youtube_video_id(url)
     if not video_id:
-        print("Playwright fallback: could not extract video ID")
+        print("Playwright: could not extract video ID")
         return False
     try:
-        print(f"Trying Playwright browser fallback for {url}")
+        print(f"Trying Playwright v2 for {url}")
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=[
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-blink-features=AutomationControlled',
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process',
-                ]
-            )
+            # Use proxy if configured
+            proxy_url = os.environ.get('YOUTUBE_PROXY') or ''
+            launch_kwargs = {
+                'headless': True,
+                'args': ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+                         '--disable-blink-features=AutomationControlled']
+            }
+            if proxy_url:
+                launch_kwargs['proxy'] = {'server': proxy_url}
+            browser = await p.chromium.launch(**launch_kwargs)
             context = await browser.new_context(
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
                 viewport={'width': 1920, 'height': 1080},
                 locale='en-US',
-                timezone_id='America/New_York',
-                color_scheme='light',
             )
             page = await context.new_page()
             # Hide webdriver
@@ -118,44 +115,52 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                 Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
                 window.chrome = { runtime: {} };
             """)
-            # Intercept video network requests
+
+            # Extract ytInitialPlayerResponse from page HTML (contains video format URLs)
             video_url = None
-            async def handle_route(route, request):
-                nonlocal video_url
-                req_url = request.url
-                if 'googlevideo.com' in req_url and ('videoplayback' in req_url or 'itag' in req_url):
-                    if video_url is None or 'range=' not in req_url:
-                        video_url = req_url
-                await route.continue_()
-            await page.route("**/*", handle_route)
-            # Try embed page first (lighter, less bot detection)
-            try:
-                await page.goto(f"https://www.youtube.com/embed/{video_id}", wait_until="networkidle", timeout=60000)
-            except Exception:
-                # Fall back to mobile watch page
+            for target_url in [
+                f"https://www.youtube.com/watch?v={video_id}",
+                f"https://m.youtube.com/watch?v={video_id}",
+                f"https://www.youtube.com/embed/{video_id}",
+            ]:
                 try:
-                    await page.goto(f"https://m.youtube.com/watch?v={video_id}", wait_until="domcontentloaded", timeout=60000)
-                except Exception:
-                    await page.goto(f"https://www.youtube.com/watch?v={video_id}", wait_until="domcontentloaded", timeout=60000)
-            # Accept consent if present
-            try:
-                consent_button = await page.wait_for_selector('button[aria-label*="Accept"], form[action*="consent"] button', timeout=8000)
-                if consent_button:
-                    await consent_button.click()
-                    await page.wait_for_timeout(3000)
-            except Exception:
-                pass
-            # Try to start playback to trigger video requests
-            try:
-                await page.click('button.ytp-large-play-button, .ytp-button[aria-label="Play"]', timeout=8000)
-                await page.wait_for_timeout(5000)
-            except Exception:
-                await page.wait_for_timeout(12000)
+                    await page.goto(target_url, wait_until='domcontentloaded', timeout=30000)
+                    # Wait a bit for JS to initialize
+                    await page.wait_for_timeout(5000)
+                    # Click consent if present
+                    try:
+                        btn = await page.wait_for_selector('button[aria-label*="Accept"], form[action*="consent"] button', timeout=3000)
+                        if btn:
+                            await btn.click()
+                            await page.wait_for_timeout(2000)
+                    except Exception:
+                        pass
+                    # Extract ytInitialPlayerResponse from page
+                    html = await page.content()
+                    import re as _re
+                    match = _re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});\s*var\s+', html, _re.DOTALL)
+                    if not match:
+                        match = _re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});', html)
+                    if match:
+                        data = json.loads(match.group(1))
+                        all_fmts = data.get('streamingData', {}).get('formats', []) + \
+                                   data.get('streamingData', {}).get('adaptiveFormats', [])
+                        # Pick best downloadable mp4 format
+                        dl_fmts = [f for f in all_fmts if f.get('url') and 'mimeType' in str(f) and 'mp4' in str(f.get('mimeType', ''))]
+                        dl_fmts.sort(key=lambda f: f.get('height', 0) or 0, reverse=True)
+                        if dl_fmts:
+                            video_url = dl_fmts[0]['url']
+                            print(f"Playwright extracted URL: {video_url[:80]}...")
+                            break
+                except Exception as e:
+                    print(f"Playwright page load failed for {target_url}: {e}")
+                    continue
+
             await browser.close()
             if not video_url:
-                print("Playwright: no video URL intercepted")
+                print("Playwright: no video URL extracted from page")
                 return False
-            # Download the intercepted video URL
+            # Download
             with httpx.Client(timeout=300, follow_redirects=True) as client:
                 with client.stream("GET", video_url, timeout=300) as stream:
                     stream.raise_for_status()
