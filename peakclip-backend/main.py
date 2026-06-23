@@ -228,7 +228,15 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                 return False
             # Download using Playwright's own request context (same cookies/headers as browser)
             print(f"Playwright downloading via browser context...")
-            response = await page.request.get(video_url, timeout=600000)
+            response = await page.request.get(video_url, timeout=600000, headers={
+                'Referer': 'https://www.youtube.com/',
+                'Origin': 'https://www.youtube.com',
+                'Range': 'bytes=0-',
+                'Accept': '*/*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'cross-site',
+            })
             if response.ok:
                 body = await response.body()
                 with open(output_path, "wb") as f:
@@ -256,12 +264,13 @@ def download_with_invidious(url: str, output_path: str) -> bool:
         return False
 
     invidious_instances = [
-        "https://iv.nboeck.de",
-        "https://iv.datura.network",
-        "https://iv.nboeck.de",
-        "https://iv.melmac.space",
+        "https://inv.nadeko.net",
+        "https://invidious.fdn.fr",
+        "https://inv.tux.pizza",
+        "https://yewtu.be",
+        "https://invidious.perennialte.ch",
+        "https://vid.puffyan.us",
         "https://yt.artemislena.eu",
-        "https://iv.datura.network",
     ]
 
     with httpx.Client(timeout=60, follow_redirects=True) as client:
@@ -316,10 +325,12 @@ def download_with_piped(url: str, output_path: str) -> bool:
 
     piped_instances = [
         "https://pipedapi.kavin.rocks",
-        "https://api.piped.projecthipbone.dev",
         "https://pipedapi.moomoo.me",
-        "https://api.piped.privacydev.net",
         "https://pipedapi.adminforge.de",
+        "https://pipedapi.ducks.party",
+        "https://pipedapi.lunar.icu",
+        "https://pipedapi.tokhmi.xyz",
+        "https://pipedapi.syncpundit.io",
     ]
 
     with httpx.Client(timeout=60, follow_redirects=True) as client:
@@ -366,24 +377,27 @@ def download_with_cobalt(url: str, output_path: str) -> bool:
     try:
         print(f"Trying cobalt.tools fallback for {url}")
         with httpx.Client(timeout=120) as client:
+            # Try current cobalt API (v10+) with updated parameters
             r = client.post(
-                "https://api.cobalt.tools/api/json",
+                "https://api.cobalt.tools/",
                 headers={"Accept": "application/json", "Content-Type": "application/json"},
-                json={"url": url, "downloadMode": "audio+video", "videoQuality": "720", "filenamePattern": "classic"}
+                json={"url": url}
             )
+            if r.status_code == 400 and "shut down" in r.text.lower():
+                print(f"cobalt.tools: public API unavailable ({r.status_code})")
+                return False
             if r.status_code != 200:
                 print(f"cobalt.tools error: {r.status_code} {r.text[:200]}")
                 return False
             data = r.json()
-            print(f"cobalt.tools response: {data.get('status')}")
-            if data.get("status") == "error":
-                print(f"cobalt.tools error: {data.get('text')}")
+            status = data.get("status", "")
+            if status == "error":
+                print(f"cobalt.tools error: {data.get('text', 'unknown error')}")
                 return False
             download_url = data.get("url")
             if not download_url:
                 print("cobalt.tools no download url")
                 return False
-            # Download the file
             with client.stream("GET", download_url, timeout=300) as stream:
                 stream.raise_for_status()
                 with open(output_path, "wb") as f:
@@ -965,159 +979,144 @@ def process_video_background(job_id: str, user_id: str, url: str):
     local_files = [video_path, audio_path]
 
     try:
-        # Retry download with different strategies
         # Auto-refresh cookies if they exist (keeps session alive)
         if os.environ.get('YOUTUBE_COOKIES_B64'):
             refresh_youtube_cookies_sync()
         auth_cfg = get_youtube_auth_config()
-        strategies = [
-            # Clients that handle proxy best: tv (no PO token), web_creator
-            {'player_client': ['tv']},
-            {'player_client': ['web_creator']},
-            # No PO token needed
-            {'player_client': ['tv_embedded']},
-            {'player_client': ['web_embedded']},
-            {'player_client': ['android_vr']},
-            {'player_client': ['mweb']},
-            {},
-            # Other clients
-            {'player_client': ['ios']},
-            {'player_client': ['android']},
-            {'player_client': ['web']},
-            {'player_client': ['web_music'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['android_music'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['android_producer'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
-            {'player_client': ['android'], 'include_dash_mpd': False, 'skip': ['webpage', 'dash']},
-            {'player_client': ['web'], 'include_dash_mpd': False},
-            {'player_client': ['android', 'web', 'ios']},
-            {'player_client': ['android', 'tv'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage']},
-            {'player_client': ['web'], 'player_skip': ['webpage', 'configs', 'js'], 'include_incomplete_formats': True},
-            {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
-            {'player_client': ['ios'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
-            {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
-        ]
-        impersonate_profiles = [
-            None,
-            'chrome',
-            'safari',
-            'chrome-120',
-            'chrome-119',
-            'safari-17',
-        ]
-        user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
-            'Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-            'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
-        ]
-        format_fallbacks = [
-            'worst[ext=mp4]/worst',
-            'worstvideo+worstaudio/worst',
-            'best[ext=mp4]/best',
-            'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            'bestvideo+bestaudio/best',
-            'worstvideo+bestaudio/worst',
-            'bestaudio/best',
-            'worst',
-            'worstvideo[ext=mp4]/worst[ext=mp4]/worst',
-            'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
-            'bv*+ba/b',
-            '17',
-            '36',
-            '5',
-            '18',
-            '34',
-            '35',
-            '43',
-            '247+140',
-        ]
 
-        last_err = None
-        proxy = get_working_proxy()
-        for attempt in range(36):
-            cfg = strategies[attempt % len(strategies)]
-            ua = user_agents[attempt % len(user_agents)]
-            fmt = format_fallbacks[attempt % len(format_fallbacks)]
-            imp = impersonate_profiles[attempt % len(impersonate_profiles)]
-            try:
-                ydl_opts = {
-                    'format': fmt,
-                    'outtmpl': video_path,
-                    'quiet': True,
-                    'no_warnings': True,
-                    'extract_flat': False,
-                    'sleep_interval': 1,
-                    'sleep_interval_requests': 1,
-                    'extractor_retries': 3,
-                    'file_access_retries': 3,
-                    'throttledratelimit': 100000,
-                    'ignore_no_formats_error': True,
-                    'allow_unplayable_formats': True,
-                    'no_check_certificate': True,
-                    'socket_timeout': 60,
-                    'http_headers': {
-                        'User-Agent': ua,
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Language': 'en-US,en;q=0.5',
-                    },
-                }
-                if proxy:
-                    ydl_opts['proxy'] = proxy
-                if imp:
-                    ydl_opts['impersonate'] = imp
-                if auth_cfg["cookies_path"]:
-                    ydl_opts['cookiefile'] = auth_cfg["cookies_path"]
-                extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
-                if auth_cfg["extractor_args"]:
-                    extractor_args['youtube'].update(auth_cfg["extractor_args"])
-                if auth_cfg.get("bgutil_home"):
-                    extractor_args['youtubepot-bgutilscript'] = {'server_home': auth_cfg["bgutil_home"]}
-                if extractor_args['youtube'] or extractor_args.get('youtubepot-bgutilscript'):
-                    ydl_opts['extractor_args'] = extractor_args
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
-                if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
-                    raise Exception("File not downloaded or too small")
-                last_err = None
-                break
-            except Exception as e:
-                last_err = e
-                err_lower = str(e).lower()
-                if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small"]):
-                    if attempt < 35:
-                        wait = min(3 + attempt, 30)
-                        print(f"YouTube issue (attempt {attempt+1}/36): {err_lower[:80]} (strategy={cfg}, imp={imp}, proxy={proxy[:40] if proxy else 'none'}), waiting {wait}s...")
-                        time.sleep(wait)
-                        continue
-                # Try Invidious, Piped, cobalt.tools, and Playwright fallbacks before giving up
-                fallback_success = (
-                    download_with_invidious(url, video_path) or
-                    download_with_piped(url, video_path) or
-                    download_with_cobalt(url, video_path) or
-                    asyncio.run(download_with_playwright(url, video_path))
-                )
-                if fallback_success:
-                    last_err = None
+        is_youtube = extract_youtube_video_id(url) is not None
+        downloaded = False
+
+        # ── Phase 1: Playwright (real browser) FIRST for YouTube ──
+        # Real browser bypasses YouTube's JS-based bot detection which blocks yt-dlp on datacenter IPs
+        if is_youtube:
+            jobs_store[job_id] = {"status": "processing", "message": "Downloading with browser..."}
+            downloaded = asyncio.run(download_with_playwright(url, video_path))
+
+        # ── Phase 2: yt-dlp with retries (primary for non-YouTube, fallback for YouTube) ──
+        if not downloaded:
+            jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp..."}
+            strategies = [
+                {'player_client': ['web', 'ios'], 'player_skip': ['webpage']},
+                {'player_client': ['android', 'ios'], 'player_skip': ['webpage']},
+                {'player_client': ['web', 'android'], 'player_skip': ['webpage']},
+                {'player_client': ['tv']},
+                {'player_client': ['web_creator']},
+                {'player_client': ['tv_embedded']},
+                {'player_client': ['web_embedded']},
+                {'player_client': ['android_vr']},
+                {'player_client': ['mweb']},
+                {},
+                {'player_client': ['ios']},
+                {'player_client': ['android']},
+                {'player_client': ['web']},
+                {'player_client': ['web_music'], 'player_skip': ['webpage', 'configs']},
+                {'player_client': ['android_music'], 'player_skip': ['webpage', 'configs']},
+                {'player_client': ['android_producer'], 'player_skip': ['webpage', 'configs']},
+                {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
+                {'player_client': ['android', 'web', 'ios']},
+                {'player_client': ['android', 'tv'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage']},
+                {'player_client': ['web'], 'player_skip': ['webpage', 'configs', 'js'], 'include_incomplete_formats': True},
+                {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
+                {'player_client': ['ios'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
+                {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
+            ]
+            impersonate_profiles = [
+                None, 'chrome', 'chrome-131', 'chrome-130', 'chrome-120',
+                'safari', 'safari-17', 'edge', 'firefox',
+            ]
+            user_agents = [
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+                'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
+                'Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+                'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
+            ]
+            format_fallbacks = [
+                'worst[ext=mp4]/worst',
+                'worstvideo+worstaudio/worst',
+                'best[ext=mp4]/best',
+                'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                'bestvideo+bestaudio/best',
+                'worstvideo+bestaudio/worst',
+                'bestaudio/best',
+                'worst',
+                'worstvideo[ext=mp4]/worst[ext=mp4]/worst',
+                'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
+                'bv*+ba/b',
+                '17', '36', '5', '18', '34', '35', '43', '247+140',
+            ]
+            proxy = get_working_proxy()
+            for attempt in range(36):
+                cfg = strategies[attempt % len(strategies)]
+                ua = user_agents[attempt % len(user_agents)]
+                fmt = format_fallbacks[attempt % len(format_fallbacks)]
+                imp = impersonate_profiles[attempt % len(impersonate_profiles)]
+                try:
+                    ydl_opts = {
+                        'format': fmt,
+                        'outtmpl': video_path,
+                        'quiet': True,
+                        'no_warnings': True,
+                        'extract_flat': False,
+                        'sleep_interval': 1,
+                        'sleep_interval_requests': 1,
+                        'extractor_retries': 3,
+                        'file_access_retries': 3,
+                        'throttledratelimit': 100000,
+                        'ignore_no_formats_error': True,
+                        'allow_unplayable_formats': True,
+                        'no_check_certificate': True,
+                        'socket_timeout': 60,
+                        'http_headers': {
+                            'User-Agent': ua,
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                            'Accept-Language': 'en-US,en;q=0.5',
+                        },
+                    }
+                    if proxy:
+                        ydl_opts['proxy'] = proxy
+                    if imp:
+                        ydl_opts['impersonate'] = imp
+                    if auth_cfg["cookies_path"]:
+                        ydl_opts['cookiefile'] = auth_cfg["cookies_path"]
+                    extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
+                    if auth_cfg["extractor_args"]:
+                        extractor_args['youtube'].update(auth_cfg["extractor_args"])
+                    if auth_cfg.get("bgutil_home"):
+                        extractor_args['youtubepot-bgutilscript'] = {'server_home': auth_cfg["bgutil_home"]}
+                    if extractor_args['youtube'] or extractor_args.get('youtubepot-bgutilscript'):
+                        ydl_opts['extractor_args'] = extractor_args
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
+                    if os.path.getsize(video_path) >= 1024:
+                        downloaded = True
+                        break
+                except Exception as e:
+                    err_lower = str(e).lower()
+                    if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small"]):
+                        if attempt < 35:
+                            wait = min(3 + attempt, 30)
+                            print(f"YouTube issue (attempt {attempt+1}/36): {err_lower[:80]} (strategy={cfg}, imp={imp}, proxy={proxy[:40] if proxy else 'none'}), waiting {wait}s...")
+                            time.sleep(wait)
+                            continue
                     break
-                jobs_store[job_id] = {"status": "error", "message": "YouTube blocked the download. Try a different video or upload the file directly."}
-                return
 
-        if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
-            fallback_success = (
+        # ── Phase 3: Invidious → Piped → cobalt (last resort) ──
+        if not downloaded:
+            jobs_store[job_id] = {"status": "processing", "message": "Trying alternative sources..."}
+            downloaded = (
                 download_with_invidious(url, video_path) or
                 download_with_piped(url, video_path) or
-                download_with_cobalt(url, video_path) or
-                asyncio.run(download_with_playwright(url, video_path))
+                download_with_cobalt(url, video_path)
             )
-            if not fallback_success:
-                jobs_store[job_id] = {"status": "error", "message": "Could not download video from this URL."}
-                return
+
+        if not downloaded:
+            jobs_store[job_id] = {"status": "error", "message": "Could not download video from this URL. Please try another video or upload the file directly."}
+            return
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
         # Extract audio at low bitrate to stay under Whisper's 25MB limit
