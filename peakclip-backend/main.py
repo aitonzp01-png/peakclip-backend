@@ -861,7 +861,7 @@ def resolve_music_path(mood: str) -> str | None:
     return path if os.path.isfile(path) else None
 
 
-def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, timeout: int = 60) -> bool:
+def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, timeout: int = 180) -> bool:
     """Burn subtitles onto a video, trying multiple fallback styles."""
     if not os.path.exists(input_path) or os.path.getsize(input_path) < 1024:
         return False
@@ -1168,10 +1168,15 @@ Return JSON with this exact format:
                           '-map', '[v]', '-map', '[a]',
                           '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
                           '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-                subprocess.run(step1, capture_output=True, timeout=600)
+                result1 = subprocess.run(step1, capture_output=True, timeout=600)
+                print(f"Step1 render exit={result1.returncode}, file={'exists' if os.path.exists(no_subs) else 'missing'}, size={os.path.getsize(no_subs) if os.path.exists(no_subs) else 0}")
+                if result1.returncode != 0:
+                    print(f"Step1 stderr: {result1.stderr.decode('utf-8', errors='replace')[:300] if result1.stderr else 'none'}")
 
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                    burn_subtitles_onto_video(no_subs, srt_path, output_path)
+                    print(f"Burning subtitles from {srt_path}")
+                    ok = burn_subtitles_onto_video(no_subs, srt_path, output_path)
+                    print(f"Subtitle burn result: {'OK' if ok else 'FAILED'}, output={'exists' if os.path.exists(output_path) else 'missing'}")
                 else:
                     vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
                     parts = [f"[0:v]{vid_filter}[v]", audio_filter]
