@@ -1153,50 +1153,74 @@ Return JSON with this exact format:
 
                 no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
                 local_files.append(no_subs)
+
+                # Split render to avoid OOM: video + audio separately
+                success = False
                 vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-                audio_filter = ""
-                if music_path:
-                    music_path_ff = music_path.replace('\\', '/')
-                    audio_filter = "[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]"
-                else:
-                    audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
-                parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-                step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-                if music_path:
-                    step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-                step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
-                          '-map', '[v]', '-map', '[a]',
-                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
-                          '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-                result1 = subprocess.run(step1, capture_output=True, timeout=600)
-                print(f"Step1 render exit={result1.returncode}, file={'exists' if os.path.exists(no_subs) else 'missing'}, size={os.path.getsize(no_subs) if os.path.exists(no_subs) else 0}")
-                if result1.returncode != 0:
-                    print(f"Step1 stderr: {result1.stderr.decode('utf-8', errors='replace')[:300] if result1.stderr else 'none'}")
+                music_path_ff = music_path.replace('\\', '/') if music_path else None
+
+                # Step 1: Render video-only (no audio) - minimal memory
+                step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                         '-vf', vid_filter, '-an',
+                         '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+                         '-preset', 'ultrafast', '-crf', '23',
+                         '-movflags', '+faststart', '-y', no_subs]
+                r1 = subprocess.run(step1, capture_output=True, timeout=600)
+                print(f"Step1 video: exit={r1.returncode}, size={os.path.getsize(no_subs) if os.path.exists(no_subs) else 'missing'}")
 
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                    print(f"Burning subtitles from {srt_path}")
-                    ok = burn_subtitles_onto_video(no_subs, srt_path, output_path)
-                    print(f"Subtitle burn result: {'OK' if ok else 'FAILED'}, output={'exists' if os.path.exists(output_path) else 'missing'}")
-                else:
-                    vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
-                    parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-                    step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
+                    # Step 2: Extract & mix audio
+                    audio_mix = f"outputs/{job_id}_clip{i+1}_audio.aac"
+                    local_files.append(audio_mix)
                     if music_path:
-                        step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-                    step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
+                        step_audio = ['ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                                      '-stream_loop', '-1', '-i', music_path_ff,
+                                      '-t', str(duration),
+                                      '-filter_complex', '[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]',
+                                      '-map', '[a]', '-c:a', 'aac', '-b:a', '192k', '-y', audio_mix]
+                    else:
+                        step_audio = ['ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                                      '-t', str(duration),
+                                      '-af', 'dynaudnorm=p=0.95',
+                                      '-vn', '-c:a', 'aac', '-b:a', '192k', '-y', audio_mix]
+                    r_audio = subprocess.run(step_audio, capture_output=True, timeout=300)
+                    print(f"Step2 audio: exit={r_audio.returncode}, size={os.path.getsize(audio_mix) if os.path.exists(audio_mix) else 'missing'}")
+
+                    if os.path.exists(audio_mix) and os.path.getsize(audio_mix) >= 1024:
+                        # Step 3: Combine video + audio, then burn subtitles
+                        combined = f"outputs/{job_id}_clip{i+1}_combined.mp4"
+                        local_files.append(combined)
+                        step3 = ['ffmpeg', '-i', no_subs, '-i', audio_mix,
+                                 '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
+                                 '-movflags', '+faststart', '-y', combined]
+                        r3 = subprocess.run(step3, capture_output=True, timeout=120)
+                        print(f"Step3 combine: exit={r3.returncode}, size={os.path.getsize(combined) if os.path.exists(combined) else 'missing'}")
+                        if os.path.exists(combined) and os.path.getsize(combined) >= 1024:
+                            print(f"Burning subtitles from {srt_path}")
+                            ok = burn_subtitles_onto_video(combined, srt_path, output_path)
+                            print(f"Subtitle burn: {'OK' if ok else 'FAILED'}")
+                            if ok:
+                                success = True
+
+                # Fallback: try direct single-pass combined render with subtitles
+                if not success:
+                    print("Fallback: single-pass render with subtitles")
+                    fb_filter = f"scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
+                    fb_parts = [f"[0:v]{fb_filter}[v]"]
+                    fb_inputs = ['-ss', str(clip_start), '-i', video_path]
+                    if music_path:
+                        fb_inputs += ['-stream_loop', '-1', '-i', music_path_ff]
+                        fb_parts.append("[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]")
+                    else:
+                        fb_parts.append("[0:a]dynaudnorm=p=0.95[a]")
+                    fb_cmd = ['ffmpeg'] + fb_inputs + ['-t', str(duration),
+                              '-filter_complex', ';'.join(fb_parts),
                               '-map', '[v]', '-map', '[a]',
-                              '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                              '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
                               '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-                    subprocess.run(step1, capture_output=True, timeout=600)
+                    r_fb = subprocess.run(fb_cmd, capture_output=True, timeout=600)
                     if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                        srt_path_ff = srt_path.replace('\\', '/')
-                        step2 = ['ffmpeg', '-i', no_subs,
-                                 '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=52,PrimaryColour=&H00FFD700,BackColour=&HCC000000,Outline=3,Bold=1,Alignment=2,MarginV=80'",
-                                 '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                                 '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                        subprocess.run(step2, capture_output=True, timeout=300)
-                        if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                            shutil.copy2(no_subs, output_path)
+                        burn_subtitles_onto_video(no_subs, srt_path, output_path)
                     else:
                         subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
                                         '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
