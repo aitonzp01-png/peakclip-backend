@@ -262,43 +262,71 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                 print("Playwright: no video URL extracted")
                 await browser.close()
                 return False
-            # Download using Chromium's real network stack (not Playwright's Node.js HTTP client)
-            # page.request.get() uses Node.js HTTP -> wrong TLS fingerprint -> 403 from googlevideo
-            # Solution: use page.goto() to the video URL, intercept the response via page.on('response')
-            print(f"Playwright downloading via browser navigation...")
-            download_data = bytearray()
-            errors = []
-            async def capture_response(response):
-                nonlocal download_data
-                if '/videoplayback' in response.url and response.request.url == video_url:
-                    try:
-                        body = await response.body()
-                        if body and len(body) > len(download_data):
-                            download_data = bytearray(body)
-                    except Exception as e:
-                        errors.append(str(e))
+            # Download using the browser's real fetch() inside Chromium, streaming chunks back to Python
+            # page.request.get() uses Node.js HTTP -> wrong TLS fingerprint -> 403
+            # page.goto() tries to "play" the video -> 0 bytes captured
+            # Solution: page.evaluate() with fetch() + ReadableStream + exposed chunk callback
+            print(f"Playwright downloading via browser fetch + stream...")
+            import base64 as _b64_module
+            chunks_queue = asyncio.Queue()
+            fetch_error = []
 
-            page.on('response', capture_response)
+            async def __pw_receive_chunk(data: str):
+                if data == '__DONE__':
+                    await chunks_queue.put(None)
+                elif data.startswith('__ERR__:'):
+                    fetch_error.append(data[8:])
+                    await chunks_queue.put(None)
+                else:
+                    await chunks_queue.put(_b64_module.b64decode(data))
 
+            await page.expose_function('__pw_put_chunk', __pw_receive_chunk)
+
+            # Start the browser-side download (runs async, chunks arrive via __pw_put_chunk)
+            await page.evaluate("""
+                async (videoUrl) => {
+                    try {
+                        const resp = await fetch(videoUrl);
+                        if (!resp.ok) { window.__pw_put_chunk('__ERR__:' + resp.status); return; }
+                        const reader = resp.body.getReader();
+                        while (true) {
+                            const {done, value} = await reader.read();
+                            if (done) break;
+                            let binary = '';
+                            for (let i = 0; i < value.length; i++) binary += String.fromCharCode(value[i]);
+                            window.__pw_put_chunk(btoa(binary));
+                        }
+                        window.__pw_put_chunk('__DONE__');
+                    } catch(e) {
+                        window.__pw_put_chunk('__ERR__:' + e.message);
+                    }
+                }
+            """, video_url)
+
+            # Write chunks to file as they arrive
             try:
-                await page.goto(video_url, wait_until='commit', timeout=60000)
-                await page.wait_for_timeout(15000)
-            except Exception as e:
-                print(f"Playwright navigation (expected): {str(e)[:80]}")
-
-            page.remove_listener('response', capture_response)
-
-            if len(download_data) >= 1024:
                 with open(output_path, "wb") as f:
-                    f.write(download_data)
-                print(f"Playwright download success via browser: {os.path.getsize(output_path)} bytes")
+                    while True:
+                        chunk = await asyncio.wait_for(chunks_queue.get(), timeout=600)
+                        if chunk is None:
+                            break
+                        f.write(chunk)
+            except asyncio.TimeoutError:
+                print("Playwright: download timed out")
                 await browser.close()
+                return False
+
+            await browser.close()
+
+            if fetch_error:
+                print(f"Playwright browser fetch error: {fetch_error[0]}")
+                return False
+
+            if os.path.getsize(output_path) >= 1024:
+                print(f"Playwright download success via fetch: {os.path.getsize(output_path)} bytes")
                 return True
             else:
-                if errors:
-                    print(f"Playwright response errors: {errors}")
-                print(f"Playwright download failed: got {len(download_data)} bytes")
-                await browser.close()
+                print(f"Playwright download too small: {os.path.getsize(output_path)} bytes")
                 return False
     except Exception as e:
         print(f"Playwright fallback failed: {e}")
