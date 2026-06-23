@@ -614,18 +614,20 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
         local_files.append(youtube_cookies_path)
         print(f"Using YouTube cookies: {youtube_cookies_path}")
 
-    # Retry download with different strategies (clients that typically don't need PO tokens)
+    # Retry download with different strategies
+    # Clients that do NOT require PO tokens are tried first (per yt-dlp PO Token Guide)
     strategies = [
+        {'player_client': ['tv_embedded']},
+        {'player_client': ['web_embedded']},
+        {'player_client': ['android_vr']},
+        {'player_client': ['tv']},
+        {'player_client': ['mweb']},
         {},  # default
         {'player_client': ['ios']},
         {'player_client': ['android']},
-        {'player_client': ['android_vr']},
         {'player_client': ['web_creator']},
         {'player_client': ['android_creator']},
         {'player_client': ['ios_creator']},
-        {'player_client': ['tv_embedded']},
-        {'player_client': ['ios', 'android'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['web_creator', 'ios'], 'player_skip': ['webpage', 'configs']},
     ]
     if youtube_cookies_path:
         # With cookies the web client is often the most reliable
