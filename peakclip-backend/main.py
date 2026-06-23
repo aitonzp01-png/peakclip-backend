@@ -861,7 +861,7 @@ def resolve_music_path(mood: str) -> str | None:
     return path if os.path.isfile(path) else None
 
 
-def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, timeout: int = 300) -> bool:
+def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, timeout: int = 60) -> bool:
     """Burn subtitles onto a video, trying multiple fallback styles."""
     if not os.path.exists(input_path) or os.path.getsize(input_path) < 1024:
         return False
