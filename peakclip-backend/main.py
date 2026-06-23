@@ -883,7 +883,7 @@ def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, 
         cmd = [
             'ffmpeg', '-i', input_path,
             '-vf', style,
-            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-preset', 'fast',
             '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path
         ]
         result = subprocess.run(cmd, capture_output=True, timeout=timeout)
@@ -1166,7 +1166,7 @@ Return JSON with this exact format:
                     step1 += ['-stream_loop', '-1', '-i', music_path_ff]
                 step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
                           '-map', '[v]', '-map', '[a]',
-                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
                           '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 result1 = subprocess.run(step1, capture_output=True, timeout=600)
                 print(f"Step1 render exit={result1.returncode}, file={'exists' if os.path.exists(no_subs) else 'missing'}, size={os.path.getsize(no_subs) if os.path.exists(no_subs) else 0}")
@@ -1717,7 +1717,7 @@ Return JSON with this exact format:
                     step1 += ['-stream_loop', '-1', '-i', music_path_ff]
                 step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
                           '-map', '[v]', '-map', '[a]',
-                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
                           '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 subprocess.run(step1, capture_output=True, timeout=600)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
