@@ -233,14 +233,51 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                         data = json.loads(match.group(1))
                         all_fmts = data.get('streamingData', {}).get('formats', []) + \
                                    data.get('streamingData', {}).get('adaptiveFormats', [])
-                        dl_fmts = [f for f in all_fmts if f.get('url') and 'mp4' in str(f.get('mimeType', ''))]
-                        dl_fmts.sort(key=lambda f: f.get('height', 0) or 0, reverse=True)
-                        if dl_fmts:
-                            video_url = dl_fmts[0]['url']
-                            print(f"Playwright extracted URL: {video_url[:80]}...")
+
+                        def _decode_fmt_url(fmt):
+                            # Direct URL
+                            url = fmt.get('url')
+                            if url:
+                                return url
+                            # signatureCipher: s=XXXX&sp=sig&url=https%3A%2F%2F...
+                            sc = fmt.get('signatureCipher') or fmt.get('cipher')
+                            if sc:
+                                from urllib.parse import unquote, parse_qs
+                                params = parse_qs(sc)
+                                url_val = params.get('url', [None])[0]
+                                if url_val:
+                                    s_val = params.get('s', [None])[0] or params.get('sig', [None])[0]
+                                    sp_val = params.get('sp', ['sig'])[0]
+                                    if s_val:
+                                        return f"{url_val}&{sp_val}={unquote(s_val)}"
+                                    return url_val
+                            return None
+
+                        video_formats = []
+                        for f in all_fmts:
+                            url = _decode_fmt_url(f)
+                            mime = str(f.get('mimeType', ''))
+                            if url and ('video' in mime or 'mp4' in mime or 'webm' in mime or '3gp' in mime):
+                                video_formats.append((f.get('height', 0) or 0, url))
+                        video_formats.sort(key=lambda x: x[0], reverse=True)
+                        if video_formats:
+                            video_url = video_formats[0][1]
+                            print(f"Playwright extracted URL ({video_formats[0][0]}p): {video_url[:80]}...")
                             break
                         else:
-                            print("Playwright: ytInitialPlayerResponse found but no mp4 formats")
+                            # Last resort: try any format with a decodable URL
+                            for f in all_fmts:
+                                url = _decode_fmt_url(f)
+                                if url:
+                                    video_url = url
+                                    print(f"Playwright extracted URL (fallback): {video_url[:80]}...")
+                                    break
+                            if not video_url:
+                                print(f"Playwright: ytInitialPlayerResponse found but no decodable video URL ({len(all_fmts)} formats)")
+                                # Dump format keys for debugging
+                                if all_fmts:
+                                    sample_keys = list(all_fmts[0].keys()) if all_fmts else []
+                                    print(f"Playwright: sample format keys: {sample_keys}")
                     else:
                         # Debug: print page info to diagnose what YouTube is serving
                         page_title = await page.title()
@@ -281,6 +318,9 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                     await chunks_queue.put(_b64_module.b64decode(data))
 
             await page.expose_function('__pw_put_chunk', __pw_receive_chunk)
+
+            # Increase timeout: video download can take minutes for large files
+            page.set_default_timeout(600000)
 
             # Start the browser-side download (runs async, chunks arrive via __pw_put_chunk)
             await page.evaluate("""
