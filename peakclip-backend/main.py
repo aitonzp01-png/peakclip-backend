@@ -220,16 +220,27 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             if not video_url:
                 print("Playwright: no video URL extracted")
                 return False
-            # Download
-            with httpx.Client(timeout=300, follow_redirects=True) as client:
-                with client.stream("GET", video_url, timeout=300) as stream:
+            # Download with proper YouTube headers
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                'Accept': '*/*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': f'https://www.youtube.com/watch?v={video_id}',
+                'Origin': 'https://www.youtube.com',
+            }
+            with httpx.Client(timeout=600, follow_redirects=True, headers=headers) as client:
+                with client.stream("GET", video_url, timeout=600) as stream:
                     stream.raise_for_status()
                     with open(output_path, "wb") as f:
-                        for chunk in stream.iter_bytes(chunk_size=8192):
+                        total = 0
+                        for chunk in stream.iter_bytes(chunk_size=65536):
                             f.write(chunk)
+                            total += len(chunk)
             if os.path.getsize(output_path) >= 1024:
                 print(f"Playwright download success: {os.path.getsize(output_path)} bytes")
                 return True
+            else:
+                print(f"Playwright download too small: {os.path.getsize(output_path)} bytes")
     except Exception as e:
         print(f"Playwright fallback failed: {e}")
     return False
