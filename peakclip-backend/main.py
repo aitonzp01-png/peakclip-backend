@@ -20,9 +20,10 @@ import time
 import httpx
 import sys
 import asyncio
+import base64
+import shutil
 from collections import defaultdict
 from urllib.parse import urlparse
-import base64
 import jwt as pyjwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -33,15 +34,32 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    # Try to update yt-dlp to latest version
+    # Try to update yt-dlp to latest nightly/master version first, then stable
     try:
-        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'], capture_output=True, text=True, timeout=60)
-        print(f"yt-dlp upgrade: {result.returncode == 0}")
-        # Check version
+        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall',
+                                 'yt-dlp[default] @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz'],
+                                capture_output=True, text=True, timeout=180)
+        print(f"yt-dlp master install: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
+        if result.returncode != 0:
+            result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'],
+                                    capture_output=True, text=True, timeout=120)
+            print(f"yt-dlp stable install: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
         ver = subprocess.run([sys.executable, '-m', 'yt_dlp', '--version'], capture_output=True, text=True, timeout=10)
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
+    # Write YouTube cookies from env var if provided
+    try:
+        cookie_b64 = os.environ.get('YOUTUBE_COOKIES_B64')
+        if cookie_b64:
+            data = base64.b64decode(cookie_b64).decode('utf-8', errors='replace')
+            with open('cookies.txt', 'w', encoding='utf-8') as f:
+                f.write(data)
+            print(f"COOKIES: written {len(data)} bytes to cookies.txt")
+        else:
+            print("COOKIES: no YOUTUBE_COOKIES_B64 env var")
+    except Exception as e:
+        print(f"COOKIES: failed to write: {e}")
     await run_migrations()
     await fetch_jwks()
     yield
@@ -493,17 +511,19 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     local_files = [video_path, audio_path]
 
     # Retry download with different strategies
+    # Per yt-dlp PO Token Guide, these clients do NOT require PO tokens:
+    # tv_embedded, web_embedded, android_vr, tv
     strategies = [
-        {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage', 'dash']},
-        {'player_client': ['web'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['ios'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
-        {'player_client': ['android'], 'include_dash_mpd': False, 'skip': ['webpage', 'dash']},
-        {'player_client': ['tv', 'tv_embedded'], 'player_skip': ['webpage', 'configs']},
-        {'player_client': ['web'], 'include_dash_mpd': False},
-        {'player_client': ['android', 'web', 'ios']},
-        {'player_client': ['android', 'tv'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage']},
+        {'player_client': ['tv_embedded']},
+        {'player_client': ['web_embedded']},
+        {'player_client': ['android_vr']},
+        {'player_client': ['tv']},
+        {'player_client': ['mweb']},
         {},
+        {'player_client': ['ios']},
+        {'player_client': ['android']},
+        {'player_client': ['web_creator']},
+        {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
     ]
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -517,29 +537,22 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
         'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
     ]
     format_fallbacks = [
-        'worst[ext=mp4]/worst',
-        'worstvideo+worstaudio/worst',
         'best[ext=mp4]/best',
         'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'bestvideo+bestaudio/best',
-        'worstvideo+bestaudio/worst',
+        'worst[ext=mp4]/worst',
+        'worstvideo+worstaudio/worst',
         'bestaudio/best',
         'worst',
-        'worstvideo[ext=mp4]/worst[ext=mp4]/worst',
-        'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
-        'bv*+ba/b',
-        '17',
-        '36',
-        '5',
-        '18',
-        '34',
-        '35',
-        '43',
-        '247+140',
     ]
 
+    # Optional proxy (residential/rotating proxy can bypass IP blocks)
+    proxy_url = os.environ.get('YOUTUBE_PROXY')
+    # Optional cookies file written by lifespan from YOUTUBE_COOKIES_B64
+    cookies_file = 'cookies.txt' if os.path.exists('cookies.txt') else None
+
     last_err = None
-    for attempt in range(30):
+    for attempt in range(24):
         cfg = strategies[attempt % len(strategies)]
         ua = user_agents[attempt % len(user_agents)]
         fmt = format_fallbacks[attempt % len(format_fallbacks)]
@@ -550,13 +563,14 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 'quiet': True,
                 'no_warnings': True,
                 'extract_flat': False,
-                'sleep_interval': 15,
-                'sleep_interval_requests': 3,
-                'extractor_retries': 15,
-                'file_access_retries': 8,
+                'noplaylist': True,
+                'sleep_interval': 5,
+                'sleep_interval_requests': 2,
+                'extractor_retries': 5,
+                'file_access_retries': 5,
                 'throttledratelimit': 100000,
                 'ignore_no_formats_error': True,
-                'allow_unplayable_formats': True,
+                'allow_unplayable_formats': False,
                 'no_check_certificate': True,
                 'socket_timeout': 60,
                 'http_headers': {
@@ -565,20 +579,26 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                     'Accept-Language': 'en-US,en;q=0.5',
                 },
             }
+            if proxy_url:
+                ydl_opts['proxy'] = proxy_url
+            if cookies_file:
+                ydl_opts['cookies'] = cookies_file
             if cfg:
                 ydl_opts['extractor_args'] = {'youtube': cfg}
+            print(f"yt-dlp attempt {attempt+1}/24 strategy={cfg} format={fmt} proxy={'yes' if proxy_url else 'no'} cookies={'yes' if cookies_file else 'no'}")
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([req.url])
+            if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
+                raise Exception("File not downloaded or too small")
             last_err = None
             break
         except Exception as e:
             last_err = e
             err_lower = str(e).lower()
-            if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
-                if attempt < 29:
-                    base_wait = 15 if attempt < 5 else 30 if attempt < 10 else 60
-                    wait = min(base_wait * (2 ** (attempt // 5)), 180)
-                    print(f"YouTube issue (attempt {attempt+1}/30): {type(e).__name__}, waiting {wait}s...")
+            if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small"]):
+                if attempt < 23:
+                    wait = min(5 * (2 ** (attempt // 3)), 120)
+                    print(f"YouTube issue (attempt {attempt+1}/24): {err_lower[:80]}, waiting {wait}s...")
                     time.sleep(wait)
                     continue
             raise HTTPException(status_code=400, detail=f"Download error: {last_err}")
@@ -691,8 +711,8 @@ Return JSON with this exact format:
                 step1 += ['-stream_loop', '-1', '-i', music_path_ff]
             step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
                       '-map', '[v]', '-map', '[a]',
-                      '-c:v', 'libx264', '-preset', 'fast',
-                      '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                      '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
             subprocess.run(step1, capture_output=True, timeout=600)
 
             if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
@@ -700,8 +720,8 @@ Return JSON with this exact format:
                 srt_path_ff = srt_path.replace('\\', '/')
                 step2 = ['ffmpeg', '-i', no_subs,
                          '-vf', f"subtitles={srt_path_ff}",
-                         '-c:v', 'libx264', '-preset', 'fast',
-                         '-c:a', 'copy', '-y', output_path]
+                         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                         '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
                 subprocess.run(step2, capture_output=True, timeout=300)
                 if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                     shutil.copy2(no_subs, output_path)
@@ -714,15 +734,15 @@ Return JSON with this exact format:
                     step1 += ['-stream_loop', '-1', '-i', music_path_ff]
                 step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
                           '-map', '[v]', '-map', '[a]',
-                          '-c:v', 'libx264', '-preset', 'fast',
-                          '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                          '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 subprocess.run(step1, capture_output=True, timeout=600)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     srt_path_ff = srt_path.replace('\\', '/')
                     step2 = ['ffmpeg', '-i', no_subs,
                              '-vf', f"subtitles={srt_path_ff}",
-                             '-c:v', 'libx264', '-preset', 'fast',
-                             '-c:a', 'copy', '-y', output_path]
+                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                             '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
                     subprocess.run(step2, capture_output=True, timeout=300)
                     if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                         shutil.copy2(no_subs, output_path)
@@ -730,7 +750,7 @@ Return JSON with this exact format:
                     # Final fallback: output is just the raw-seeked segment, no frills
                     subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
                                     '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
-                                    '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', output_path],
+                                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path],
                                    capture_output=True, timeout=300)
 
             local_files.append(output_path)
@@ -942,6 +962,10 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             '-vf', vf,
             '-r', str(req.fps),
             '-c:v', vcodec,
+        ])
+        if vcodec == 'libx264':
+            cmd.extend(['-pix_fmt', 'yuv420p', '-movflags', '+faststart'])
+        cmd.extend([
             '-preset', 'fast',
             '-c:a', acodec,
         ])
@@ -1212,8 +1236,8 @@ Return JSON with this exact format:
                 step1 += ['-stream_loop', '-1', '-i', music_path_ff]
             step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
                       '-map', '[v]', '-map', '[a]',
-                      '-c:v', 'libx264', '-preset', 'fast',
-                      '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                      '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
             subprocess.run(step1, capture_output=True, timeout=600)
 
             if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
@@ -1221,8 +1245,8 @@ Return JSON with this exact format:
                 srt_path_ff = srt_path.replace('\\', '/')
                 step2 = ['ffmpeg', '-i', no_subs,
                          '-vf', f"subtitles={srt_path_ff}",
-                         '-c:v', 'libx264', '-preset', 'fast',
-                         '-c:a', 'copy', '-y', output_path]
+                         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                         '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
                 subprocess.run(step2, capture_output=True, timeout=300)
                 if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                     shutil.copy2(no_subs, output_path)
@@ -1235,22 +1259,22 @@ Return JSON with this exact format:
                     step1 += ['-stream_loop', '-1', '-i', music_path_ff]
                 step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
                           '-map', '[v]', '-map', '[a]',
-                          '-c:v', 'libx264', '-preset', 'fast',
-                          '-c:a', 'aac', '-b:a', '192k', '-y', no_subs]
+                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                          '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 subprocess.run(step1, capture_output=True, timeout=600)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     srt_path_ff = srt_path.replace('\\', '/')
                     step2 = ['ffmpeg', '-i', no_subs,
                              '-vf', f"subtitles={srt_path_ff}",
-                             '-c:v', 'libx264', '-preset', 'fast',
-                             '-c:a', 'copy', '-y', output_path]
+                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                             '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
                     subprocess.run(step2, capture_output=True, timeout=300)
                     if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                         shutil.copy2(no_subs, output_path)
                 else:
                     subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
                                     '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
-                                    '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-y', output_path],
+                                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path],
                                    capture_output=True, timeout=300)
 
             local_files.append(output_path)
