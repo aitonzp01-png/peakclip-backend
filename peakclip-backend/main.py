@@ -52,27 +52,22 @@ def get_youtube_auth_config():
         config["extractor_args"]["po_token"] = po_token
     if visitor_data:
         config["extractor_args"]["visitor_data"] = visitor_data
+    # bgutil PO token provider auto-detects at ~/bgutil-ytdlp-pot-provider
+    bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
+    if os.path.isdir(bgutil_home):
+        config["bgutil_home"] = bgutil_home
+        print(f"bgutil PO token provider found at {bgutil_home}")
+    else:
+        print("bgutil PO token provider NOT found")
     return config
 
 
 def get_working_proxy() -> str | None:
-    """Return configured proxy or try a free proxy."""
+    """Return configured proxy. Free proxy lists are unreliable and disabled."""
     configured = os.getenv("YOUTUBE_PROXY")
     if configured:
-        print(f"Using configured proxy: {configured[:30]}...")
+        print(f"Using configured proxy: {configured[:40]}...")
         return configured
-    # Try free proxy list
-    try:
-        with httpx.Client(timeout=15) as client:
-            r = client.get("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all")
-            if r.status_code == 200:
-                proxies = [p.strip() for p in r.text.strip().split("\n") if p.strip()]
-                if proxies:
-                    proxy = random.choice(proxies)
-                    print(f"Trying free proxy: {proxy}")
-                    return f"http://{proxy}"
-    except Exception as e:
-        print(f"Free proxy fetch failed: {e}")
     return None
 
 
@@ -342,6 +337,21 @@ async def lifespan(app: FastAPI):
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
+    # Verify bgutil PO token provider
+    try:
+        bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
+        if os.path.isdir(bgutil_home):
+            print(f"bgutil provider dir exists: {bgutil_home}")
+            # Check if yt-dlp sees the plugin
+            plug = subprocess.run([sys.executable, '-m', 'yt_dlp', '--verbose', '--help'], capture_output=True, text=True, timeout=30)
+            if 'bgutil' in (plug.stdout + plug.stderr).lower():
+                print("bgutil plugin detected by yt-dlp")
+            else:
+                print("bgutil plugin NOT detected by yt-dlp")
+        else:
+            print("bgutil provider dir missing")
+    except Exception as e:
+        print(f"bgutil verification error: {e}")
     await run_migrations()
     await fetch_jwks()
     yield
@@ -961,7 +971,9 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
                 if auth_cfg["extractor_args"]:
                     extractor_args['youtube'].update(auth_cfg["extractor_args"])
-                if extractor_args['youtube']:
+                if auth_cfg.get("bgutil_home"):
+                    extractor_args['youtubepot-bgutilscript'] = {'server_home': auth_cfg["bgutil_home"]}
+                if extractor_args['youtube'] or extractor_args.get('youtubepot-bgutilscript'):
                     ydl_opts['extractor_args'] = extractor_args
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
