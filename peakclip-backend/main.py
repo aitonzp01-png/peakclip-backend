@@ -140,7 +140,7 @@ async def refresh_youtube_cookies() -> bool:
             context = await browser.new_context(proxy=playwright_proxy)
             await context.add_cookies(playwright_cookies)
             page = await context.new_page()
-            await page.goto('https://www.youtube.com', timeout=60000)
+            await page.goto('https://www.youtube.com', wait_until='domcontentloaded', timeout=60000)
             await page.wait_for_timeout(4000)
             cookies = await context.cookies()
             netscape_lines = ["# Netscape HTTP Cookie File", ""]
@@ -677,6 +677,42 @@ def download_with_cobalt(url: str, output_path: str) -> bool:
 
 
 @asynccontextmanager
+_bgutil_process = None
+
+
+def start_bgutil_server():
+    """Start bgutil-ytdlp-pot-provider HTTP server if available."""
+    global _bgutil_process
+    bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
+    server_js = os.path.join(bgutil_home, "build", "index.js")
+    if not os.path.exists(server_js):
+        print(f"bgutil server script not found at {server_js}")
+        return None
+    try:
+        # Check if already running
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex(('127.0.0.1', 4416))
+        sock.close()
+        if result == 0:
+            print("bgutil server already running on port 4416")
+            return "http://127.0.0.1:4416"
+
+        proc = subprocess.Popen(
+            ['node', server_js],
+            cwd=bgutil_home,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        _bgutil_process = proc
+        print(f"Started bgutil server (pid={proc.pid})")
+        return "http://127.0.0.1:4416"
+    except Exception as e:
+        print(f"Failed to start bgutil server: {e}")
+        return None
+
+
 async def lifespan(app: FastAPI):
     # Startup - fast yt-dlp upgrade only
     try:
@@ -687,12 +723,23 @@ async def lifespan(app: FastAPI):
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
+
+    # Start bgutil PO token provider server
+    bgutil_url = start_bgutil_server()
+    if bgutil_url:
+        os.environ['BGUTIL_POT_URL'] = bgutil_url
+
     await run_migrations()
     await fetch_jwks()
     await run_migrations()
     await fetch_jwks()
     yield
-    # Shutdown (nothing to do)
+    # Shutdown
+    if _bgutil_process:
+        try:
+            _bgutil_process.terminate()
+        except Exception:
+            pass
 
 app = FastAPI(lifespan=lifespan)
 
@@ -790,10 +837,10 @@ async def run_migrations():
     except Exception as e:
         print(f"COLUMN MIGRATION error: {e}")
 
-    # Add start_time / end_time columns to clips table if missing
+    # Add start_time / end_time / subtitles_srt columns to clips table if missing
     try:
-        supabase.table("clips").select("start_time,end_time").limit(1).execute()
-        print("SQL MIGRATION: start_time/end_time columns already exist (OK)")
+        supabase.table("clips").select("start_time,end_time,subtitles_srt").limit(1).execute()
+        print("SQL MIGRATION: start_time/end_time/subtitles_srt columns already exist (OK)")
     except Exception:
         async with httpx.AsyncClient(timeout=15) as client:
             headers = {
@@ -801,7 +848,11 @@ async def run_migrations():
                 "Authorization": f"Bearer {service_key}",
                 "Content-Type": "application/json",
             }
-            alter_sql = "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC;"
+            alter_sql = (
+                "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC;"
+                "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC;"
+                "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS subtitles_srt TEXT;"
+            )
             for url in [
                 f"https://{project_ref}.supabase.co/sql/v1/query",
                 f"https://api.supabase.com/v1/projects/{project_ref}/database/query",
@@ -809,7 +860,7 @@ async def run_migrations():
                 try:
                     res = await client.post(url, json={"query": alter_sql}, headers=headers)
                     if res.status_code == 200:
-                        print("SQL MIGRATION: added start_time/end_time columns (OK)")
+                        print("SQL MIGRATION: added start_time/end_time/subtitles_srt columns (OK)")
                         break
                 except Exception:
                     pass
@@ -1234,10 +1285,13 @@ def format_srt_time(seconds: float) -> str:
 
 
 def generate_srt_subtitle(words, clip_start, clip_end, output_path):
-    """Generate SRT subtitles grouped into readable phrases with timestamps relative to clip_start."""
+    """Generate SRT subtitles grouped into readable phrases with timestamps relative to clip_start.
+    Returns the SRT content as a string."""
     clip_words = [w for w in words if w['start'] >= clip_start and w['end'] <= clip_end]
     if not clip_words:
-        return
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write("")
+        return ""
 
     # Group words into phrases (3-7 words each, break on punctuation or max length)
     phrases = []
@@ -1281,8 +1335,10 @@ def generate_srt_subtitle(words, clip_start, clip_end, output_path):
         lines.append("")
         idx += 1
 
+    srt_content = "\n".join(lines)
     with open(output_path, 'w', encoding='utf-8') as f:
-        f.write("\n".join(lines))
+        f.write(srt_content)
+    return srt_content
 
 
 def resolve_music_path(mood: str) -> str | None:
@@ -1294,16 +1350,35 @@ def resolve_music_path(mood: str) -> str | None:
 
 
 def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, timeout: int = 180) -> bool:
-    """Burn subtitles onto a video, trying multiple fallback styles."""
+    """Burn subtitles onto a video, trying multiple fallback styles.
+    Font size is computed responsively based on video height."""
     if not os.path.exists(input_path) or os.path.getsize(input_path) < 1024:
         return False
     srt_path_ff = srt_path.replace('\\', '/')
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
+
+    # Probe video height to compute responsive font size
+    height = 1280
+    try:
+        probe = subprocess.run([
+            'ffprobe', '-v', 'quiet', '-select_streams', 'v',
+            '-show_entries', 'stream=height',
+            '-of', 'default=noprint_wrappers=1:nokey=1', input_path
+        ], capture_output=True, text=True, timeout=15)
+        if probe.stdout.strip():
+            height = int(probe.stdout.strip())
+    except Exception:
+        pass
+    # Scale font size with height: ~1/25 of video height, bounded
+    font_size = max(18, min(72, height // 25))
+    margin_v = max(12, height // 60)
+    print(f"Subtitle burn: video height={height}, font_size={font_size}, margin_v={margin_v}")
+
     styles = [
-        f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=36,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=20'",
-        f"subtitles={srt_path_ff}:force_style='Fontname=Arial,Fontsize=36,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=20'",
-        f"subtitles={srt_path_ff}:force_style='Fontname=FreeSans,Fontsize=36,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=20'",
+        f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize={font_size},PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV={margin_v}'",
+        f"subtitles={srt_path_ff}:force_style='Fontname=Arial,Fontsize={font_size},PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV={margin_v}'",
+        f"subtitles={srt_path_ff}:force_style='Fontname=FreeSans,Fontsize={font_size},PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV={margin_v}'",
         f"subtitles={srt_path_ff}",
     ]
     for style in styles:
@@ -1363,12 +1438,13 @@ def process_video_background(job_id: str, user_id: str, url: str):
         if not downloaded:
             jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp..."}
             strategies = [
+                {'player_client': ['tv_embedded', 'web', 'ios', 'android']},
+                {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs']},
                 {'player_client': ['web', 'ios'], 'player_skip': ['webpage']},
                 {'player_client': ['android', 'ios'], 'player_skip': ['webpage']},
                 {'player_client': ['web', 'android'], 'player_skip': ['webpage']},
                 {'player_client': ['tv']},
                 {'player_client': ['web_creator']},
-                {'player_client': ['tv_embedded']},
                 {'player_client': ['web_embedded']},
                 {'player_client': ['android_vr']},
                 {'player_client': ['mweb']},
@@ -1452,9 +1528,15 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
                     if auth_cfg["extractor_args"]:
                         extractor_args['youtube'].update(auth_cfg["extractor_args"])
-                    if auth_cfg.get("bgutil_home"):
+                    # Prefer running bgutil HTTP server; fallback to script provider
+                    bgutil_url = os.environ.get('BGUTIL_POT_URL')
+                    if bgutil_url:
+                        extractor_args['youtubepot'] = {'pot_bgutil_base_url': bgutil_url}
+                        print(f"yt-dlp using bgutil HTTP server at {bgutil_url}")
+                    elif auth_cfg.get("bgutil_home"):
                         extractor_args['youtubepot-bgutilscript'] = {'server_home': auth_cfg["bgutil_home"]}
-                    if extractor_args['youtube'] or extractor_args.get('youtubepot-bgutilscript'):
+                        print("yt-dlp using bgutil script provider")
+                    if extractor_args['youtube'] or extractor_args.get('youtubepot-bgutilscript') or extractor_args.get('youtubepot'):
                         ydl_opts['extractor_args'] = extractor_args
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         ydl.download([url])
@@ -1633,7 +1715,7 @@ Return JSON with this exact format:
                 clip_mood = clip.get("mood", "chill")
 
                 srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}.srt")
-                generate_srt_subtitle(words_data, clip_start, clip["end"], srt_path)
+                srt_content = generate_srt_subtitle(words_data, clip_start, clip["end"], srt_path)
                 temp_files_extra.append(srt_path)
 
                 music_path = resolve_music_path(clip_mood)
@@ -1756,7 +1838,8 @@ Return JSON with this exact format:
                     "thumbnail_url": thumb_storage_url,
                     "duration": round(duration, 1),
                     "start_time": clip_start,
-                    "end_time": clip["end"]
+                    "end_time": clip["end"],
+                    "subtitles_srt": srt_content or ""
                 }).execute()
 
                 output_clips.append({
@@ -2301,7 +2384,7 @@ Return JSON with this exact format:
             clip_mood = clip.get("mood", "chill")
 
             srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}.srt")
-            generate_srt_subtitle(words_data, clip_start, clip["end"], srt_path)
+            srt_content = generate_srt_subtitle(words_data, clip_start, clip["end"], srt_path)
             temp_files_extra.append(srt_path)
 
             music_path = resolve_music_path(clip_mood)
