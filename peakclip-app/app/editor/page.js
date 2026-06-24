@@ -26,65 +26,6 @@ export default function EditorPage() {
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const timeoutsRef = useRef([])
 
-  useEffect(() => {
-    const init = async () => {
-      const { data: { user } } = await getSupabaseClient().auth.getUser()
-      if (!user) { window.location.href = '/login'; return }
-      setUser(user)
-
-      const params = new URLSearchParams(window.location.search)
-      const id = params.get('id')
-      const urlParam = params.get('url')
-
-      if (id) {
-        setClipId(id)
-        await loadClipData(id, user)
-      } else if (!urlParam) {
-        // Create a clip record in Supabase so it shows in dashboard
-        const saved = await createClip(user.id, { title: 'New Project', duration: 0, status: 'draft' })
-        if (saved?.id) {
-          window.history.replaceState(null, '', `/editor?id=${saved.id}`)
-          setClipId(saved.id)
-          setClip({ id: saved.id, title: 'New Project', video_url: null, duration: 0 })
-        } else {
-          const demoId = 'demo_' + Date.now()
-          setClipId(demoId)
-          const store = useEditorStore.getState()
-          store.setSubtitleText('Drop a video or paste a URL to start')
-          store.setSubtitleStyle('bold-yellow')
-        }
-      } else {
-        const demoId = 'demo_' + Date.now()
-        setClipId(demoId)
-        const store = useEditorStore.getState()
-        store.setSubtitleText('Drop a video or paste a URL to start')
-        store.setSubtitleStyle('bold-yellow')
-        if (urlParam) {
-          const title = urlParam.split('/').pop()?.slice(0, 40) || 'Video Clip'
-          const saved = await createClip(user.id, { title, video_url: urlParam, duration: 60 })
-          if (saved?.id) {
-            window.history.replaceState(null, '', `/editor?id=${saved.id}&url=${encodeURIComponent(urlParam)}`)
-            setClipId(saved.id)
-            setClip({ id: saved.id, title, video_url: urlParam, duration: 60, url: urlParam })
-          }
-        }
-      }
-
-      setLoading(false)
-    }
-
-    init()
-
-    // Safety timeout — force stop loading after 10s
-    const safetyTimer = setTimeout(() => setLoading(false), 10000)
-    timeoutsRef.current.push(safetyTimer)
-
-    return () => {
-      timeoutsRef.current.forEach(clearTimeout)
-      timeoutsRef.current = []
-    }
-  }, [])
-
   const loadUser = async () => {
     const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) { window.location.href = '/login'; return }
@@ -132,7 +73,6 @@ export default function EditorPage() {
       }
 
       // Apply trim from clip data: for processed clips, use full 0-100%
-      // (start_time/end_time are original video timestamps, not relative to clip)
       store.setTrimStart(0)
       store.setTrimEnd(100)
 
@@ -169,6 +109,63 @@ export default function EditorPage() {
     }
     setLoading(false)
   }
+
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await getSupabaseClient().auth.getUser()
+      if (!user) { window.location.href = '/login'; return }
+      setUser(user)
+
+      const params = new URLSearchParams(window.location.search)
+      const id = params.get('id')
+      const urlParam = params.get('url')
+
+      if (id) {
+        setClipId(id)
+        await loadClipData(id, user)
+      } else if (!urlParam) {
+        const saved = await createClip(user.id, { title: 'New Project', duration: 0, status: 'draft' })
+        if (saved?.id) {
+          window.history.replaceState(null, '', `/editor?id=${saved.id}`)
+          setClipId(saved.id)
+          setClip({ id: saved.id, title: 'New Project', video_url: null, duration: 0 })
+        } else {
+          const demoId = 'demo_' + Date.now()
+          setClipId(demoId)
+          const store = useEditorStore.getState()
+          store.setSubtitleText('Drop a video or paste a URL to start')
+          store.setSubtitleStyle('bold-yellow')
+        }
+      } else {
+        const demoId = 'demo_' + Date.now()
+        setClipId(demoId)
+        const store = useEditorStore.getState()
+        store.setSubtitleText('Drop a video or paste a URL to start')
+        store.setSubtitleStyle('bold-yellow')
+        if (urlParam) {
+          const title = urlParam.split('/').pop()?.slice(0, 40) || 'Video Clip'
+          const saved = await createClip(user.id, { title, video_url: urlParam, duration: 60 })
+          if (saved?.id) {
+            window.history.replaceState(null, '', `/editor?id=${saved.id}&url=${encodeURIComponent(urlParam)}`)
+            setClipId(saved.id)
+            setClip({ id: saved.id, title, video_url: urlParam, duration: 60, url: urlParam })
+          }
+        }
+      }
+
+      setLoading(false)
+    }
+
+    init()
+
+    const safetyTimer = setTimeout(() => setLoading(false), 10000)
+    timeoutsRef.current.push(safetyTimer)
+
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout)
+      timeoutsRef.current = []
+    }
+  }, [])
 
   const handleKeyDown = useCallback((e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
