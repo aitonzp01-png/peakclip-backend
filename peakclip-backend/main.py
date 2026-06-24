@@ -193,60 +193,43 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             """)
 
             # ============================================================
-            # PASO 1: Configurar intercepcion ANTES de navegar
+            # PASO 1: Configurar response listener ANTES de navegar
+            # NO page.route() con route.fetch() => ENOTFOUND en Railway
+            # USAR page.on('response') => browser ya recibio la respuesta
             # ============================================================
             video_chunks = []
             audio_chunks = []
             seen_urls = set()
 
-            async def intercept_video(route, request):
-                req_url = request.url
-                if 'googlevideo.com' in req_url and 'videoplayback' in req_url:
-                    if req_url in seen_urls:
-                        await route.continue_()
+            async def on_response(response):
+                req_url = response.url
+                if 'googlevideo.com' not in req_url or 'videoplayback' not in req_url:
+                    return
+                if req_url in seen_urls:
+                    return
+                seen_urls.add(req_url)
+                try:
+                    body = await response.body()
+                    if len(body) < 10000:
                         return
-                    seen_urls.add(req_url)
-                    try:
-                        response = await route.fetch()
-                        body = await response.body()
-                        if len(body) > 10000:
-                            from urllib.parse import urlparse, parse_qs
-                            params = parse_qs(urlparse(req_url).query)
-                            mime = params.get('mime', [''])[0].lower()
-                            itag = params.get('itag', ['0'])[0]
+                    from urllib.parse import urlparse, parse_qs
+                    params = parse_qs(urlparse(req_url).query)
+                    mime = params.get('mime', [''])[0].lower()
+                    itag = params.get('itag', ['0'])[0]
 
-                            # Known YouTube audio itags
-                            AUDIO_ITAGS = {'139','140','141','249','250','251','256','258','327'}
-                            is_audio = 'audio' in mime or itag in AUDIO_ITAGS
+                    AUDIO_ITAGS = {'139','140','141','249','250','251','256','258','327'}
+                    is_audio = 'audio' in mime or itag in AUDIO_ITAGS
 
-                            # Get range offset for proper ordering
-                            range_val = params.get('range', [None])[0]
-                            offset = 0
-                            if range_val:
-                                try:
-                                    offset = int(range_val.split('-')[0])
-                                except (ValueError, IndexError):
-                                    pass
+                    if is_audio:
+                        audio_chunks.append(body)
+                        print(f"Playwright captured AUDIO: {len(body)}B (itag={itag})")
+                    else:
+                        video_chunks.append(body)
+                        print(f"Playwright captured VIDEO: {len(body)}B (itag={itag})")
+                except Exception as e:
+                    print(f"Playwright response capture error: {e}")
 
-                            if is_audio:
-                                audio_chunks.append((offset, body))
-                                print(f"Playwright intercepted AUDIO chunk: {len(body)}B (itag={itag})")
-                            else:
-                                video_chunks.append((offset, body))
-                                print(f"Playwright intercepted VIDEO chunk: {len(body)}B (itag={itag})")
-                        await route.fulfill(
-                            status=response.status,
-                            headers=dict(response.headers),
-                            body=body,
-                        )
-                    except Exception as e:
-                        print(f"Playwright intercept error: {e}")
-                        await route.continue_()
-                else:
-                    await route.continue_()
-
-            # Registrar ANTES de navegar
-            await page.route('**/*', intercept_video)
+            page.on('response', on_response)
 
             # ============================================================
             # PASO 2: Navegar a YouTube
@@ -356,8 +339,8 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             # ============================================================
             # PASO 5: Escribir archivo y mezclar con ffmpeg si necesario
             # ============================================================
-            video_bytes = b''.join(b for _, b in sorted(video_chunks, key=lambda x: x[0]))
-            audio_bytes = b''.join(b for _, b in sorted(audio_chunks, key=lambda x: x[0]))
+            video_bytes = b''.join(video_chunks)
+            audio_bytes = b''.join(audio_chunks)
 
             print(f"Playwright: video={len(video_bytes)}B audio={len(audio_bytes)}B")
 
