@@ -1575,41 +1575,23 @@ def process_video_background(job_id: str, user_id: str, url: str):
                             continue
                     break
 
-        # ── Phase 2: Playwright (browser) fallback for YouTube ──
+        # ── Phase 2: Piped / Invidious (reliable public instances) ──
+        if is_youtube and not downloaded:
+            jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious..."}
+            downloaded = (
+                download_with_piped(url, video_path) or
+                download_with_invidious(url, video_path)
+            )
+
+        # ── Phase 3: Playwright (browser) fallback for YouTube ──
         if is_youtube and not downloaded:
             jobs_store[job_id] = {"status": "processing", "message": "Downloading with browser..."}
             downloaded = asyncio.run(download_with_playwright(url, video_path))
 
-        # ── Phase 3: yt-dlp for non-YouTube URLs if still not downloaded ──
-        if not downloaded and not is_youtube:
-            jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp..."}
-            try:
-                ydl_opts = {
-                    'format': 'best[ext=mp4]/best',
-                    'outtmpl': video_path,
-                    'quiet': True,
-                    'no_warnings': True,
-                    'no_check_certificate': True,
-                    'socket_timeout': 60,
-                }
-                proxy = get_working_proxy()
-                if proxy:
-                    ydl_opts['proxy'] = proxy
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
-                if os.path.exists(video_path) and os.path.getsize(video_path) >= 1024:
-                    downloaded = True
-            except Exception as e:
-                print(f"yt-dlp non-YouTube download failed: {e}")
-
-        # ── Phase 4: Invidious → Piped → cobalt (last resort for YouTube) ──
-        if not downloaded:
-            jobs_store[job_id] = {"status": "processing", "message": "Trying alternative sources..."}
-            downloaded = (
-                download_with_invidious(url, video_path) or
-                download_with_piped(url, video_path) or
-                download_with_cobalt(url, video_path)
-            )
+        # ── Phase 4: cobalt (last resort) ──
+        if is_youtube and not downloaded:
+            jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools..."}
+            downloaded = download_with_cobalt(url, video_path)
 
         if not downloaded:
             jobs_store[job_id] = {"status": "error", "message": "Could not download video from this URL. Please try another video or upload the file directly."}

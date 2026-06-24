@@ -13,7 +13,9 @@ RUN apt-get update && apt-get install -y \
 RUN git clone --single-branch --branch master https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /root/bgutil-ytdlp-pot-provider \
     && cd /root/bgutil-ytdlp-pot-provider/server \
     && npm ci \
-    && npx tsc
+    && npx tsc \
+    && ls -la /root/bgutil-ytdlp-pot-provider/server \
+    && find /root/bgutil-ytdlp-pot-provider/server -name "index.js" -type f 2>/dev/null | head -5
 
 WORKDIR /app
 
