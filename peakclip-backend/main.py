@@ -873,7 +873,8 @@ async def run_migrations():
     try:
         supabase.table("clips").select("start_time,end_time,subtitles_srt").limit(1).execute()
         print("SQL MIGRATION: start_time/end_time/subtitles_srt columns already exist (OK)")
-    except Exception:
+    except Exception as e:
+        print(f"SQL MIGRATION: clips columns missing, attempting to add: {e}")
         async with httpx.AsyncClient(timeout=15) as client:
             headers = {
                 "apikey": service_key,
@@ -884,7 +885,10 @@ async def run_migrations():
                 "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC;"
                 "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC;"
                 "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS subtitles_srt TEXT;"
+                "NOTIFY pgrst, 'reload schema';"
             )
+            sql_success = False
+            sql_errors = []
             for url in [
                 f"https://{project_ref}.supabase.co/sql/v1/query",
                 f"https://api.supabase.com/v1/projects/{project_ref}/database/query",
@@ -893,9 +897,16 @@ async def run_migrations():
                     res = await client.post(url, json={"query": alter_sql}, headers=headers)
                     if res.status_code == 200:
                         print("SQL MIGRATION: added start_time/end_time/subtitles_srt columns (OK)")
+                        sql_success = True
                         break
-                except Exception:
-                    pass
+                    else:
+                        sql_errors.append(f"{url}: {res.status_code} {res.text[:200]}")
+                except Exception as ex:
+                    sql_errors.append(f"{url}: {ex}")
+            if not sql_success:
+                print("SQL MIGRATION WARNING: could not add subtitles_srt column")
+                for err in sql_errors:
+                    print(f"  {err}")
 
     # Ensure 'clips' storage bucket exists and is public
     try:
@@ -1861,17 +1872,34 @@ Return JSON with this exact format:
                     thumb_storage_path = f"thumbnails/{job_id}.jpg"
                     thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
 
-                supabase.table("clips").insert({
-                    "user_id": user_id,
-                    "title": clip["title"],
-                    "status": "done" if clip_storage_url else "error",
-                    "video_url": clip_storage_url,
-                    "thumbnail_url": thumb_storage_url,
-                    "duration": round(duration, 1),
-                    "start_time": clip_start,
-                    "end_time": clip["end"],
-                    "subtitles_srt": srt_content or ""
-                }).execute()
+                try:
+                    supabase.table("clips").insert({
+                        "user_id": user_id,
+                        "title": clip["title"],
+                        "status": "done" if clip_storage_url else "error",
+                        "video_url": clip_storage_url,
+                        "thumbnail_url": thumb_storage_url,
+                        "duration": round(duration, 1),
+                        "start_time": clip_start,
+                        "end_time": clip["end"],
+                        "subtitles_srt": srt_content or ""
+                    }).execute()
+                except Exception as e:
+                    print(f"Clip insert warning (subtitles_srt may need migration): {e}")
+                    # Retry without subtitles_srt if column missing
+                    try:
+                        supabase.table("clips").insert({
+                            "user_id": user_id,
+                            "title": clip["title"],
+                            "status": "done" if clip_storage_url else "error",
+                            "video_url": clip_storage_url,
+                            "thumbnail_url": thumb_storage_url,
+                            "duration": round(duration, 1),
+                            "start_time": clip_start,
+                            "end_time": clip["end"]
+                        }).execute()
+                    except Exception as e2:
+                        print(f"Clip insert failed: {e2}")
 
                 output_clips.append({
                     "clip": i + 1,
@@ -2528,16 +2556,33 @@ Return JSON with this exact format:
                 thumb_storage_path = f"thumbnails/{job_id}.jpg"
                 thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
 
-            supabase.table("clips").insert({
-                "user_id": user_id,
-                "title": clip["title"],
-                "status": "done" if clip_storage_url else "error",
-                "video_url": clip_storage_url,
-                "thumbnail_url": thumb_storage_url,
-                "duration": round(duration, 1),
-                "start_time": clip_start,
-                "end_time": clip["end"]
-            }).execute()
+            try:
+                supabase.table("clips").insert({
+                    "user_id": user_id,
+                    "title": clip["title"],
+                    "status": "done" if clip_storage_url else "error",
+                    "video_url": clip_storage_url,
+                    "thumbnail_url": thumb_storage_url,
+                    "duration": round(duration, 1),
+                    "start_time": clip_start,
+                    "end_time": clip["end"],
+                    "subtitles_srt": srt_content or ""
+                }).execute()
+            except Exception as e:
+                print(f"Clip insert warning (subtitles_srt may need migration): {e}")
+                try:
+                    supabase.table("clips").insert({
+                        "user_id": user_id,
+                        "title": clip["title"],
+                        "status": "done" if clip_storage_url else "error",
+                        "video_url": clip_storage_url,
+                        "thumbnail_url": thumb_storage_url,
+                        "duration": round(duration, 1),
+                        "start_time": clip_start,
+                        "end_time": clip["end"]
+                    }).execute()
+                except Exception as e2:
+                    print(f"Clip insert failed: {e2}")
 
             output_clips.append({
                 "clip": i + 1,
