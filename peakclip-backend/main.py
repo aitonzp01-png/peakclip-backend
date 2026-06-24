@@ -1344,8 +1344,8 @@ def generate_srt_subtitle(words, clip_start, clip_end, output_path):
         if not word_text:
             continue
         current_phrase.append(w)
-        # Break phrase on sentence-ending punctuation or max 7 words
-        if len(current_phrase) >= 7 or word_text.endswith(('.', '!', '?', ',')):
+        # Break phrase on sentence-ending punctuation or max 5 words (shorter for vertical video)
+        if len(current_phrase) >= 5 or word_text.endswith(('.', '!', '?', ',')):
             phrases.append(current_phrase)
             current_phrase = []
     if current_phrase:
@@ -1356,7 +1356,7 @@ def generate_srt_subtitle(words, clip_start, clip_end, output_path):
     i = 0
     while i < len(phrases):
         group = phrases[i]
-        while len(group) < 3 and i + 1 < len(phrases):
+        while len(group) < 2 and i + 1 < len(phrases):
             i += 1
             group.extend(phrases[i])
         merged.append(group)
@@ -1413,8 +1413,8 @@ def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, 
             height = int(probe.stdout.strip())
     except Exception:
         pass
-    # Scale font size with height: ~1/38 of video height, bounded
-    font_size = max(16, min(56, height // 38))
+    # Scale font size with height: smaller for 9:16 vertical videos
+    font_size = max(18, min(40, height // 55))
     margin_v = max(10, height // 80)
     print(f"Subtitle burn: video height={height}, font_size={font_size}, margin_v={margin_v}")
 
