@@ -1536,19 +1536,28 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
 
     # 1) Try getting the clip's processed video from Supabase Storage
     try:
-        supabase_url = supabase.table("clips").select("url").eq("id", req.clip_id).eq("user_id", user_id).execute()
+        supabase_url = supabase.table("clips").select("url,video_url").eq("id", req.clip_id).eq("user_id", user_id).execute()
         clip_data = supabase_url.data
-        if clip_data and clip_data[0].get("url"):
-            stored_url = clip_data[0]["url"]
-            source_path = f"downloads/{job_id}_source.mp4"
-            r = httpx.get(stored_url, timeout=120)
-            if r.status_code == 200:
-                with open(source_path, "wb") as f:
-                    f.write(r.content)
-                print(f"Export: using stored clip from Supabase ({os.path.getsize(source_path)} bytes)")
-            else:
-                source_path = None
-    except Exception:
+        if clip_data:
+            stored_url = clip_data[0].get("url") or clip_data[0].get("video_url")
+            if stored_url:
+                source_path = f"downloads/{job_id}_source.mp4"
+                print(f"Export: fetching stored clip from {stored_url[:80]}...")
+                r = httpx.get(stored_url, timeout=120, follow_redirects=True)
+                if r.status_code == 200 and len(r.content) >= 1024:
+                    with open(source_path, "wb") as f:
+                        f.write(r.content)
+                    print(f"Export: using stored clip from Supabase ({os.path.getsize(source_path)} bytes)")
+                else:
+                    print(f"Export: stored clip fetch failed (status={r.status_code}, size={len(r.content)})")
+                    source_path = None
+    except Exception as e:
+        print(f"Export: stored clip error: {e}")
+        source_path = None
+
+    # Source validation
+    if source_path and os.path.getsize(source_path) < 1024:
+        print(f"Export: source too small ({os.path.getsize(source_path)} bytes), discarding")
         source_path = None
 
     # 2) Fallback: download from the provided URL (works for direct MP4 URLs)
@@ -1578,10 +1587,17 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         '-of', 'default=noprint_wrappers=1:nokey=1', source_path
     ], capture_output=True, text=True)
 
-    total_duration = float(probe.stdout.strip() or 30)
+    try:
+        total_duration = float(probe.stdout.strip())
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail=f"Could not probe source video. Source size: {os.path.getsize(source_path)} bytes. ffprobe: {probe.stderr[:200]}")
+    if total_duration <= 0:
+        raise HTTPException(status_code=400, detail=f"Invalid source duration: {total_duration}s. File may be corrupt.")
+
     trim_s = req.trim_start / 100 * total_duration
     trim_d = (req.trim_end - req.trim_start) / 100 * total_duration
     trim_d = max(trim_d, 2)
+    print(f"Export: source={os.path.getsize(source_path)}B dur={total_duration}s trim={trim_s}-{trim_s+trim_d}s")
 
     # Resolution mapping
     res_map = {"720p": "720:1280", "1080p": "1080:1920", "4k": "2160:3840"}
@@ -1714,14 +1730,25 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         cmd.extend(['-y', output_path])
 
         result = subprocess.run(cmd, capture_output=True, text=True)
+        print(f"Export: ffmpeg exit={result.returncode} output_size={os.path.getsize(output_path) if os.path.exists(output_path) else 0}")
         if result.returncode != 0:
             err_lines = result.stderr.strip().split('\n')[-10:] if result.stderr else ["unknown ffmpeg error"]
             raise HTTPException(status_code=400, detail=f"Export error: {' | '.join(err_lines)[:500]}")
+
+        if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
+            size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+            source_size = os.path.getsize(source_path)
+            stderr_tail = result.stderr.strip().split('\n')[-5:] if result.stderr else ["no stderr"]
+            raise HTTPException(status_code=400, detail=f"Export produced empty file ({size}B). Source: {source_size}B, trim: {trim_s:.1f}s-{trim_s+trim_d:.1f}s dur:{total_duration}s. ffmpeg: {' | '.join(stderr_tail)[:300]}")
+
         local_files.append(output_path)
 
         # Upload to Supabase Storage
         storage_path = f"exports/{output_filename}"
         public_url = upload_to_storage(output_path, "clips", storage_path, f"video/{output_ext}")
+
+        if not public_url:
+            raise HTTPException(status_code=400, detail="Export failed: could not upload to storage")
 
         # Update clip record
         supabase.table("clips").update({
