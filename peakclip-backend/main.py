@@ -2052,9 +2052,9 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         elif req.filter_style == "cool":
             vf = f"{vf},colorbalance=rs=-.2:gs=.1:bs=.3"
 
-        # Subtitles via textfile
-        subtitle_text = req.subtitle_text or "PeakClip"
-        if req.subtitle_style != "none" and subtitle_text:
+        # Subtitles via textfile (only if explicitly provided)
+        subtitle_text = req.subtitle_text or ""
+        if req.subtitle_style != "none" and subtitle_text.strip():
             fs = req.font_size
             style_configs = {
                 "bold-yellow": f"fontsize={fs}:fontcolor=yellow:borderw=3:bordercolor=black",

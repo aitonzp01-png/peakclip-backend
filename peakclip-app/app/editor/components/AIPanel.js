@@ -65,10 +65,8 @@ export default function AIPanel() {
 
     switch (toolId) {
       case 'auto-captions': {
-        const text = s.subtitleText || clip?.title || clip?.reason || 'Add your caption text'
-        s.setSubtitleText(text)
         s.setSubtitleStyle('bold-yellow')
-        s.showHint('Captions ready — edit in Text panel')
+        s.showHint('Auto captions: edit text in the Text panel')
         break
       }
       case 'hook-detection': {

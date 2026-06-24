@@ -51,9 +51,8 @@ export default function EditorPage() {
           }
           setClip({ id: realId, title, video_url: urlParam, duration: 60, url: urlParam })
           setClipId(realId)
-          store.setSubtitleText(title)
         } else {
-          store.setSubtitleText('New project — add media to start')
+          store.setSubtitleText('')
         }
         setLoading(false)
         return
@@ -64,12 +63,11 @@ export default function EditorPage() {
 
       if (data) {
         setClip(data)
-        const title = data.title || 'Clip'
-        store.setSubtitleText(title)
+        store.setSubtitleText('')
       } else if (urlParam) {
         const title = urlParam.split('/').pop()?.slice(0, 40) || 'Video Clip'
         setClip({ id, title, video_url: urlParam, duration: 60, url: urlParam })
-        store.setSubtitleText(title)
+        store.setSubtitleText('')
       }
 
       // Apply trim from clip data: for processed clips, use full 0-100%
@@ -99,9 +97,9 @@ export default function EditorPage() {
           setClipId(realId)
         }
         setClip({ id: realId, title, video_url: urlParam, duration: 60, url: urlParam })
-        store.setSubtitleText(title)
+        store.setSubtitleText('')
       } else {
-        store.setSubtitleText('Demo clip loaded')
+        store.setSubtitleText('')
         store.setSubtitleStyle('bold-yellow')
       }
       store.setMusic('chill')
