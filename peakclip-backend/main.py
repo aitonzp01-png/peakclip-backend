@@ -299,71 +299,120 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                 print("Playwright: no video URL extracted")
                 await browser.close()
                 return False
-            # Download using the browser's real fetch() inside Chromium, streaming chunks back to Python
-            # page.request.get() uses Node.js HTTP -> wrong TLS fingerprint -> 403
-            # page.goto() tries to "play" the video -> 0 bytes captured
-            # Solution: page.evaluate() with fetch() + ReadableStream + exposed chunk callback
-            print(f"Playwright downloading via browser fetch + stream...")
-            import base64 as _b64_module
-            chunks_queue = asyncio.Queue()
-            fetch_error = []
 
-            async def __pw_receive_chunk(data: str):
-                if data == '__DONE__':
-                    await chunks_queue.put(None)
-                elif data.startswith('__ERR__:'):
-                    fetch_error.append(data[8:])
-                    await chunks_queue.put(None)
+            # NEW APPROACH: intercept video stream while native player plays
+            # googlevideo URLs require the browser's real session context with proper
+            # referrer/origin headers that only the native video player sends.
+            # Using page.route() we capture the actual bytes YouTube serves.
+            print("Playwright: setting up route interception for video stream...")
+            collected_chunks = []
+            video_response_urls = set()
+
+            async def intercept_video(route, request):
+                req_url = request.url
+                if 'googlevideo.com' in req_url and 'videoplayback' in req_url:
+                    if req_url in video_response_urls:
+                        await route.continue_()
+                        return
+                    video_response_urls.add(req_url)
+                    try:
+                        response = await route.fetch()
+                        body = await response.body()
+                        if len(body) > 10000:
+                            content_type = response.headers.get('content-type', '')
+                            content_range = response.headers.get('content-range', '')
+                            collected_chunks.append({
+                                'data': body,
+                                'url': req_url,
+                                'content_type': content_type,
+                                'content_range': content_range,
+                            })
+                            print(f"Playwright intercepted chunk: {len(body)} bytes (range: {content_range[:50] or 'full'}) from {req_url[:60]}...")
+                        await route.fulfill(
+                            status=response.status,
+                            headers=dict(response.headers),
+                            body=body,
+                        )
+                    except Exception as e:
+                        print(f"Playwright route intercept error: {e}")
+                        await route.continue_()
                 else:
-                    await chunks_queue.put(_b64_module.b64decode(data))
+                    await route.continue_()
 
-            await page.expose_function('__pw_put_chunk', __pw_receive_chunk)
+            await page.route('**/*', intercept_video)
 
-            # Increase timeout: video download can take minutes for large files
-            page.set_default_timeout(600000)
-
-            # Start the browser-side download (runs async, chunks arrive via __pw_put_chunk)
-            await page.evaluate("""
-                async (videoUrl) => {
-                    try {
-                        const resp = await fetch(videoUrl);
-                        if (!resp.ok) { window.__pw_put_chunk('__ERR__:' + resp.status); return; }
-                        const reader = resp.body.getReader();
-                        while (true) {
-                            const {done, value} = await reader.read();
-                            if (done) break;
-                            let binary = '';
-                            for (let i = 0; i < value.length; i++) binary += String.fromCharCode(value[i]);
-                            window.__pw_put_chunk(btoa(binary));
-                        }
-                        window.__pw_put_chunk('__DONE__');
-                    } catch(e) {
-                        window.__pw_put_chunk('__ERR__:' + e.message);
-                    }
-                }
-            """, video_url)
-
-            # Write chunks to file as they arrive
+            # Trigger native video player to start playback
             try:
-                with open(output_path, "wb") as f:
-                    while True:
-                        chunk = await asyncio.wait_for(chunks_queue.get(), timeout=600)
-                        if chunk is None:
-                            break
-                        f.write(chunk)
-            except asyncio.TimeoutError:
-                print("Playwright: download timed out")
-                await browser.close()
-                return False
+                await page.evaluate("""
+                    () => {
+                        const video = document.querySelector('video');
+                        if (video) {
+                            video.muted = true;
+                            video.currentTime = 0;
+                            video.play().catch(() => {});
+                        }
+                    }
+                """)
+                print("Playwright: triggered native player, waiting for video stream...")
 
+                # Wait for initial chunks
+                await page.wait_for_timeout(8000)
+
+                # Try clicking the player if no chunks yet
+                if not collected_chunks:
+                    try:
+                        await page.click('video', timeout=3000)
+                        await page.wait_for_timeout(8000)
+                    except Exception:
+                        pass
+
+                # YouTube makes range requests - wait until chunks stop arriving
+                if collected_chunks:
+                    last_count = 0
+                    max_wait_cycles = 30
+                    cycle = 0
+                    while cycle < max_wait_cycles:
+                        await page.wait_for_timeout(3000)
+                        current_count = len(collected_chunks)
+                        if current_count == last_count:
+                            break
+                        last_count = current_count
+                        cycle += 1
+                    print(f"Playwright: collected {len(collected_chunks)} chunks total")
+                else:
+                    print("Playwright: no video chunks intercepted from native player")
+
+            except Exception as e:
+                print(f"Playwright: player interaction failed: {e}")
+
+            await page.unroute('**/*', intercept_video)
             await browser.close()
 
-            if fetch_error:
-                print(f"Playwright browser fetch error: {fetch_error[0]}")
+            if not collected_chunks:
+                print("Playwright: no video data intercepted")
                 return False
 
+            # Sort chunks by content-range to ensure correct order
+            def _range_start(chunk):
+                cr = chunk.get('content_range', '')
+                if cr and 'bytes ' in cr:
+                    try:
+                        return int(cr.split(' ')[1].split('-')[0])
+                    except (ValueError, IndexError):
+                        pass
+                return 0
+
+            collected_chunks.sort(key=_range_start)
+
+            # Write all chunks to file in order
+            total_bytes = sum(len(c['data']) for c in collected_chunks)
+            print(f"Playwright: writing {total_bytes} bytes ({len(collected_chunks)} chunks) to {output_path}")
+            with open(output_path, 'wb') as f:
+                for chunk in collected_chunks:
+                    f.write(chunk['data'])
+
             if os.path.getsize(output_path) >= 1024:
-                print(f"Playwright download success via fetch: {os.path.getsize(output_path)} bytes")
+                print(f"Playwright download success via interception: {os.path.getsize(output_path)} bytes")
                 return True
             else:
                 print(f"Playwright download too small: {os.path.getsize(output_path)} bytes")
