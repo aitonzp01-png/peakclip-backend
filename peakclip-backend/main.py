@@ -304,8 +304,10 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             # googlevideo URLs require the browser's real session context with proper
             # referrer/origin headers that only the native video player sends.
             # Using page.route() we capture the actual bytes YouTube serves.
+            # YouTube uses DASH: video and audio are separate requests. Split them.
             print("Playwright: setting up route interception for video stream...")
-            collected_chunks = []
+            video_chunks = []
+            audio_chunks = []
             video_response_urls = set()
 
             async def intercept_video(route, request):
@@ -319,15 +321,25 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                         response = await route.fetch()
                         body = await response.body()
                         if len(body) > 10000:
-                            content_type = response.headers.get('content-type', '')
+                            from urllib.parse import urlparse, parse_qs
+                            parsed = urlparse(req_url)
+                            params = parse_qs(parsed.query)
+                            mime_param = params.get('mime', [''])[0].lower()
                             content_range = response.headers.get('content-range', '')
-                            collected_chunks.append({
-                                'data': body,
-                                'url': req_url,
-                                'content_type': content_type,
-                                'content_range': content_range,
-                            })
-                            print(f"Playwright intercepted chunk: {len(body)} bytes (range: {content_range[:50] or 'full'}) from {req_url[:60]}...")
+
+                            if 'audio' in mime_param:
+                                audio_chunks.append({
+                                    'data': body,
+                                    'content_range': content_range,
+                                })
+                                print(f"Playwright intercepted AUDIO chunk: {len(body)}B (range: {content_range[:50] or 'full'})")
+                            else:
+                                video_chunks.append({
+                                    'data': body,
+                                    'content_range': content_range,
+                                })
+                                print(f"Playwright intercepted VIDEO chunk: {len(body)}B (range: {content_range[:50] or 'full'})")
+
                         await route.fulfill(
                             status=response.status,
                             headers=dict(response.headers),
@@ -359,7 +371,7 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                 await page.wait_for_timeout(8000)
 
                 # Try clicking the player if no chunks yet
-                if not collected_chunks:
+                if not video_chunks and not audio_chunks:
                     try:
                         await page.click('video', timeout=3000)
                         await page.wait_for_timeout(8000)
@@ -367,18 +379,18 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                         pass
 
                 # YouTube makes range requests - wait until chunks stop arriving
-                if collected_chunks:
+                if video_chunks or audio_chunks:
                     last_count = 0
                     max_wait_cycles = 30
                     cycle = 0
                     while cycle < max_wait_cycles:
                         await page.wait_for_timeout(3000)
-                        current_count = len(collected_chunks)
+                        current_count = len(video_chunks) + len(audio_chunks)
                         if current_count == last_count:
                             break
                         last_count = current_count
                         cycle += 1
-                    print(f"Playwright: collected {len(collected_chunks)} chunks total")
+                    print(f"Playwright: collected {len(video_chunks)} video + {len(audio_chunks)} audio chunks")
                 else:
                     print("Playwright: no video chunks intercepted from native player")
 
@@ -388,7 +400,7 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             await page.unroute('**/*', intercept_video)
             await browser.close()
 
-            if not collected_chunks:
+            if not video_chunks:
                 print("Playwright: no video data intercepted")
                 return False
 
@@ -402,14 +414,47 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                         pass
                 return 0
 
-            collected_chunks.sort(key=_range_start)
+            video_chunks.sort(key=_range_start)
+            audio_chunks.sort(key=_range_start)
 
-            # Write all chunks to file in order
-            total_bytes = sum(len(c['data']) for c in collected_chunks)
-            print(f"Playwright: writing {total_bytes} bytes ({len(collected_chunks)} chunks) to {output_path}")
-            with open(output_path, 'wb') as f:
-                for chunk in collected_chunks:
-                    f.write(chunk['data'])
+            video_bytes = b''.join(c['data'] for c in video_chunks)
+            audio_bytes = b''.join(c['data'] for c in audio_chunks)
+            print(f"Playwright: video={len(video_bytes)}B audio={len(audio_bytes)}B")
+
+            if audio_bytes:
+                # DASH: separate video and audio streams → mux with ffmpeg
+                tmp_video = output_path + '.video.tmp'
+                tmp_audio = output_path + '.audio.tmp'
+                with open(tmp_video, 'wb') as f:
+                    f.write(video_bytes)
+                with open(tmp_audio, 'wb') as f:
+                    f.write(audio_bytes)
+
+                result = subprocess.run([
+                    'ffmpeg', '-y',
+                    '-i', tmp_video,
+                    '-i', tmp_audio,
+                    '-c:v', 'copy',
+                    '-c:a', 'aac',
+                    '-shortest',
+                    output_path
+                ], capture_output=True, text=True, timeout=120)
+
+                for tmp in [tmp_video, tmp_audio]:
+                    try:
+                        os.remove(tmp)
+                    except Exception:
+                        pass
+
+                if result.returncode != 0:
+                    print(f"Playwright: ffmpeg mux failed: {result.stderr[:200]}")
+                    # Fallback: save video-only
+                    with open(output_path, 'wb') as f:
+                        f.write(video_bytes)
+            else:
+                # Progressive format: video already has audio muxed
+                with open(output_path, 'wb') as f:
+                    f.write(video_bytes)
 
             if os.path.getsize(output_path) >= 1024:
                 print(f"Playwright download success via interception: {os.path.getsize(output_path)} bytes")
@@ -1357,9 +1402,20 @@ def process_video_background(job_id: str, user_id: str, url: str):
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
         # Extract audio at low bitrate to stay under Whisper's 25MB limit
-        subprocess.run([
+        result = subprocess.run([
             'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '24k', audio_path, '-y'
-        ], capture_output=True)
+        ], capture_output=True, text=True)
+        if result.returncode != 0 or not os.path.exists(audio_path) or os.path.getsize(audio_path) < 512:
+            print(f"Audio extraction failed (rc={result.returncode}, stderr={result.stderr[:200]}), retrying with alternate codec...")
+            # Retry with different approach: extract with aac first, then convert
+            result = subprocess.run([
+                'ffmpeg', '-y', '-i', video_path,
+                '-vn', '-acodec', 'libmp3lame', '-q:a', '4',
+                '-ar', '16000', '-ac', '1',
+                audio_path
+            ], capture_output=True, text=True, timeout=60)
+        if not os.path.exists(audio_path) or os.path.getsize(audio_path) < 512:
+            raise FileNotFoundError(f"Could not extract audio from video: {audio_path} (video size: {os.path.getsize(video_path)} bytes)")
 
         # Generate a thumbnail for the source video
         thumb_path = f"thumbnails/{job_id}.jpg"
@@ -1946,9 +2002,18 @@ async def upload_video(
 
     jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
 
-    subprocess.run([
+    result = subprocess.run([
         'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '24k', audio_path, '-y'
-    ], capture_output=True)
+    ], capture_output=True, text=True)
+    if result.returncode != 0 or not os.path.exists(audio_path) or os.path.getsize(audio_path) < 512:
+        result = subprocess.run([
+            'ffmpeg', '-y', '-i', video_path,
+            '-vn', '-acodec', 'libmp3lame', '-q:a', '4',
+            '-ar', '16000', '-ac', '1',
+            audio_path
+        ], capture_output=True, text=True, timeout=60)
+    if not os.path.exists(audio_path) or os.path.getsize(audio_path) < 512:
+        raise FileNotFoundError(f"Could not extract audio from uploaded video: {audio_path}")
 
     thumb_path = f"thumbnails/{job_id}.jpg"
     generate_thumbnail(video_path, thumb_path)
