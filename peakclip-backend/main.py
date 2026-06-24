@@ -147,282 +147,200 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
         print(f"Trying Playwright v2 for {url}")
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'])
+            browser = await p.chromium.launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox',
+                      '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required']
+            )
             context = await browser.new_context(
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
                 viewport={'width': 1920, 'height': 1080},
             )
-            # Load cookies from file if available (after auto-refresh)
+
+            # Load cookies
             cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
             if not os.path.exists(cookie_path):
                 cookie_path = "cookies.txt"
             if os.path.exists(cookie_path):
                 try:
-                    with open(cookie_path, 'r') as f:
-                        cookies_content = f.read()
-                    import base64 as _b64
                     pw_cookies = []
-                    for line in cookies_content.split('\n'):
-                        if line.startswith('#') or not line.strip():
-                            continue
-                        parts = line.split('\t')
-                        if len(parts) >= 7:
-                            pw_cookies.append({
-                                'name': parts[5], 'value': parts[6],
-                                'domain': parts[0], 'path': parts[2],
-                                'secure': parts[3] == 'TRUE',
-                                'httpOnly': False,
-                            })
+                    with open(cookie_path, 'r') as f:
+                        for line in f.read().split('\n'):
+                            if line.startswith('#') or not line.strip():
+                                continue
+                            parts = line.split('\t')
+                            if len(parts) >= 7:
+                                pw_cookies.append({
+                                    'name': parts[5], 'value': parts[6],
+                                    'domain': parts[0], 'path': parts[2],
+                                    'secure': parts[3] == 'TRUE',
+                                    'httpOnly': False,
+                                })
                     if pw_cookies:
                         await context.add_cookies(pw_cookies)
                         print(f"Playwright: loaded {len(pw_cookies)} cookies from {cookie_path}")
                 except Exception as e:
                     print(f"Playwright cookie load failed: {e}")
-            else:
-                print("Playwright: no cookie file found")
 
             page = await context.new_page()
+
+            # Anti-detection
             await page.add_init_script("""
                 Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-                Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-                Object.defineProperty(navigator, 'hardwareConcurrency', {get: () => 8});
-                Object.defineProperty(navigator, 'deviceMemory', {get: () => 8});
-                Object.defineProperty(navigator, 'maxTouchPoints', {get: () => 0});
+                Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
+                Object.defineProperty(navigator, 'languages', {get: () => ['en-US','en']});
                 window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
-                const originalQuery = window.navigator.permissions.query;
-                window.navigator.permissions.query = (parameters) => (
-                    parameters.name === 'notifications' ?
-                        Promise.resolve({ state: Notification.permission }) :
-                        originalQuery(parameters)
-                );
             """)
-            # Try to load video page and extract player response
-            video_url = None
-            for target_url in [
-                f"https://www.youtube.com/watch?v={video_id}",
-                f"https://m.youtube.com/watch?v={video_id}",
-            ]:
-                try:
-                    await page.goto(target_url, wait_until='networkidle', timeout=30000)
-                    await page.wait_for_timeout(3000)
-                    # Handle YouTube consent / sign-in / age gate overlays
-                    for selector in [
-                        'button[aria-label*="Accept"]',
-                        'form[action*="consent"] button',
-                        'ytd-button-renderer button',
-                        'tp-yt-paper-dialog button',
-                        'button:has-text("Accept all")',
-                        'button:has-text("I agree")',
-                        'button:has-text("Reject all")',
-                        'button:has-text("No thanks")',
-                    ]:
-                        try:
-                            btn = await page.wait_for_selector(selector, timeout=2000)
-                            if btn:
-                                await btn.click()
-                                await page.wait_for_timeout(2000)
-                        except Exception:
-                            pass
-                    html = await page.content()
-                    import re as _re
-                    match = _re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});\s*var\s+', html, _re.DOTALL)
-                    if not match:
-                        match = _re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});', html)
-                    if match:
-                        data = json.loads(match.group(1))
-                        all_fmts = data.get('streamingData', {}).get('formats', []) + \
-                                   data.get('streamingData', {}).get('adaptiveFormats', [])
 
-                        def _decode_fmt_url(fmt):
-                            # Direct URL
-                            url = fmt.get('url')
-                            if url:
-                                return url
-                            # signatureCipher: s=XXXX&sp=sig&url=https%3A%2F%2F...
-                            sc = fmt.get('signatureCipher') or fmt.get('cipher')
-                            if sc:
-                                from urllib.parse import unquote, parse_qs
-                                params = parse_qs(sc)
-                                url_val = params.get('url', [None])[0]
-                                if url_val:
-                                    s_val = params.get('s', [None])[0] or params.get('sig', [None])[0]
-                                    sp_val = params.get('sp', ['sig'])[0]
-                                    if s_val:
-                                        return f"{url_val}&{sp_val}={unquote(s_val)}"
-                                    return url_val
-                            return None
-
-                        video_formats = []
-                        for f in all_fmts:
-                            url = _decode_fmt_url(f)
-                            mime = str(f.get('mimeType', ''))
-                            if url and ('video' in mime or 'mp4' in mime or 'webm' in mime or '3gp' in mime):
-                                video_formats.append((f.get('height', 0) or 0, url))
-                        video_formats.sort(key=lambda x: x[0], reverse=True)
-                        if video_formats:
-                            video_url = video_formats[0][1]
-                            print(f"Playwright extracted URL ({video_formats[0][0]}p): {video_url[:80]}...")
-                            break
-                        else:
-                            # Last resort: try any format with a decodable URL
-                            for f in all_fmts:
-                                url = _decode_fmt_url(f)
-                                if url:
-                                    video_url = url
-                                    print(f"Playwright extracted URL (fallback): {video_url[:80]}...")
-                                    break
-                            if not video_url:
-                                print(f"Playwright: ytInitialPlayerResponse found but no decodable video URL ({len(all_fmts)} formats)")
-                                # Dump format keys for debugging
-                                if all_fmts:
-                                    sample_keys = list(all_fmts[0].keys()) if all_fmts else []
-                                    print(f"Playwright: sample format keys: {sample_keys}")
-                    else:
-                        # Debug: print page info to diagnose what YouTube is serving
-                        page_title = await page.title()
-                        body_snippet = html[:500]
-                        print(f"Playwright page title: '{page_title}'")
-                        # Check for known block pages
-                        if 'sign in' in html.lower() and 'confirm you' in html.lower():
-                            print("Playwright: YouTube serving sign-in challenge page")
-                        elif 'unavailable' in html.lower():
-                            print("Playwright: video unavailable")
-                        elif 'age' in html.lower() and 'restrict' in html.lower():
-                            print("Playwright: age-restricted video")
-                        else:
-                            print(f"Playwright: no ytInitialPlayerResponse in HTML ({len(html)} bytes html)")
-                except Exception as e:
-                    print(f"Playwright page load failed for {target_url}: {e}")
-                    continue
-            if not video_url:
-                print("Playwright: no video URL extracted")
-                await browser.close()
-                return False
-
-            # NEW APPROACH: intercept video stream while native player plays
-            # googlevideo URLs require the browser's real session context with proper
-            # referrer/origin headers that only the native video player sends.
-            # Using page.route() we capture the actual bytes YouTube serves.
-            # YouTube uses DASH: video and audio are separate requests. Split them.
-            print("Playwright: setting up route interception for video stream...")
+            # ============================================================
+            # PASO 1: Configurar intercepcion ANTES de navegar
+            # ============================================================
             video_chunks = []
             audio_chunks = []
-            video_response_urls = set()
+            seen_urls = set()
 
             async def intercept_video(route, request):
                 req_url = request.url
                 if 'googlevideo.com' in req_url and 'videoplayback' in req_url:
-                    if req_url in video_response_urls:
+                    if req_url in seen_urls:
                         await route.continue_()
                         return
-                    video_response_urls.add(req_url)
+                    seen_urls.add(req_url)
                     try:
                         response = await route.fetch()
                         body = await response.body()
                         if len(body) > 10000:
                             from urllib.parse import urlparse, parse_qs
-                            parsed = urlparse(req_url)
-                            params = parse_qs(parsed.query)
-                            mime_param = params.get('mime', [''])[0].lower()
-                            content_range = response.headers.get('content-range', '')
-
-                            if 'audio' in mime_param:
-                                audio_chunks.append({
-                                    'data': body,
-                                    'content_range': content_range,
-                                })
-                                print(f"Playwright intercepted AUDIO chunk: {len(body)}B (range: {content_range[:50] or 'full'})")
+                            params = parse_qs(urlparse(req_url).query)
+                            mime = params.get('mime', [''])[0].lower()
+                            itag = params.get('itag', [''])[0]
+                            if 'audio' in mime:
+                                audio_chunks.append(body)
+                                print(f"Playwright intercepted AUDIO chunk: {len(body)} bytes (itag={itag})")
                             else:
-                                video_chunks.append({
-                                    'data': body,
-                                    'content_range': content_range,
-                                })
-                                print(f"Playwright intercepted VIDEO chunk: {len(body)}B (range: {content_range[:50] or 'full'})")
-
+                                video_chunks.append(body)
+                                print(f"Playwright intercepted VIDEO chunk: {len(body)} bytes (itag={itag})")
                         await route.fulfill(
                             status=response.status,
                             headers=dict(response.headers),
                             body=body,
                         )
                     except Exception as e:
-                        print(f"Playwright route intercept error: {e}")
+                        print(f"Playwright intercept error: {e}")
                         await route.continue_()
                 else:
                     await route.continue_()
 
+            # Registrar ANTES de navegar
             await page.route('**/*', intercept_video)
 
-            # Trigger native video player to start playback
+            # ============================================================
+            # PASO 2: Navegar a YouTube
+            # ============================================================
+            target_url = f"https://www.youtube.com/watch?v={video_id}"
+            print(f"Playwright: navigating to {target_url}")
             try:
-                await page.evaluate("""
-                    () => {
-                        const video = document.querySelector('video');
-                        if (video) {
-                            video.muted = true;
-                            video.currentTime = 0;
-                            video.play().catch(() => {});
-                        }
-                    }
-                """)
-                print("Playwright: triggered native player, waiting for video stream...")
+                await page.goto(target_url, wait_until='domcontentloaded', timeout=30000)
+            except Exception as e:
+                print(f"Playwright: goto failed: {e}")
+                await browser.close()
+                return False
 
-                # Wait for initial chunks
-                await page.wait_for_timeout(8000)
+            # ============================================================
+            # PASO 3: Forzar reproduccion del video
+            # ============================================================
+            await page.wait_for_timeout(3000)
 
-                # Try clicking the player if no chunks yet
-                if not video_chunks and not audio_chunks:
+            # Accept consent overlays
+            for selector in [
+                'button[aria-label*="Accept"]',
+                'button:has-text("Accept all")',
+                'button:has-text("I agree")',
+                'button:has-text("Reject all")',
+            ]:
+                try:
+                    btn = page.locator(selector).first
+                    if await btn.is_visible(timeout=1000):
+                        await btn.click()
+                        await page.wait_for_timeout(1000)
+                except Exception:
+                    pass
+
+            # Trigger playback via multiple strategies
+            for play_strategy in [
+                "document.querySelector('video')?.play().catch(()=>{})",
+                None,
+                None,
+            ]:
+                if play_strategy:
                     try:
-                        await page.click('video', timeout=3000)
-                        await page.wait_for_timeout(8000)
+                        await page.evaluate(play_strategy)
                     except Exception:
                         pass
 
-                # YouTube makes range requests - wait until chunks stop arriving
-                if video_chunks or audio_chunks:
-                    last_count = 0
-                    max_wait_cycles = 30
-                    cycle = 0
-                    while cycle < max_wait_cycles:
-                        await page.wait_for_timeout(3000)
-                        current_count = len(video_chunks) + len(audio_chunks)
-                        if current_count == last_count:
-                            break
-                        last_count = current_count
-                        cycle += 1
-                    print(f"Playwright: collected {len(video_chunks)} video + {len(audio_chunks)} audio chunks")
-                else:
-                    print("Playwright: no video chunks intercepted from native player")
+            # Click the player as fallback
+            try:
+                await page.click('#movie_player', timeout=3000)
+            except Exception:
+                pass
 
-            except Exception as e:
-                print(f"Playwright: player interaction failed: {e}")
+            # Unmute so YouTube sends audio chunks too
+            try:
+                await page.evaluate("""
+                    const v = document.querySelector('video');
+                    if (v) { v.muted = false; v.volume = 0.5; }
+                """)
+            except Exception:
+                pass
 
-            await page.unroute('**/*', intercept_video)
+            print("Playwright: triggered native player, waiting for video stream...")
+
+            # ============================================================
+            # PASO 4: Esperar chunks con timeout adaptativo
+            # ============================================================
+            waited = 0
+            while waited < 60 and not video_chunks and not audio_chunks:
+                await page.wait_for_timeout(2000)
+                waited += 2
+
+            if not video_chunks and not audio_chunks:
+                print("Playwright: no chunks after 60s, trying scroll/interact...")
+                try:
+                    await page.evaluate("window.scrollTo(0, 300)")
+                    await page.evaluate("document.querySelector('video')?.play()")
+                    await page.wait_for_timeout(10000)
+                except Exception:
+                    pass
+
+            # Wait until chunks stop arriving (5s idle window)
+            if video_chunks or audio_chunks:
+                last_total = 0
+                idle_cycles = 0
+                while idle_cycles < 3:
+                    await page.wait_for_timeout(5000)
+                    current_total = len(video_chunks) + len(audio_chunks)
+                    if current_total == last_total:
+                        idle_cycles += 1
+                    else:
+                        idle_cycles = 0
+                        last_total = current_total
+                print(f"Playwright: collected {len(video_chunks)} video + {len(audio_chunks)} audio chunks")
+
             await browser.close()
 
-            if not video_chunks:
-                print("Playwright: no video data intercepted")
-                return False
+            # ============================================================
+            # PASO 5: Escribir archivo y mezclar con ffmpeg si necesario
+            # ============================================================
+            video_bytes = b''.join(video_chunks)
+            audio_bytes = b''.join(audio_chunks)
 
-            # Sort chunks by content-range to ensure correct order
-            def _range_start(chunk):
-                cr = chunk.get('content_range', '')
-                if cr and 'bytes ' in cr:
-                    try:
-                        return int(cr.split(' ')[1].split('-')[0])
-                    except (ValueError, IndexError):
-                        pass
-                return 0
-
-            video_chunks.sort(key=_range_start)
-            audio_chunks.sort(key=_range_start)
-
-            video_bytes = b''.join(c['data'] for c in video_chunks)
-            audio_bytes = b''.join(c['data'] for c in audio_chunks)
             print(f"Playwright: video={len(video_bytes)}B audio={len(audio_bytes)}B")
 
+            if not video_bytes:
+                print("Playwright: no video data captured")
+                return False
+
             if audio_bytes:
-                # DASH: separate video and audio streams → mux with ffmpeg
                 tmp_video = output_path + '.video.tmp'
                 tmp_audio = output_path + '.audio.tmp'
                 with open(tmp_video, 'wb') as f:
@@ -434,37 +352,37 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                     'ffmpeg', '-y',
                     '-i', tmp_video,
                     '-i', tmp_audio,
-                    '-c:v', 'copy',
-                    '-c:a', 'aac',
-                    '-shortest',
+                    '-c:v', 'copy', '-c:a', 'aac', '-shortest',
                     output_path
-                ], capture_output=True, text=True, timeout=120)
+                ], capture_output=True, timeout=120)
 
                 for tmp in [tmp_video, tmp_audio]:
-                    try:
-                        os.remove(tmp)
-                    except Exception:
-                        pass
+                    try: os.remove(tmp)
+                    except: pass
 
                 if result.returncode != 0:
-                    print(f"Playwright: ffmpeg mux failed: {result.stderr[:200]}")
-                    # Fallback: save video-only
+                    print(f"Playwright: ffmpeg mux failed, saving video-only: {result.stderr.decode()[:300]}")
                     with open(output_path, 'wb') as f:
                         f.write(video_bytes)
+                else:
+                    print("Playwright: ffmpeg mux success")
             else:
-                # Progressive format: video already has audio muxed
                 with open(output_path, 'wb') as f:
                     f.write(video_bytes)
 
-            if os.path.getsize(output_path) >= 1024:
-                print(f"Playwright download success via interception: {os.path.getsize(output_path)} bytes")
+            size = os.path.getsize(output_path)
+            if size >= 1024:
+                print(f"Playwright download success: {size} bytes")
                 return True
             else:
-                print(f"Playwright download too small: {os.path.getsize(output_path)} bytes")
+                print(f"Playwright download too small: {size} bytes")
                 return False
+
     except Exception as e:
         print(f"Playwright fallback failed: {e}")
-    return False
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 def download_with_invidious(url: str, output_path: str) -> bool:
