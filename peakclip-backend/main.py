@@ -683,10 +683,17 @@ def start_bgutil_server():
     """Start bgutil-ytdlp-pot-provider HTTP server if available."""
     global _bgutil_process
     bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
-    server_js = os.path.join(bgutil_home, "build", "index.js")
-    if not os.path.exists(server_js):
-        print(f"bgutil server script not found at {server_js}")
+    # Look for compiled server entry point in common locations
+    server_js = None
+    for sub in ["build", "dist", "lib", "."]:
+        candidate = os.path.join(bgutil_home, sub, "index.js")
+        if os.path.exists(candidate):
+            server_js = candidate
+            break
+    if not server_js:
+        print(f"bgutil server script not found in {bgutil_home}/(build|dist|lib|.)")
         return None
+    print(f"bgutil server script found at {server_js}")
     try:
         import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
