@@ -111,10 +111,33 @@ async def refresh_youtube_cookies() -> bool:
                 })
         if not playwright_cookies:
             return False
+
+        # Build proxy config for cookie refresh (same as download)
+        proxy_url = (
+            os.environ.get('YOUTUBE_PROXY') or
+            os.environ.get('YTDLP_PROXY') or
+            os.environ.get('HTTP_PROXY') or
+            os.environ.get('HTTPS_PROXY') or
+            os.environ.get('PROXY_URL') or
+            ''
+        ).strip()
+        playwright_proxy = None
+        if proxy_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(proxy_url)
+            if parsed.hostname and parsed.port:
+                server = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}" if parsed.scheme else f"http://{parsed.hostname}:{parsed.port}"
+                playwright_proxy = {'server': server}
+                if parsed.username:
+                    playwright_proxy['username'] = parsed.username
+                if parsed.password:
+                    playwright_proxy['password'] = parsed.password
+                print(f"Cookie refresh: using proxy {server}")
+
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-dev-shm-usage'])
-            context = await browser.new_context()
+            context = await browser.new_context(proxy=playwright_proxy)
             await context.add_cookies(playwright_cookies)
             page = await context.new_page()
             await page.goto('https://www.youtube.com', timeout=30000)
