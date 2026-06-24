@@ -1092,6 +1092,76 @@ def debug():
     }
 
 
+@app.get("/diagnose/proxy")
+def diagnose_proxy():
+    """Test proxy connectivity from the running backend."""
+    import socket
+    from urllib.parse import urlparse
+    from urllib.request import ProxyHandler, build_opener, Request
+
+    proxy_key = None
+    proxy_url = ""
+    for key in ['YOUTUBE_PROXY', 'YTDLP_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'PROXY_URL']:
+        val = os.environ.get(key)
+        if val:
+            proxy_key = key
+            proxy_url = val.strip()
+            break
+
+    if not proxy_url:
+        return JSONResponse({
+            "configured": False,
+            "message": "No proxy configured. Set YOUTUBE_PROXY, YTDLP_PROXY, HTTP_PROXY, HTTPS_PROXY or PROXY_URL."
+        })
+
+    parsed = urlparse(proxy_url)
+    host = parsed.hostname
+    port = parsed.port
+    masked_url = proxy_url
+    if parsed.password:
+        masked_url = proxy_url.replace(parsed.password, '*' * len(parsed.password))
+
+    result = {
+        "configured": True,
+        "source": proxy_key,
+        "proxy_url": masked_url,
+        "scheme": parsed.scheme or None,
+        "host": host,
+        "port": port,
+        "username": parsed.username or None,
+        "has_password": bool(parsed.password),
+    }
+
+    if not host or not port:
+        result["valid"] = False
+        result["error"] = "Proxy URL missing host or port"
+        return JSONResponse(result)
+
+    # Test 1: direct TCP connection
+    try:
+        sock = socket.create_connection((host, port), timeout=10)
+        sock.close()
+        result["tcp_connect"] = {"ok": True, "message": "OK"}
+    except Exception as e:
+        result["tcp_connect"] = {"ok": False, "message": str(e)}
+
+    # Test 2: HTTP request through proxy
+    try:
+        proxy_handler = ProxyHandler({'http': proxy_url, 'https': proxy_url})
+        opener = build_opener(proxy_handler)
+        opener.addheaders = [
+            ('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'),
+        ]
+        req = Request("https://www.youtube.com", method='HEAD')
+        resp = opener.open(req, timeout=30)
+        result["http_request"] = {"ok": True, "status": resp.status}
+    except Exception as e:
+        result["http_request"] = {"ok": False, "message": str(e)}
+
+    result["working"] = result.get("tcp_connect", {}).get("ok") and result.get("http_request", {}).get("ok")
+    return JSONResponse(result)
+
+
 def generate_thumbnail(video_path, output_path, timestamp=5):
     subprocess.run([
         'ffmpeg', '-ss', str(timestamp), '-i', video_path,
