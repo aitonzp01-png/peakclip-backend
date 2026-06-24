@@ -680,10 +680,9 @@ _bgutil_process = None
 
 
 def start_bgutil_server():
-    """Start bgutil-ytdlp-pot-provider HTTP server if available."""
+    """Start bgutil-ytdlp-pot-provider HTTP server if compiled JS exists."""
     global _bgutil_process
     bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
-    # Look for compiled server entry point in common locations
     server_js = None
     for sub in ["build", "dist", "lib", "."]:
         candidate = os.path.join(bgutil_home, sub, "index.js")
@@ -691,9 +690,7 @@ def start_bgutil_server():
             server_js = candidate
             break
     if not server_js:
-        print(f"bgutil server script not found in {bgutil_home}/(build|dist|lib|.)")
         return None
-    print(f"bgutil server script found at {server_js}")
     try:
         import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -701,7 +698,6 @@ def start_bgutil_server():
         result = sock.connect_ex(('127.0.0.1', 4416))
         sock.close()
         if result == 0:
-            print("bgutil server already running on port 4416")
             return "http://127.0.0.1:4416"
 
         proc = subprocess.Popen(
@@ -718,6 +714,36 @@ def start_bgutil_server():
         return None
 
 
+def get_bgutil_config():
+    """Return bgutil configuration for yt-dlp extractor_args if available."""
+    config = {}
+    # 1) Try pip-installed plugin
+    try:
+        import bgutil_ytdlp_pot_provider
+        config['youtubepot'] = {'po_provider': 'bgutil'}
+        print("yt-dlp using bgutil pip plugin")
+        return config
+    except ImportError:
+        pass
+
+    # 2) Try running HTTP server from compiled JS
+    bgutil_url = os.environ.get('BGUTIL_POT_URL')
+    if bgutil_url:
+        config['youtubepot'] = {'pot_bgutil_base_url': bgutil_url}
+        print(f"yt-dlp using bgutil HTTP server at {bgutil_url}")
+        return config
+
+    # 3) Try script provider from cloned repo
+    bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
+    if os.path.isdir(bgutil_home):
+        config['youtubepot-bgutilscript'] = {'server_home': bgutil_home}
+        print("yt-dlp using bgutil script provider")
+        return config
+
+    return config
+
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup - fast yt-dlp upgrade only
@@ -730,7 +756,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
 
-    # Start bgutil PO token provider server
+    # Start bgutil PO token provider server if compiled JS exists
     bgutil_url = start_bgutil_server()
     if bgutil_url:
         os.environ['BGUTIL_POT_URL'] = bgutil_url
@@ -1434,14 +1460,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
         is_youtube = extract_youtube_video_id(url) is not None
         downloaded = False
 
-        # ── Phase 1: Playwright (real browser) FIRST for YouTube ──
-        # Real browser bypasses YouTube's JS-based bot detection which blocks yt-dlp on datacenter IPs
+        # ── Phase 1: yt-dlp with proxy (primary for YouTube) ──
         if is_youtube:
-            jobs_store[job_id] = {"status": "processing", "message": "Downloading with browser..."}
-            downloaded = asyncio.run(download_with_playwright(url, video_path))
-
-        # ── Phase 2: yt-dlp with retries (primary for non-YouTube, fallback for YouTube) ──
-        if not downloaded:
             jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp..."}
             strategies = [
                 {'player_client': ['tv_embedded', 'web', 'ios', 'android']},
@@ -1534,15 +1554,11 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
                     if auth_cfg["extractor_args"]:
                         extractor_args['youtube'].update(auth_cfg["extractor_args"])
-                    # Prefer running bgutil HTTP server; fallback to script provider
-                    bgutil_url = os.environ.get('BGUTIL_POT_URL')
-                    if bgutil_url:
-                        extractor_args['youtubepot'] = {'pot_bgutil_base_url': bgutil_url}
-                        print(f"yt-dlp using bgutil HTTP server at {bgutil_url}")
-                    elif auth_cfg.get("bgutil_home"):
-                        extractor_args['youtubepot-bgutilscript'] = {'server_home': auth_cfg["bgutil_home"]}
-                        print("yt-dlp using bgutil script provider")
-                    if extractor_args['youtube'] or extractor_args.get('youtubepot-bgutilscript') or extractor_args.get('youtubepot'):
+                    # Add bgutil PO token provider if available
+                    bgutil_cfg = get_bgutil_config()
+                    if bgutil_cfg:
+                        extractor_args.update(bgutil_cfg)
+                    if extractor_args.get('youtube') or extractor_args.get('youtubepot') or extractor_args.get('youtubepot-bgutilscript'):
                         ydl_opts['extractor_args'] = extractor_args
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         ydl.download([url])
@@ -1559,7 +1575,34 @@ def process_video_background(job_id: str, user_id: str, url: str):
                             continue
                     break
 
-        # ── Phase 3: Invidious → Piped → cobalt (last resort) ──
+        # ── Phase 2: Playwright (browser) fallback for YouTube ──
+        if is_youtube and not downloaded:
+            jobs_store[job_id] = {"status": "processing", "message": "Downloading with browser..."}
+            downloaded = asyncio.run(download_with_playwright(url, video_path))
+
+        # ── Phase 3: yt-dlp for non-YouTube URLs if still not downloaded ──
+        if not downloaded and not is_youtube:
+            jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp..."}
+            try:
+                ydl_opts = {
+                    'format': 'best[ext=mp4]/best',
+                    'outtmpl': video_path,
+                    'quiet': True,
+                    'no_warnings': True,
+                    'no_check_certificate': True,
+                    'socket_timeout': 60,
+                }
+                proxy = get_working_proxy()
+                if proxy:
+                    ydl_opts['proxy'] = proxy
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                if os.path.exists(video_path) and os.path.getsize(video_path) >= 1024:
+                    downloaded = True
+            except Exception as e:
+                print(f"yt-dlp non-YouTube download failed: {e}")
+
+        # ── Phase 4: Invidious → Piped → cobalt (last resort for YouTube) ──
         if not downloaded:
             jobs_store[job_id] = {"status": "processing", "message": "Trying alternative sources..."}
             downloaded = (
