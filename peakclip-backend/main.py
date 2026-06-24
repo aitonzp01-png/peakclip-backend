@@ -213,13 +213,27 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                             from urllib.parse import urlparse, parse_qs
                             params = parse_qs(urlparse(req_url).query)
                             mime = params.get('mime', [''])[0].lower()
-                            itag = params.get('itag', [''])[0]
-                            if 'audio' in mime:
-                                audio_chunks.append(body)
-                                print(f"Playwright intercepted AUDIO chunk: {len(body)} bytes (itag={itag})")
+                            itag = params.get('itag', ['0'])[0]
+
+                            # Known YouTube audio itags
+                            AUDIO_ITAGS = {'139','140','141','249','250','251','256','258','327'}
+                            is_audio = 'audio' in mime or itag in AUDIO_ITAGS
+
+                            # Get range offset for proper ordering
+                            range_val = params.get('range', [None])[0]
+                            offset = 0
+                            if range_val:
+                                try:
+                                    offset = int(range_val.split('-')[0])
+                                except (ValueError, IndexError):
+                                    pass
+
+                            if is_audio:
+                                audio_chunks.append((offset, body))
+                                print(f"Playwright intercepted AUDIO chunk: {len(body)}B (itag={itag})")
                             else:
-                                video_chunks.append(body)
-                                print(f"Playwright intercepted VIDEO chunk: {len(body)} bytes (itag={itag})")
+                                video_chunks.append((offset, body))
+                                print(f"Playwright intercepted VIDEO chunk: {len(body)}B (itag={itag})")
                         await route.fulfill(
                             status=response.status,
                             headers=dict(response.headers),
@@ -284,11 +298,18 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             except Exception:
                 pass
 
-            # Unmute so YouTube sends audio chunks too
+            # Unmute and force audio stream loading (CRITICAL for DASH audio)
             try:
                 await page.evaluate("""
                     const v = document.querySelector('video');
-                    if (v) { v.muted = false; v.volume = 0.5; }
+                    if (v) {
+                        v.muted = false;
+                        v.volume = 1.0;
+                        v.play().catch(() => {});
+                    }
+                    const player = document.getElementById('movie_player');
+                    if (player && player.unMute) player.unMute();
+                    if (player && player.setVolume) player.setVolume(100);
                 """)
             except Exception:
                 pass
@@ -298,41 +319,45 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             # ============================================================
             # PASO 4: Esperar chunks con timeout adaptativo
             # ============================================================
-            waited = 0
-            while waited < 60 and not video_chunks and not audio_chunks:
-                await page.wait_for_timeout(2000)
-                waited += 2
+            max_wait = 90
+            interval = 3
+            cycles = max_wait // interval
+            last_total = 0
+            idle_cycles = 0
+            max_idle = 4  # 4 * 3s = 12s idle = done
 
-            if not video_chunks and not audio_chunks:
-                print("Playwright: no chunks after 60s, trying scroll/interact...")
-                try:
-                    await page.evaluate("window.scrollTo(0, 300)")
-                    await page.evaluate("document.querySelector('video')?.play()")
-                    await page.wait_for_timeout(10000)
-                except Exception:
-                    pass
+            for i in range(cycles):
+                await page.wait_for_timeout(interval * 1000)
+                current_total = len(video_chunks) + len(audio_chunks)
 
-            # Wait until chunks stop arriving (5s idle window)
-            if video_chunks or audio_chunks:
-                last_total = 0
-                idle_cycles = 0
-                while idle_cycles < 3:
-                    await page.wait_for_timeout(5000)
-                    current_total = len(video_chunks) + len(audio_chunks)
-                    if current_total == last_total:
-                        idle_cycles += 1
-                    else:
-                        idle_cycles = 0
-                        last_total = current_total
-                print(f"Playwright: collected {len(video_chunks)} video + {len(audio_chunks)} audio chunks")
+                if current_total > 0 and current_total == last_total:
+                    idle_cycles += 1
+                    if idle_cycles >= max_idle:
+                        break
+                else:
+                    idle_cycles = 0
+                last_total = current_total
+
+                # If we have video but no audio yet, seek to force YouTube to load audio stream
+                if len(video_chunks) > 0 and len(audio_chunks) == 0 and i == 10:
+                    try:
+                        await page.evaluate("""
+                            const v = document.querySelector('video');
+                            if (v) { v.currentTime = 0.1; v.play().catch(()=>{}); }
+                        """)
+                        print("Playwright: seek to 0.1s to force audio stream load")
+                    except Exception:
+                        pass
+
+            print(f"Playwright: collected {len(video_chunks)} video + {len(audio_chunks)} audio chunks")
 
             await browser.close()
 
             # ============================================================
             # PASO 5: Escribir archivo y mezclar con ffmpeg si necesario
             # ============================================================
-            video_bytes = b''.join(video_chunks)
-            audio_bytes = b''.join(audio_chunks)
+            video_bytes = b''.join(b for _, b in sorted(video_chunks, key=lambda x: x[0]))
+            audio_bytes = b''.join(b for _, b in sorted(audio_chunks, key=lambda x: x[0]))
 
             print(f"Playwright: video={len(video_bytes)}B audio={len(audio_bytes)}B")
 
@@ -1319,19 +1344,48 @@ def process_video_background(job_id: str, user_id: str, url: str):
             return
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
-        # Extract audio at low bitrate to stay under Whisper's 25MB limit
-        result = subprocess.run([
-            'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '24k', audio_path, '-y'
+        # Check if video has an audio track first
+        probe = subprocess.run([
+            'ffprobe', '-v', 'quiet', '-print_format', 'json',
+            '-show_streams', '-select_streams', 'a', video_path
         ], capture_output=True, text=True)
-        if result.returncode != 0 or not os.path.exists(audio_path) or os.path.getsize(audio_path) < 512:
-            print(f"Audio extraction failed (rc={result.returncode}, stderr={result.stderr[:200]}), retrying with alternate codec...")
-            # Retry with different approach: extract with aac first, then convert
+        has_audio = False
+        try:
+            probe_data = json.loads(probe.stdout)
+            has_audio = len(probe_data.get('streams', [])) > 0
+        except Exception:
+            has_audio = False
+
+        if has_audio:
             result = subprocess.run([
-                'ffmpeg', '-y', '-i', video_path,
-                '-vn', '-acodec', 'libmp3lame', '-q:a', '4',
-                '-ar', '16000', '-ac', '1',
+                'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '24k', audio_path, '-y'
+            ], capture_output=True, text=True)
+            if result.returncode != 0 or not os.path.exists(audio_path) or os.path.getsize(audio_path) < 512:
+                print(f"Audio extraction failed (rc={result.returncode}), retrying with alternate codec...")
+                result = subprocess.run([
+                    'ffmpeg', '-y', '-i', video_path,
+                    '-vn', '-acodec', 'libmp3lame', '-q:a', '4',
+                    '-ar', '16000', '-ac', '1',
+                    audio_path
+                ], capture_output=True, text=True, timeout=60)
+        else:
+            # No audio track — generate silent audio matching video duration
+            print("Video has no audio track, generating silent audio...")
+            dur_probe = subprocess.run([
+                'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1', video_path
+            ], capture_output=True, text=True)
+            try:
+                vid_dur = max(float(dur_probe.stdout.strip() or 1), 1)
+            except (ValueError, TypeError):
+                vid_dur = 1
+            result = subprocess.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i',
+                f'anullsrc=r=16000:cl=mono:d={vid_dur}',
+                '-ar', '16000', '-ac', '1', '-b:a', '24k',
                 audio_path
             ], capture_output=True, text=True, timeout=60)
+
         if not os.path.exists(audio_path) or os.path.getsize(audio_path) < 512:
             raise FileNotFoundError(f"Could not extract audio from video: {audio_path} (video size: {os.path.getsize(video_path)} bytes)")
 
