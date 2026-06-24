@@ -63,12 +63,14 @@ def get_youtube_auth_config():
 
 
 def get_working_proxy() -> str | None:
-    """Return configured proxy. Free proxy lists are unreliable and disabled."""
-    configured = os.getenv("YOUTUBE_PROXY")
-    if configured:
-        print(f"Using configured proxy: {configured[:40]}...")
-        return configured
+    """Return configured proxy. Checks multiple common environment variables."""
+    for key in ['YOUTUBE_PROXY', 'YTDLP_PROXY', 'HTTP_PROXY', 'HTTPS_PROXY', 'PROXY_URL']:
+        configured = os.getenv(key)
+        if configured:
+            print(f"Using configured proxy ({key}): {configured[:40]}...")
+            return configured
     return None
+
 
 
 def extract_youtube_video_id(url: str) -> str | None:
@@ -145,6 +147,33 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
         return False
     try:
         print(f"Trying Playwright v2 for {url}")
+
+        # Read proxy from environment (same as yt-dlp)
+        proxy_url = (
+            os.environ.get('YOUTUBE_PROXY') or
+            os.environ.get('YTDLP_PROXY') or
+            os.environ.get('HTTP_PROXY') or
+            os.environ.get('HTTPS_PROXY') or
+            os.environ.get('PROXY_URL') or
+            ''
+        ).strip()
+        playwright_proxy = None
+        if proxy_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(proxy_url)
+            if parsed.hostname and parsed.port:
+                server = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}" if parsed.scheme else f"http://{parsed.hostname}:{parsed.port}"
+                playwright_proxy = {'server': server}
+                if parsed.username:
+                    playwright_proxy['username'] = parsed.username
+                if parsed.password:
+                    playwright_proxy['password'] = parsed.password
+                print(f"Playwright: using proxy {server}")
+            else:
+                print(f"Playwright: proxy URL invalid: {proxy_url[:40]}")
+        else:
+            print("Playwright: no proxy configured")
+
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
             browser = await p.chromium.launch(
@@ -153,6 +182,7 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                       '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required']
             )
             context = await browser.new_context(
+                proxy=playwright_proxy,
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
                 viewport={'width': 1920, 'height': 1080},
             )
@@ -348,37 +378,49 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
                 print("Playwright: no video data captured")
                 return False
 
+            # Write raw temp files and remux with ffmpeg for a valid MP4
+            raw_video = output_path + '.rawv.tmp'
+            raw_audio = output_path + '.rawa.tmp'
+            with open(raw_video, 'wb') as f:
+                f.write(video_bytes)
+
             if audio_bytes:
-                tmp_video = output_path + '.video.tmp'
-                tmp_audio = output_path + '.audio.tmp'
-                with open(tmp_video, 'wb') as f:
-                    f.write(video_bytes)
-                with open(tmp_audio, 'wb') as f:
+                with open(raw_audio, 'wb') as f:
                     f.write(audio_bytes)
-
-                result = subprocess.run([
+                mux_cmd = [
                     'ffmpeg', '-y',
-                    '-i', tmp_video,
-                    '-i', tmp_audio,
-                    '-c:v', 'copy', '-c:a', 'aac', '-shortest',
+                    '-i', raw_video,
+                    '-i', raw_audio,
+                    '-c', 'copy',
+                    '-movflags', '+faststart',
                     output_path
-                ], capture_output=True, timeout=120)
-
-                for tmp in [tmp_video, tmp_audio]:
-                    try: os.remove(tmp)
-                    except: pass
-
-                if result.returncode != 0:
-                    print(f"Playwright: ffmpeg mux failed, saving video-only: {result.stderr.decode()[:300]}")
-                    with open(output_path, 'wb') as f:
-                        f.write(video_bytes)
-                else:
-                    print("Playwright: ffmpeg mux success")
+                ]
             else:
+                mux_cmd = [
+                    'ffmpeg', '-y',
+                    '-i', raw_video,
+                    '-c', 'copy',
+                    '-movflags', '+faststart',
+                    output_path
+                ]
+            mux_result = subprocess.run(mux_cmd, capture_output=True, timeout=120)
+
+            # Cleanup temp files
+            for tmp in [raw_video, raw_audio]:
+                try:
+                    os.remove(tmp)
+                except Exception:
+                    pass
+
+            if mux_result.returncode != 0:
+                print(f"Playwright: remux failed: {mux_result.stderr.decode()[:300]}")
+                # Fallback: save raw without remux
                 with open(output_path, 'wb') as f:
                     f.write(video_bytes)
+            else:
+                print("Playwright: remux success")
 
-            size = os.path.getsize(output_path)
+            size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
             if size < 1024:
                 print(f"Playwright download too small: {size} bytes")
                 return False
