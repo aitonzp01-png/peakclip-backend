@@ -1536,10 +1536,10 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
 
     # 1) Try getting the clip's processed video from Supabase Storage
     try:
-        supabase_url = supabase.table("clips").select("url,video_url").eq("id", req.clip_id).eq("user_id", user_id).execute()
+        supabase_url = supabase.table("clips").select("video_url").eq("id", req.clip_id).eq("user_id", user_id).execute()
         clip_data = supabase_url.data
         if clip_data:
-            stored_url = clip_data[0].get("url") or clip_data[0].get("video_url")
+            stored_url = clip_data[0].get("video_url")
             if stored_url:
                 source_path = f"downloads/{job_id}_source.mp4"
                 print(f"Export: fetching stored clip from {stored_url[:80]}...")

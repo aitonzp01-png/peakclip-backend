@@ -131,15 +131,10 @@ export default function EditorPage() {
         store.setSubtitleText(title)
       }
 
-      // Apply real clip data from backend processing
-      const dur = Number(data?.duration) || 60
-      if (data?.start_time != null && data?.end_time != null && dur > 0) {
-        store.setTrimStart(Math.max(0, (Number(data.start_time) / dur) * 100))
-        store.setTrimEnd(Math.min(100, (Number(data.end_time) / dur) * 100))
-      } else {
-        store.setTrimStart(0)
-        store.setTrimEnd(100)
-      }
+      // Apply trim from clip data: for processed clips, use full 0-100%
+      // (start_time/end_time are original video timestamps, not relative to clip)
+      store.setTrimStart(0)
+      store.setTrimEnd(100)
 
       // Set music based on clip mood if available
       if (data?.mood) {

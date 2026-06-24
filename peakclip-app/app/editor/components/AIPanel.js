@@ -72,15 +72,9 @@ export default function AIPanel() {
         break
       }
       case 'hook-detection': {
-        if (clip?.start_time != null && clip?.end_time != null && dur > 0) {
-          s.setTrimStart(Math.max(0, (clip.start_time / dur) * 100))
-          s.setTrimEnd(Math.min(100, (clip.end_time / dur) * 100))
-          s.showHint(`Best hook: ${clip.start_time}s–${clip.end_time}s`)
-        } else {
-          s.setTrimStart(2)
-          s.setTrimEnd(45)
-          s.showHint('Hook detected at 0:02 (estimated)')
-        }
+        s.setTrimStart(0)
+        s.setTrimEnd(100)
+        s.showHint('Clip already trimmed to best moment')
         break
       }
       case 'remove-silence':
@@ -102,13 +96,8 @@ export default function AIPanel() {
         s.showHint('Color enhanced')
         break
       case 'generate-shorts': {
-        if (clip?.start_time != null && clip?.end_time != null && dur > 0) {
-          s.setTrimStart(Math.max(0, (clip.start_time / dur) * 100))
-          s.setTrimEnd(Math.min(100, (clip.end_time / dur) * 100))
-        } else {
-          s.setTrimStart(0)
-          s.setTrimEnd(Math.min(100, (60 / dur) * 100))
-        }
+        s.setTrimStart(0)
+        s.setTrimEnd(100)
         if (clip?.mood) s.setMusic(clip.mood)
         s.showHint('Short generated from best moment')
         break
