@@ -1413,9 +1413,9 @@ def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, 
             height = int(probe.stdout.strip())
     except Exception:
         pass
-    # Scale font size with height: smaller for 9:16 vertical videos
-    font_size = max(18, min(40, height // 55))
-    margin_v = max(10, height // 80)
+    # Scale font size with height: very small for 9:16 vertical videos
+    font_size = max(16, min(34, height // 70))
+    margin_v = max(8, height // 100)
     print(f"Subtitle burn: video height={height}, font_size={font_size}, margin_v={margin_v}")
 
     styles = [
