@@ -140,7 +140,7 @@ async def refresh_youtube_cookies() -> bool:
             context = await browser.new_context(proxy=playwright_proxy)
             await context.add_cookies(playwright_cookies)
             page = await context.new_page()
-            await page.goto('https://www.youtube.com', timeout=30000)
+            await page.goto('https://www.youtube.com', timeout=60000)
             await page.wait_for_timeout(4000)
             cookies = await context.cookies()
             netscape_lines = ["# Netscape HTTP Cookie File", ""]
@@ -290,11 +290,16 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             target_url = f"https://www.youtube.com/watch?v={video_id}"
             print(f"Playwright: navigating to {target_url}")
             try:
-                await page.goto(target_url, wait_until='domcontentloaded', timeout=30000)
+                await page.goto(target_url, wait_until='domcontentloaded', timeout=60000)
             except Exception as e:
-                print(f"Playwright: goto failed: {e}")
-                await browser.close()
-                return False
+                print(f"Playwright: goto failed (will retry once): {e}")
+                try:
+                    await page.wait_for_timeout(3000)
+                    await page.goto(target_url, wait_until='domcontentloaded', timeout=60000)
+                except Exception as e2:
+                    print(f"Playwright: goto retry failed: {e2}")
+                    await browser.close()
+                    return False
 
             # ============================================================
             # PASO 3: Forzar reproduccion del video
