@@ -676,43 +676,10 @@ def download_with_cobalt(url: str, output_path: str) -> bool:
         return False
 
 
-@asynccontextmanager
 _bgutil_process = None
 
 
-def start_bgutil_server():
-    """Start bgutil-ytdlp-pot-provider HTTP server if available."""
-    global _bgutil_process
-    bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
-    server_js = os.path.join(bgutil_home, "build", "index.js")
-    if not os.path.exists(server_js):
-        print(f"bgutil server script not found at {server_js}")
-        return None
-    try:
-        # Check if already running
-        import socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        result = sock.connect_ex(('127.0.0.1', 4416))
-        sock.close()
-        if result == 0:
-            print("bgutil server already running on port 4416")
-            return "http://127.0.0.1:4416"
-
-        proc = subprocess.Popen(
-            ['node', server_js],
-            cwd=bgutil_home,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        _bgutil_process = proc
-        print(f"Started bgutil server (pid={proc.pid})")
-        return "http://127.0.0.1:4416"
-    except Exception as e:
-        print(f"Failed to start bgutil server: {e}")
-        return None
-
-
+@asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup - fast yt-dlp upgrade only
     try:
