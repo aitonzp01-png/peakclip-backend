@@ -1539,8 +1539,9 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         supabase_url = supabase.table("clips").select("video_url").eq("id", req.clip_id).eq("user_id", user_id).execute()
         clip_data = supabase_url.data
         if clip_data:
-            stored_url = clip_data[0].get("video_url")
-            if stored_url:
+            stored_url = (clip_data[0].get("video_url") or "").strip()
+            # Skip if it's a YouTube URL (not a processed video)
+            if stored_url and not extract_youtube_video_id(stored_url):
                 source_path = f"downloads/{job_id}_source.mp4"
                 print(f"Export: fetching stored clip from {stored_url[:80]}...")
                 r = httpx.get(stored_url, timeout=120, follow_redirects=True)
@@ -1551,6 +1552,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                 else:
                     print(f"Export: stored clip fetch failed (status={r.status_code}, size={len(r.content)})")
                     source_path = None
+            elif stored_url:
+                print(f"Export: stored video_url is a YouTube URL, skipping (use req.video_url as fallback)")
     except Exception as e:
         print(f"Export: stored clip error: {e}")
         source_path = None
@@ -1562,15 +1565,15 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
 
     # 2) Fallback: download from the provided URL (works for direct MP4 URLs)
     if not source_path:
-        video_url = req.video_url.strip()
+        video_url = (req.video_url or "").strip()
         if not video_url:
-            raise HTTPException(status_code=400, detail="No video URL provided and no processed clip found. Please process the video first.")
+            raise HTTPException(status_code=400, detail="No video source available. Submit this video via Dashboard first to download and process it.")
 
         is_yt = extract_youtube_video_id(video_url)
         if is_yt:
             raise HTTPException(
                 status_code=400,
-                detail="YouTube URL not yet processed. Submit this video via Dashboard first so it can be downloaded and analyzed."
+                detail="This clip links to a YouTube URL that hasn't been downloaded yet. Submit it via Dashboard → Process to download and analyze it first."
             )
 
         source_path = f"downloads/{job_id}_source.mp4"
