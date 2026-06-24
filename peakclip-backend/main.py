@@ -1446,6 +1446,22 @@ Return JSON with this exact format:
         clips_data = json.loads(raw)
         clips_data["clips"].sort(key=lambda c: c.get("hook_score", 5), reverse=True)
 
+        # Verify downloaded video duration and clamp clip timestamps
+        probe_dur = subprocess.run([
+            'ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1', video_path
+        ], capture_output=True, text=True, timeout=15)
+        try:
+            video_duration = float(probe_dur.stdout.strip())
+        except Exception:
+            video_duration = 0
+        print(f"Downloaded video duration: {video_duration:.1f}s")
+        for clip in clips_data["clips"]:
+            if video_duration > 0 and clip["start"] >= video_duration:
+                print(f"WARNING: clip start {clip['start']}s exceeds video duration {video_duration:.1f}s, adjusting")
+                clip["start"] = max(0, video_duration - 60)
+                clip["end"] = video_duration
+
         output_clips = []
         temp_files_extra = []
 
@@ -1482,39 +1498,56 @@ Return JSON with this exact format:
                 has_audio = bool(probe_audio.stdout.strip())
                 print(f"Video has audio track: {has_audio}")
 
-                step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-                if music_path:
-                    step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-                step1 += ['-t', str(duration), '-vf', vid_filter]
-
+                # Build render command with stable input ordering
+                # Cases:
+                # 1) music + has_audio: inputs=[video(0), music(1)] -> map 0:v, [a]
+                # 2) music + !has_audio: inputs=[video(0), music(1)] -> map 0:v, [a]
+                # 3) !music + has_audio: inputs=[video(0)] -> map 0:v, 0:a
+                # 4) !music + !has_audio: inputs=[video(0), anullsrc(1)] -> map 0:v, 1:a
                 if music_path and has_audio:
-                    step1 += [
+                    step1 = [
+                        'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                        '-stream_loop', '-1', '-i', music_path_ff,
+                        '-t', str(duration), '-vf', vid_filter,
                         '-filter_complex', '[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]',
                         '-map', '0:v', '-map', '[a]',
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
+                        '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs
                     ]
                 elif music_path and not has_audio:
-                    step1 += [
+                    step1 = [
+                        'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                        '-stream_loop', '-1', '-i', music_path_ff,
+                        '-t', str(duration), '-vf', vid_filter,
                         '-filter_complex', '[1:a]volume=0.15[a]',
                         '-map', '0:v', '-map', '[a]',
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
+                        '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs
                     ]
                 elif not music_path and has_audio:
-                    step1 += [
+                    step1 = [
+                        'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                        '-t', str(duration), '-vf', vid_filter,
                         '-filter_complex', '[0:a]dynaudnorm=p=0.95[a]',
                         '-map', '0:v', '-map', '[a]',
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
+                        '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs
                     ]
                 else:
-                    step1 += [
-                        '-filter_complex', f'aevalsrc=0:d={duration}[a]',
-                        '-map', '0:v', '-map', '[a]',
+                    step1 = [
+                        'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                        '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
+                        '-t', str(duration), '-vf', vid_filter,
+                        '-map', '0:v', '-map', '1:a',
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
+                        '-c:a', 'aac', '-b:a', '128k', '-shortest',
+                        '-movflags', '+faststart', '-y', no_subs
                     ]
 
-                step1 += [
-                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
-                    '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 r1 = subprocess.run(step1, capture_output=True, timeout=600)
                 print(f"Render exit={r1.returncode}, no_subs={'OK' if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024 else 'FAIL'}")
                 if r1.returncode != 0:
-                    print(f"Render stderr: {r1.stderr.decode()[:300]}")
+                    print(f"Render stderr: {r1.stderr.decode()[:500]}")
 
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     print(f"Burning subtitles from {srt_path}")
@@ -1524,21 +1557,24 @@ Return JSON with this exact format:
                         shutil.copy2(no_subs, output_path)
                         print("Subtitles failed, copied without")
                 else:
-                    # Last resort: no music, handle missing audio
-                    print("Last resort: ultrafast direct without filter_complex")
-                    last_resort_cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path,
-                                       '-t', str(duration), '-vf', vid_filter]
+                    # Last resort: handle missing audio with anullsrc
+                    print("Last resort: ultrafast direct")
                     if has_audio:
-                        last_resort_cmd += ['-map', '0:v', '-map', '0:a', '-c:a', 'aac', '-b:a', '192k']
+                        last_resort_cmd = [
+                            'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                            '-t', str(duration), '-vf', vid_filter,
+                            '-map', '0:v', '-map', '0:a',
+                            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
+                            '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                     else:
-                        last_resort_cmd += [
-                            '-filter_complex', f'aevalsrc=0:d={duration}[a]',
-                            '-map', '0:v', '-map', '[a]',
-                            '-c:a', 'aac', '-b:a', '192k',
-                        ]
-                    last_resort_cmd += [
-                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
-                        '-movflags', '+faststart', '-y', no_subs]
+                        last_resort_cmd = [
+                            'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                            '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
+                            '-t', str(duration), '-vf', vid_filter,
+                            '-map', '0:v', '-map', '1:a',
+                            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
+                            '-c:a', 'aac', '-b:a', '128k', '-shortest',
+                            '-movflags', '+faststart', '-y', no_subs]
                     subprocess.run(last_resort_cmd, capture_output=True, timeout=600)
                     if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                         burn_subtitles_onto_video(no_subs, srt_path, output_path)
@@ -2080,6 +2116,22 @@ Return JSON with this exact format:
     clips_data = json.loads(raw)
     clips_data["clips"].sort(key=lambda c: c.get("hook_score", 5), reverse=True)
 
+    # Verify downloaded video duration and clamp clip timestamps
+    probe_dur = subprocess.run([
+        'ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1', video_path
+    ], capture_output=True, text=True, timeout=15)
+    try:
+        video_duration = float(probe_dur.stdout.strip())
+    except Exception:
+        video_duration = 0
+    print(f"Downloaded video duration: {video_duration:.1f}s")
+    for clip in clips_data["clips"]:
+        if video_duration > 0 and clip["start"] >= video_duration:
+            print(f"WARNING: clip start {clip['start']}s exceeds video duration {video_duration:.1f}s, adjusting")
+            clip["start"] = max(0, video_duration - 60)
+            clip["end"] = video_duration
+
     output_clips = []
     temp_files_extra = []
 
@@ -2112,36 +2164,48 @@ Return JSON with this exact format:
             print(f"Video has audio track: {has_audio}")
 
             vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-            step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-            if music_path:
-                music_path_ff = music_path.replace('\\', '/')
-                step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-            step1 += ['-t', str(duration), '-vf', vid_filter]
+            music_path_ff = music_path.replace('\\', '/') if music_path else None
 
+            # Build render command with stable input ordering
             if music_path and has_audio:
-                step1 += [
+                step1 = [
+                    'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                    '-stream_loop', '-1', '-i', music_path_ff,
+                    '-t', str(duration), '-vf', vid_filter,
                     '-filter_complex', '[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]',
                     '-map', '0:v', '-map', '[a]',
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                    '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs
                 ]
             elif music_path and not has_audio:
-                step1 += [
+                step1 = [
+                    'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                    '-stream_loop', '-1', '-i', music_path_ff,
+                    '-t', str(duration), '-vf', vid_filter,
                     '-filter_complex', '[1:a]volume=0.15[a]',
                     '-map', '0:v', '-map', '[a]',
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                    '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs
                 ]
             elif not music_path and has_audio:
-                step1 += [
+                step1 = [
+                    'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                    '-t', str(duration), '-vf', vid_filter,
                     '-filter_complex', '[0:a]dynaudnorm=p=0.95[a]',
                     '-map', '0:v', '-map', '[a]',
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                    '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs
                 ]
             else:
-                step1 += [
-                    '-filter_complex', f'aevalsrc=0:d={duration}[a]',
-                    '-map', '0:v', '-map', '[a]',
+                step1 = [
+                    'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                    '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
+                    '-t', str(duration), '-vf', vid_filter,
+                    '-map', '0:v', '-map', '1:a',
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
+                    '-c:a', 'aac', '-b:a', '128k', '-shortest',
+                    '-movflags', '+faststart', '-y', no_subs
                 ]
-
-            step1 += [
-                '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
             subprocess.run(step1, capture_output=True, timeout=600)
 
             if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
@@ -2158,19 +2222,22 @@ Return JSON with this exact format:
                 # Fallback: render at 720p (lower memory), handle missing audio
                 print("Fallback: 720p render")
                 vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
-                last_resort = ['ffmpeg', '-ss', str(clip_start), '-i', video_path,
-                               '-t', str(duration), '-vf', vid_filter]
                 if has_audio:
-                    last_resort += ['-map', '0:v', '-map', '0:a', '-c:a', 'aac', '-b:a', '192k']
+                    last_resort = [
+                        'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                        '-t', str(duration), '-vf', vid_filter,
+                        '-map', '0:v', '-map', '0:a',
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
+                        '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 else:
-                    last_resort += [
-                        '-filter_complex', f'aevalsrc=0:d={duration}[a]',
-                        '-map', '0:v', '-map', '[a]',
-                        '-c:a', 'aac', '-b:a', '192k',
-                    ]
-                last_resort += [
-                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
-                    '-movflags', '+faststart', '-y', no_subs]
+                    last_resort = [
+                        'ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                        '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
+                        '-t', str(duration), '-vf', vid_filter,
+                        '-map', '0:v', '-map', '1:a',
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '23',
+                        '-c:a', 'aac', '-b:a', '128k', '-shortest',
+                        '-movflags', '+faststart', '-y', no_subs]
                 subprocess.run(last_resort, capture_output=True, timeout=600)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     burn_subtitles_onto_video(no_subs, srt_path, output_path)
