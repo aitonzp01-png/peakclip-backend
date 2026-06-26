@@ -914,7 +914,6 @@ async def test_ytdlp_on_startup():
     cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
 
     await check_js_runtime()
-    await generate_youtube_cookies_via_playwright()
 
     print("=== yt-dlp STARTUP TEST ===")
     print(f"Proxy: {proxy[:40] if proxy else 'NONE'}")
