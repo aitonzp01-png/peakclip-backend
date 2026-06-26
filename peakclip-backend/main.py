@@ -246,6 +246,17 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             """)
 
             # ============================================================
+            # PASO 0: Bloquear recursos pesados para cargar más rápido
+            # ============================================================
+            async def block_unnecessary(route, request):
+                if request.resource_type in ['image', 'font', 'stylesheet', 'media']:
+                    await route.abort()
+                else:
+                    await route.continue_()
+
+            await page.route('**/*', block_unnecessary)
+
+            # ============================================================
             # PASO 1: Configurar response listener ANTES de navegar
             # NO page.route() con route.fetch() => ENOTFOUND en Railway
             # USAR page.on('response') => browser ya recibio la respuesta
@@ -285,17 +296,17 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             page.on('response', on_response)
 
             # ============================================================
-            # PASO 2: Navegar a YouTube
+            # PASO 2: Navegar a YouTube con timeout 90s
             # ============================================================
             target_url = f"https://www.youtube.com/watch?v={video_id}"
             print(f"Playwright: navigating to {target_url}")
             try:
-                await page.goto(target_url, wait_until='domcontentloaded', timeout=60000)
+                await page.goto(target_url, wait_until='domcontentloaded', timeout=90000)
             except Exception as e:
                 print(f"Playwright: goto failed (will retry once): {e}")
                 try:
                     await page.wait_for_timeout(3000)
-                    await page.goto(target_url, wait_until='domcontentloaded', timeout=60000)
+                    await page.goto(target_url, wait_until='domcontentloaded', timeout=90000)
                 except Exception as e2:
                     print(f"Playwright: goto retry failed: {e2}")
                     await browser.close()
@@ -743,6 +754,69 @@ def get_bgutil_config():
     return config
 
 
+YTDLP_STRATEGIES = [
+    {'player_client': ['tv_embedded'], 'player_skip': []},
+    {'player_client': ['android_testsuite'], 'player_skip': []},
+    {'player_client': ['mweb'], 'player_skip': []},
+    {'player_client': ['ios'], 'player_skip': ['webpage']},
+    {'player_client': ['web'], 'player_skip': []},
+]
+
+
+def get_ydl_opts_for_strategy(strategy, proxy_url, cookie_path, output_template):
+    opts = {
+        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
+        'outtmpl': output_template,
+        'quiet': True,
+        'no_warnings': True,
+        'extractor_retries': 3,
+        'file_access_retries': 3,
+        'fragment_retries': 3,
+        'retries': 3,
+        'socket_timeout': 60,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+        'merge_output_format': 'mp4',
+        'postprocessors': [{
+            'key': 'FFmpegVideoConvertor',
+            'preferedformat': 'mp4',
+        }],
+    }
+    if proxy_url:
+        opts['proxy'] = proxy_url
+    if cookie_path and os.path.exists(cookie_path):
+        opts['cookiefile'] = cookie_path
+    extractor_args = {'youtube': {}}
+    extractor_args['youtube']['player_client'] = strategy['player_client']
+    if strategy.get('player_skip'):
+        extractor_args['youtube']['player_skip'] = strategy['player_skip']
+    # Add bgutil PO token provider if available (for web client)
+    bgutil_cfg = get_bgutil_config()
+    if bgutil_cfg:
+        extractor_args.update(bgutil_cfg)
+    opts['extractor_args'] = extractor_args
+    return opts
+
+
+def download_with_ytdlp(url: str, output_path: str, proxy_url: str = None, cookie_path: str = None) -> bool:
+    """Download video with yt-dlp trying multiple player_client strategies."""
+    import yt_dlp
+    for i, strategy in enumerate(YTDLP_STRATEGIES):
+        print(f"yt-dlp strategy {i+1}/{len(YTDLP_STRATEGIES)}: player_client={strategy['player_client']}")
+        try:
+            opts = get_ydl_opts_for_strategy(strategy, proxy_url, cookie_path, output_path)
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                ydl.download([url])
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 1024:
+                print(f"yt-dlp success with strategy {i+1}")
+                return True
+        except Exception as e:
+            err = str(e)[:120]
+            print(f"yt-dlp strategy {i+1} failed: {err}")
+            continue
+    return False
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -869,10 +943,10 @@ async def run_migrations():
     except Exception as e:
         print(f"COLUMN MIGRATION error: {e}")
 
-    # Add start_time / end_time / subtitles_srt columns to clips table if missing
+    # Add start_time / end_time / subtitles_srt / srt_url columns to clips table if missing
     try:
-        supabase.table("clips").select("start_time,end_time,subtitles_srt").limit(1).execute()
-        print("SQL MIGRATION: start_time/end_time/subtitles_srt columns already exist (OK)")
+        supabase.table("clips").select("start_time,end_time,subtitles_srt,srt_url").limit(1).execute()
+        print("SQL MIGRATION: start_time/end_time/subtitles_srt/srt_url columns already exist (OK)")
     except Exception as e:
         print(f"SQL MIGRATION: clips columns missing, attempting to add: {e}")
         async with httpx.AsyncClient(timeout=15) as client:
@@ -885,6 +959,7 @@ async def run_migrations():
                 "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC;"
                 "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC;"
                 "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS subtitles_srt TEXT;"
+                "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS srt_url TEXT;"
                 "NOTIFY pgrst, 'reload schema';"
             )
             sql_success = False
@@ -896,7 +971,7 @@ async def run_migrations():
                 try:
                     res = await client.post(url, json={"query": alter_sql}, headers=headers)
                     if res.status_code == 200:
-                        print("SQL MIGRATION: added start_time/end_time/subtitles_srt columns (OK)")
+                        print("SQL MIGRATION: added start_time/end_time/subtitles_srt/srt_url columns (OK)")
                         sql_success = True
                         break
                     else:
@@ -1138,6 +1213,20 @@ class ExportRequest(BaseModel):
     resolution: str = "1080p"
     format: str = "mp4"
     fps: int = 30
+
+
+class SubtitleStyle(BaseModel):
+    clip_id: str
+    video_url: str
+    srt_url: str
+    font_size: int = 18
+    font_color: str = "white"
+    background: bool = True
+    background_opacity: float = 0.6
+    position: str = "bottom"
+    bold: bool = True
+    outline: int = 2
+    font_name: str = "DejaVu Sans"
 
 
 try:
@@ -1392,36 +1481,36 @@ def resolve_music_path(mood: str) -> str | None:
     return path if os.path.isfile(path) else None
 
 
-def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, timeout: int = 180) -> bool:
+def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, timeout: int = 180, force_style: str = None) -> bool:
     """Burn subtitles onto a video, trying multiple fallback styles.
-    Font size is computed responsively based on video height."""
+    Font size is computed responsively based on video height unless force_style is provided."""
     if not os.path.exists(input_path) or os.path.getsize(input_path) < 1024:
         return False
     srt_path_ff = srt_path.replace('\\', '/')
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
 
-    # Probe video height to compute responsive font size
-    height = 1280
-    try:
-        probe = subprocess.run([
-            'ffprobe', '-v', 'quiet', '-select_streams', 'v',
-            '-show_entries', 'stream=height',
-            '-of', 'default=noprint_wrappers=1:nokey=1', input_path
-        ], capture_output=True, text=True, timeout=15)
-        if probe.stdout.strip():
-            height = int(probe.stdout.strip())
-    except Exception:
-        pass
-    # Scale font size with height: very small for 9:16 vertical videos
-    font_size = max(16, min(34, height // 70))
-    margin_v = max(8, height // 100)
-    print(f"Subtitle burn: video height={height}, font_size={font_size}, margin_v={margin_v}")
+    if force_style is None:
+        # Probe video height to compute responsive font size
+        height = 1280
+        try:
+            probe = subprocess.run([
+                'ffprobe', '-v', 'quiet', '-select_streams', 'v',
+                '-show_entries', 'stream=height',
+                '-of', 'default=noprint_wrappers=1:nokey=1', input_path
+            ], capture_output=True, text=True, timeout=15)
+            if probe.stdout.strip():
+                height = int(probe.stdout.strip())
+        except Exception:
+            pass
+        # Scale font size with height: very small for 9:16 vertical videos
+        font_size = max(16, min(34, height // 70))
+        margin_v = max(8, height // 100)
+        print(f"Subtitle burn: video height={height}, font_size={font_size}, margin_v={margin_v}")
+        force_style = f"Fontname=DejaVu Sans,Fontsize={font_size},PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV={margin_v}"
 
     styles = [
-        f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize={font_size},PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV={margin_v}'",
-        f"subtitles={srt_path_ff}:force_style='Fontname=Arial,Fontsize={font_size},PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV={margin_v}'",
-        f"subtitles={srt_path_ff}:force_style='Fontname=FreeSans,Fontsize={font_size},PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV={margin_v}'",
+        f"subtitles={srt_path_ff}:force_style='{force_style}'",
         f"subtitles={srt_path_ff}",
     ]
     for style in styles:
@@ -1471,120 +1560,14 @@ def process_video_background(job_id: str, user_id: str, url: str):
         is_youtube = extract_youtube_video_id(url) is not None
         downloaded = False
 
-        # ── Phase 1: yt-dlp with proxy (primary for YouTube) ──
+        # ── Phase 1: yt-dlp with multiple strategies (primary for YouTube) ──
         if is_youtube:
             jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp..."}
-            strategies = [
-                {'player_client': ['tv_embedded', 'web', 'ios', 'android']},
-                {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs']},
-                {'player_client': ['web', 'ios'], 'player_skip': ['webpage']},
-                {'player_client': ['android', 'ios'], 'player_skip': ['webpage']},
-                {'player_client': ['web', 'android'], 'player_skip': ['webpage']},
-                {'player_client': ['tv']},
-                {'player_client': ['web_creator']},
-                {'player_client': ['web_embedded']},
-                {'player_client': ['android_vr']},
-                {'player_client': ['mweb']},
-                {},
-                {'player_client': ['ios']},
-                {'player_client': ['android']},
-                {'player_client': ['web']},
-                {'player_client': ['web_music'], 'player_skip': ['webpage', 'configs']},
-                {'player_client': ['android_music'], 'player_skip': ['webpage', 'configs']},
-                {'player_client': ['android_producer'], 'player_skip': ['webpage', 'configs']},
-                {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
-                {'player_client': ['android', 'web', 'ios']},
-                {'player_client': ['android', 'tv'], 'player_skip': ['webpage', 'configs'], 'skip': ['webpage']},
-                {'player_client': ['web'], 'player_skip': ['webpage', 'configs', 'js'], 'include_incomplete_formats': True},
-                {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
-                {'player_client': ['ios'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
-                {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
-            ]
-            impersonate_profiles = [
-                None, 'chrome', 'chrome-131', 'chrome-130', 'chrome-120',
-                'safari', 'safari-17', 'edge', 'firefox',
-            ]
-            user_agents = [
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-                'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-                'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
-                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
-                'Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-                'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
-            ]
-            format_fallbacks = [
-                'worst[ext=mp4]/worst',
-                'worstvideo+worstaudio/worst',
-                'best[ext=mp4]/best',
-                'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                'bestvideo+bestaudio/best',
-                'worstvideo+bestaudio/worst',
-                'bestaudio/best',
-                'worst',
-                'worstvideo[ext=mp4]/worst[ext=mp4]/worst',
-                'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
-                'bv*+ba/b',
-                '17', '36', '5', '18', '34', '35', '43', '247+140',
-            ]
             proxy = get_working_proxy()
-            for attempt in range(36):
-                cfg = strategies[attempt % len(strategies)]
-                ua = user_agents[attempt % len(user_agents)]
-                fmt = format_fallbacks[attempt % len(format_fallbacks)]
-                imp = impersonate_profiles[attempt % len(impersonate_profiles)]
-                try:
-                    ydl_opts = {
-                        'format': fmt,
-                        'outtmpl': video_path,
-                        'quiet': True,
-                        'no_warnings': True,
-                        'extract_flat': False,
-                        'sleep_interval': 1,
-                        'sleep_interval_requests': 1,
-                        'extractor_retries': 3,
-                        'file_access_retries': 3,
-                        'throttledratelimit': 100000,
-                        'ignore_no_formats_error': True,
-                        'allow_unplayable_formats': True,
-                        'no_check_certificate': True,
-                        'socket_timeout': 60,
-                        'http_headers': {
-                            'User-Agent': ua,
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                            'Accept-Language': 'en-US,en;q=0.5',
-                        },
-                    }
-                    if proxy:
-                        ydl_opts['proxy'] = proxy
-                    if imp:
-                        ydl_opts['impersonate'] = imp
-                    if auth_cfg["cookies_path"]:
-                        ydl_opts['cookiefile'] = auth_cfg["cookies_path"]
-                    extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
-                    if auth_cfg["extractor_args"]:
-                        extractor_args['youtube'].update(auth_cfg["extractor_args"])
-                    # Add bgutil PO token provider if available
-                    bgutil_cfg = get_bgutil_config()
-                    if bgutil_cfg:
-                        extractor_args.update(bgutil_cfg)
-                    if extractor_args.get('youtube') or extractor_args.get('youtubepot') or extractor_args.get('youtubepot-bgutilscript'):
-                        ydl_opts['extractor_args'] = extractor_args
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([url])
-                    if os.path.getsize(video_path) >= 1024:
-                        downloaded = True
-                        break
-                except Exception as e:
-                    err_lower = str(e).lower()
-                    if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small"]):
-                        if attempt < 35:
-                            wait = min(3 + attempt, 30)
-                            print(f"YouTube issue (attempt {attempt+1}/36): {err_lower[:80]} (strategy={cfg}, imp={imp}, proxy={proxy[:40] if proxy else 'none'}), waiting {wait}s...")
-                            time.sleep(wait)
-                            continue
-                    break
+            cookie_path = auth_cfg.get("cookies_path") or os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
+            if not os.path.exists(cookie_path):
+                cookie_path = "cookies.txt" if os.path.exists("cookies.txt") else None
+            downloaded = download_with_ytdlp(url, video_path, proxy, cookie_path)
 
         # ── Phase 2: Piped / Invidious (reliable public instances) ──
         if is_youtube and not downloaded:
@@ -1872,6 +1855,16 @@ Return JSON with this exact format:
                     thumb_storage_path = f"thumbnails/{job_id}.jpg"
                     thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
 
+                # Upload SRT file to Supabase Storage for frontend editing
+                srt_storage_url = ""
+                if srt_content and clip_storage_url:
+                    try:
+                        srt_storage_path = f"{job_id}/{job_id}_clip{i+1}.srt"
+                        srt_storage_url = upload_to_storage(srt_path, "clips", srt_storage_path, "text/plain") or ""
+                        print(f"SRT uploaded: {srt_storage_url}")
+                    except Exception as e:
+                        print(f"SRT upload failed: {e}")
+
                 try:
                     supabase.table("clips").insert({
                         "user_id": user_id,
@@ -1879,14 +1872,15 @@ Return JSON with this exact format:
                         "status": "done" if clip_storage_url else "error",
                         "video_url": clip_storage_url,
                         "thumbnail_url": thumb_storage_url,
+                        "srt_url": srt_storage_url,
                         "duration": round(duration, 1),
                         "start_time": clip_start,
                         "end_time": clip["end"],
                         "subtitles_srt": srt_content or ""
                     }).execute()
                 except Exception as e:
-                    print(f"Clip insert warning (subtitles_srt may need migration): {e}")
-                    # Retry without subtitles_srt if column missing
+                    print(f"Clip insert warning (subtitles_srt/srt_url may need migration): {e}")
+                    # Retry without subtitles_srt/srt_url if columns missing
                     try:
                         supabase.table("clips").insert({
                             "user_id": user_id,
@@ -2198,6 +2192,79 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             try: os.unlink(f)
             except OSError: pass
         for f in temp_files:
+            try: os.unlink(f)
+            except OSError: pass
+
+
+@app.post("/burn-subtitles")
+async def burn_subtitles_endpoint(style: SubtitleStyle, user: dict = Depends(get_current_user)):
+    """Burn subtitles onto a video with customizable style."""
+    await check_rate_limit(f"burn-subtitles:{user['sub']}")
+    user_id = user["sub"]
+    job_id = str(uuid.uuid4())
+
+    video_path = f"downloads/{job_id}_source.mp4"
+    srt_path = f"downloads/{job_id}_subtitles.srt"
+    output_path = f"outputs/{job_id}_burned.mp4"
+    local_files = [video_path, srt_path, output_path]
+
+    try:
+        # Download video
+        r = httpx.get(style.video_url, timeout=120, follow_redirects=True)
+        if r.status_code != 200 or len(r.content) < 1024:
+            raise HTTPException(status_code=400, detail="Could not download source video")
+        with open(video_path, "wb") as f:
+            f.write(r.content)
+
+        # Download SRT
+        r_srt = httpx.get(style.srt_url, timeout=60, follow_redirects=True)
+        if r_srt.status_code != 200:
+            raise HTTPException(status_code=400, detail="Could not download subtitle file")
+        with open(srt_path, "wb") as f:
+            f.write(r_srt.content)
+
+        # Build force_style string
+        COLOR_MAP = {
+            'white': '&H00FFFFFF',
+            'yellow': '&H0000FFFF',
+            'cyan': '&H00FFFF00',
+            'green': '&H0000FF00',
+            'red': '&H000000FF',
+            'black': '&H00000000',
+        }
+        POSITION_MAP = {
+            'bottom': 2,
+            'top': 8,
+            'middle': 5,
+        }
+        primary_color = COLOR_MAP.get(style.font_color.lower(), '&H00FFFFFF')
+        alignment = POSITION_MAP.get(style.position.lower(), 2)
+        margin_v = 60 if style.position.lower() == 'bottom' else 20
+        back_color = f"&H{int(style.background_opacity * 255):02X}000000" if style.background else '&H00000000'
+
+        force_style = (
+            f"Fontname={style.font_name},"
+            f"Fontsize={style.font_size},"
+            f"PrimaryColour={primary_color},"
+            f"BackColour={back_color},"
+            f"Outline={style.outline},"
+            f"Bold={1 if style.bold else 0},"
+            f"Alignment={alignment},"
+            f"MarginV={margin_v}"
+        )
+
+        if not burn_subtitles_onto_video(video_path, srt_path, output_path, force_style=force_style):
+            raise HTTPException(status_code=400, detail="Failed to burn subtitles")
+
+        # Upload result
+        storage_path = f"burned/{job_id}_burned.mp4"
+        public_url = upload_to_storage(output_path, "clips", storage_path, "video/mp4")
+        if not public_url:
+            raise HTTPException(status_code=400, detail="Failed to upload burned video")
+
+        return {"success": True, "video_url": public_url}
+    finally:
+        for f in local_files:
             try: os.unlink(f)
             except OSError: pass
 
@@ -2556,6 +2623,16 @@ Return JSON with this exact format:
                 thumb_storage_path = f"thumbnails/{job_id}.jpg"
                 thumb_storage_url = upload_to_storage(thumb_path, "clips", thumb_storage_path, "image/jpeg")
 
+            # Upload SRT file to Supabase Storage for frontend editing
+            srt_storage_url = ""
+            if srt_content and clip_storage_url:
+                try:
+                    srt_storage_path = f"{job_id}/{job_id}_clip{i+1}.srt"
+                    srt_storage_url = upload_to_storage(srt_path, "clips", srt_storage_path, "text/plain") or ""
+                    print(f"SRT uploaded: {srt_storage_url}")
+                except Exception as e:
+                    print(f"SRT upload failed: {e}")
+
             try:
                 supabase.table("clips").insert({
                     "user_id": user_id,
@@ -2563,13 +2640,14 @@ Return JSON with this exact format:
                     "status": "done" if clip_storage_url else "error",
                     "video_url": clip_storage_url,
                     "thumbnail_url": thumb_storage_url,
+                    "srt_url": srt_storage_url,
                     "duration": round(duration, 1),
                     "start_time": clip_start,
                     "end_time": clip["end"],
                     "subtitles_srt": srt_content or ""
                 }).execute()
             except Exception as e:
-                print(f"Clip insert warning (subtitles_srt may need migration): {e}")
+                print(f"Clip insert warning (subtitles_srt/srt_url may need migration): {e}")
                 try:
                     supabase.table("clips").insert({
                         "user_id": user_id,
