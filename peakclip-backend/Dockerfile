@@ -9,6 +9,12 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Deno (JavaScript runtime required by yt-dlp for YouTube challenge solving)
+RUN curl -fsSL https://deno.land/install.sh | sh \
+    && ln -s /root/.deno/bin/deno /usr/local/bin/deno \
+    && deno --version
+ENV PATH="/root/.deno/bin:${PATH}"
+
 # Build bgutil-ytdlp-pot-provider (script provider for PO tokens)
 RUN git clone --single-branch --branch master https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /root/bgutil-ytdlp-pot-provider \
     && cd /root/bgutil-ytdlp-pot-provider/server \

@@ -765,11 +765,11 @@ class YTDLPLogger:
 
 
 YTDLP_STRATEGIES = [
-    {'player_client': ['tv_embedded'], 'player_skip': []},
-    {'player_client': ['android_testsuite'], 'player_skip': []},
-    {'player_client': ['mweb'], 'player_skip': []},
+    {'player_client': ['web'], 'player_skip': ['webpage']},
     {'player_client': ['ios'], 'player_skip': ['webpage']},
-    {'player_client': ['web'], 'player_skip': []},
+    {'player_client': ['android'], 'player_skip': ['webpage']},
+    {'player_client': ['mweb'], 'player_skip': []},
+    {'player_client': ['tv'], 'player_skip': []},
 ]
 
 
@@ -829,6 +829,20 @@ def download_with_ytdlp(url: str, output_path: str, proxy_url: str = None, cooki
     return False
 
 
+async def check_js_runtime():
+    """Check if Deno/Node are available for yt-dlp JS challenges."""
+    for cmd, name in [('deno', 'Deno'), ('node', 'Node.js')]:
+        try:
+            result = subprocess.run([cmd, '--version'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                print(f"JS runtime available: {name} - {result.stdout.strip()[:80]}")
+                return True
+        except Exception:
+            pass
+    print("WARNING: no JS runtime found for yt-dlp (Deno/Node). YouTube extraction may fail.")
+    return False
+
+
 async def test_ytdlp_on_startup():
     """Probar yt-dlp al iniciar para diagnosticar el problema."""
     import yt_dlp
@@ -836,11 +850,14 @@ async def test_ytdlp_on_startup():
     proxy = os.environ.get('YOUTUBE_PROXY', '')
     cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
 
+    await check_js_runtime()
+
     print("=== yt-dlp STARTUP TEST ===")
     print(f"Proxy: {proxy[:40] if proxy else 'NONE'}")
     print(f"Cookies: {os.path.exists(cookie_path)}")
 
-    for client in ['tv_embedded', 'android_testsuite', 'mweb']:
+    clients = [s['player_client'][0] for s in YTDLP_STRATEGIES]
+    for client in clients:
         try:
             opts = {
                 'quiet': True,
@@ -854,25 +871,25 @@ async def test_ytdlp_on_startup():
             }
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(test_url, download=False)
-                print(f"TEST {client}: OK - {info.get('title', '?')[:40]}")
+                print(f"TEST {client} CON proxy: OK - {info.get('title', '?')[:40]}")
         except Exception as e:
-            print(f"TEST {client}: FAIL - {str(e)[:120]}")
+            print(f"TEST {client} CON proxy: FAIL - {str(e)[:120]}")
 
-    # Test without proxy
+    # Test web client without proxy
     try:
         opts = {
             'quiet': True,
             'no_warnings': True,
-            'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
+            'extractor_args': {'youtube': {'player_client': ['web']}},
             'skip_download': True,
             'format': 'best',
             'logger': YTDLPLogger(),
         }
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(test_url, download=False)
-            print(f"TEST tv_embedded SIN proxy: OK - {info.get('title', '?')[:40]}")
+            print(f"TEST web SIN proxy: OK - {info.get('title', '?')[:40]}")
     except Exception as e:
-        print(f"TEST tv_embedded SIN proxy: FAIL - {str(e)[:120]}")
+        print(f"TEST web SIN proxy: FAIL - {str(e)[:120]}")
 
     print("=== END yt-dlp TEST ===")
 
