@@ -369,14 +369,14 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
             print("Playwright: triggered native player, waiting for video stream...")
 
             # ============================================================
-            # PASO 4: Esperar chunks con timeout adaptativo
+            # PASO 4: Esperar chunks con timeout adaptativo (máx 45s)
             # ============================================================
-            max_wait = 90
+            max_wait = 45
             interval = 3
             cycles = max_wait // interval
             last_total = 0
             idle_cycles = 0
-            max_idle = 4  # 4 * 3s = 12s idle = done
+            max_idle = 2  # 2 * 3s = 6s idle = done
 
             for i in range(cycles):
                 await page.wait_for_timeout(interval * 1000)
@@ -754,6 +754,16 @@ def get_bgutil_config():
     return config
 
 
+class YTDLPLogger:
+    def debug(self, msg):
+        if '[debug]' not in msg:
+            print(f"yt-dlp: {msg}")
+    def warning(self, msg):
+        print(f"yt-dlp WARNING: {msg}")
+    def error(self, msg):
+        print(f"yt-dlp ERROR: {msg}")
+
+
 YTDLP_STRATEGIES = [
     {'player_client': ['tv_embedded'], 'player_skip': []},
     {'player_client': ['android_testsuite'], 'player_skip': []},
@@ -778,6 +788,7 @@ def get_ydl_opts_for_strategy(strategy, proxy_url, cookie_path, output_template)
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
         'merge_output_format': 'mp4',
+        'logger': YTDLPLogger(),
         'postprocessors': [{
             'key': 'FFmpegVideoConvertor',
             'preferedformat': 'mp4',
@@ -818,6 +829,54 @@ def download_with_ytdlp(url: str, output_path: str, proxy_url: str = None, cooki
     return False
 
 
+async def test_ytdlp_on_startup():
+    """Probar yt-dlp al iniciar para diagnosticar el problema."""
+    import yt_dlp
+    test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    proxy = os.environ.get('YOUTUBE_PROXY', '')
+    cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
+
+    print("=== yt-dlp STARTUP TEST ===")
+    print(f"Proxy: {proxy[:40] if proxy else 'NONE'}")
+    print(f"Cookies: {os.path.exists(cookie_path)}")
+
+    for client in ['tv_embedded', 'android_testsuite', 'mweb']:
+        try:
+            opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'proxy': proxy or None,
+                'cookiefile': cookie_path if os.path.exists(cookie_path) else None,
+                'extractor_args': {'youtube': {'player_client': [client]}},
+                'skip_download': True,
+                'format': 'best',
+                'logger': YTDLPLogger(),
+            }
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(test_url, download=False)
+                print(f"TEST {client}: OK - {info.get('title', '?')[:40]}")
+        except Exception as e:
+            print(f"TEST {client}: FAIL - {str(e)[:120]}")
+
+    # Test without proxy
+    try:
+        opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extractor_args': {'youtube': {'player_client': ['tv_embedded']}},
+            'skip_download': True,
+            'format': 'best',
+            'logger': YTDLPLogger(),
+        }
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(test_url, download=False)
+            print(f"TEST tv_embedded SIN proxy: OK - {info.get('title', '?')[:40]}")
+    except Exception as e:
+        print(f"TEST tv_embedded SIN proxy: FAIL - {str(e)[:120]}")
+
+    print("=== END yt-dlp TEST ===")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup - fast yt-dlp upgrade only
@@ -834,6 +893,12 @@ async def lifespan(app: FastAPI):
     bgutil_url = start_bgutil_server()
     if bgutil_url:
         os.environ['BGUTIL_POT_URL'] = bgutil_url
+
+    # Diagnostic yt-dlp test on startup
+    try:
+        await test_ytdlp_on_startup()
+    except Exception as e:
+        print(f"yt-dlp startup test error: {e}")
 
     await run_migrations()
     await fetch_jwks()
@@ -1557,35 +1622,48 @@ def process_video_background(job_id: str, user_id: str, url: str):
             refresh_youtube_cookies_sync()
         auth_cfg = get_youtube_auth_config()
 
-        is_youtube = extract_youtube_video_id(url) is not None
-        downloaded = False
+        async def download_video_async(url: str, video_path: str, job_id: str) -> bool:
+            """Download video using multiple strategies."""
+            is_youtube = extract_youtube_video_id(url) is not None
+            downloaded = False
 
-        # ── Phase 1: yt-dlp with multiple strategies (primary for YouTube) ──
-        if is_youtube:
-            jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp..."}
-            proxy = get_working_proxy()
-            cookie_path = auth_cfg.get("cookies_path") or os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
-            if not os.path.exists(cookie_path):
-                cookie_path = "cookies.txt" if os.path.exists("cookies.txt") else None
-            downloaded = download_with_ytdlp(url, video_path, proxy, cookie_path)
+            # ── Phase 1: yt-dlp with multiple strategies (primary for YouTube) ──
+            if is_youtube:
+                jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp..."}
+                proxy = get_working_proxy()
+                cookie_path = auth_cfg.get("cookies_path") or os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
+                if not os.path.exists(cookie_path):
+                    cookie_path = "cookies.txt" if os.path.exists("cookies.txt") else None
+                downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, proxy, cookie_path)
 
-        # ── Phase 2: Piped / Invidious (reliable public instances) ──
-        if is_youtube and not downloaded:
-            jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious..."}
-            downloaded = (
-                download_with_piped(url, video_path) or
-                download_with_invidious(url, video_path)
-            )
+            # ── Phase 2: Piped / Invidious (reliable public instances) ──
+            if is_youtube and not downloaded:
+                jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious..."}
+                downloaded = (
+                    await asyncio.to_thread(download_with_piped, url, video_path) or
+                    await asyncio.to_thread(download_with_invidious, url, video_path)
+                )
 
-        # ── Phase 3: Playwright (browser) fallback for YouTube ──
-        if is_youtube and not downloaded:
-            jobs_store[job_id] = {"status": "processing", "message": "Downloading with browser..."}
-            downloaded = asyncio.run(download_with_playwright(url, video_path))
+            # ── Phase 3: Playwright (browser) fallback for YouTube ──
+            if is_youtube and not downloaded:
+                jobs_store[job_id] = {"status": "processing", "message": "Downloading with browser..."}
+                downloaded = await download_with_playwright(url, video_path)
 
-        # ── Phase 4: cobalt (last resort) ──
-        if is_youtube and not downloaded:
-            jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools..."}
-            downloaded = download_with_cobalt(url, video_path)
+            # ── Phase 4: cobalt (last resort) ──
+            if is_youtube and not downloaded:
+                jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools..."}
+                downloaded = await asyncio.to_thread(download_with_cobalt, url, video_path)
+
+            return downloaded
+
+        async def download_with_timeout(url, video_path, job_id, timeout_seconds=180):
+            try:
+                return await asyncio.wait_for(download_video_async(url, video_path, job_id), timeout=timeout_seconds)
+            except asyncio.TimeoutError:
+                print(f"DOWNLOAD TIMEOUT after {timeout_seconds}s for {url}")
+                return False
+
+        downloaded = asyncio.run(download_with_timeout(url, video_path, job_id))
 
         if not downloaded:
             jobs_store[job_id] = {"status": "error", "message": "Could not download video from this URL. Please try another video or upload the file directly."}
