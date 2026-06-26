@@ -85,34 +85,11 @@ def extract_youtube_video_id(url: str) -> str | None:
     return None
 
 
-def refresh_youtube_cookies_sync() -> bool:
-    """Use Playwright to refresh YouTube cookies. Called before download if cookies exist."""
-    return asyncio.run(refresh_youtube_cookies())
-
-async def refresh_youtube_cookies() -> bool:
-    """Use Playwright to refresh YouTube cookies from an existing session."""
-    cookie_b64 = os.environ.get('YOUTUBE_COOKIES_B64')
-    if not cookie_b64:
-        return False
+async def generate_youtube_cookies_via_playwright() -> bool:
+    """Use Playwright to generate fresh YouTube cookies.
+    If GOOGLE_EMAIL and GOOGLE_PASSWORD env vars are set, logs in for authenticated cookies.
+    Always saves anonymous session cookies as fallback."""
     try:
-        import base64 as _b64
-        cookies_content = _b64.b64decode(cookie_b64).decode('utf-8')
-        playwright_cookies = []
-        for line in cookies_content.split('\n'):
-            if line.startswith('#') or not line.strip():
-                continue
-            parts = line.split('\t')
-            if len(parts) >= 7:
-                playwright_cookies.append({
-                    'name': parts[5], 'value': parts[6],
-                    'domain': parts[0], 'path': parts[2],
-                    'secure': parts[3] == 'TRUE',
-                    'httpOnly': False,
-                })
-        if not playwright_cookies:
-            return False
-
-        # Build proxy config for cookie refresh (same as download)
         proxy_url = (
             os.environ.get('YOUTUBE_PROXY') or
             os.environ.get('YTDLP_PROXY') or
@@ -123,7 +100,6 @@ async def refresh_youtube_cookies() -> bool:
         ).strip()
         playwright_proxy = None
         if proxy_url:
-            from urllib.parse import urlparse
             parsed = urlparse(proxy_url)
             if parsed.hostname and parsed.port:
                 server = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}" if parsed.scheme else f"http://{parsed.hostname}:{parsed.port}"
@@ -132,16 +108,68 @@ async def refresh_youtube_cookies() -> bool:
                     playwright_proxy['username'] = parsed.username
                 if parsed.password:
                     playwright_proxy['password'] = parsed.password
-                print(f"Cookie refresh: using proxy {server}")
+                print(f"Cookie gen: using proxy {server}")
 
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-dev-shm-usage'])
-            context = await browser.new_context(proxy=playwright_proxy)
-            await context.add_cookies(playwright_cookies)
+            browser = await p.chromium.launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-dev-shm-usage', '--disable-setuid-sandbox']
+            )
+            context = await browser.new_context(
+                proxy=playwright_proxy,
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                viewport={'width': 1920, 'height': 1080},
+            )
             page = await context.new_page()
-            await page.goto('https://www.youtube.com', wait_until='domcontentloaded', timeout=60000)
-            await page.wait_for_timeout(4000)
+            await page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
+                Object.defineProperty(navigator, 'languages', {get: () => ['en-US','en']});
+                window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
+            """)
+
+            google_email = os.environ.get('GOOGLE_EMAIL', '').strip()
+            google_password = os.environ.get('GOOGLE_PASSWORD', '').strip()
+            did_login = False
+            if google_email and google_password:
+                try:
+                    print("Cookie gen: attempting Google login...")
+                    await page.goto(
+                        'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://www.youtube.com',
+                        wait_until='domcontentloaded', timeout=60000
+                    )
+                    await page.wait_for_timeout(3000)
+                    email_input = await page.wait_for_selector('input[type="email"], #identifierId', timeout=15000)
+                    if email_input:
+                        await email_input.fill(google_email)
+                        await page.wait_for_timeout(1000)
+                        next_btn = await page.wait_for_selector('#identifierNext button, button:has-text("Next")', timeout=5000)
+                        if next_btn:
+                            await next_btn.click()
+                            await page.wait_for_timeout(3000)
+                    password_input = await page.wait_for_selector('input[type="password"]', timeout=20000)
+                    if password_input:
+                        await password_input.fill(google_password)
+                        await page.wait_for_timeout(1000)
+                        pw_next = await page.wait_for_selector('#passwordNext button, button:has-text("Next")', timeout=5000)
+                        if pw_next:
+                            await pw_next.click()
+                            await page.wait_for_timeout(5000)
+                    try:
+                        await page.wait_for_url('https://www.youtube.com/**', timeout=30000)
+                        did_login = True
+                        print("Cookie gen: Google login successful")
+                    except Exception:
+                        print("Cookie gen: Google login redirect not detected (may need 2FA)")
+                except Exception as e:
+                    print(f"Cookie gen: Google login failed (non-fatal): {e}")
+
+            if not did_login:
+                print("Cookie gen: getting anonymous session cookies...")
+                await page.goto('https://www.youtube.com', wait_until='domcontentloaded', timeout=60000)
+                await page.wait_for_timeout(5000)
+
             cookies = await context.cookies()
             netscape_lines = ["# Netscape HTTP Cookie File", ""]
             for c in cookies:
@@ -152,14 +180,16 @@ async def refresh_youtube_cookies() -> bool:
                 name = c.get('name', '')
                 value = c.get('value', '')
                 netscape_lines.append(f"{domain}\t{'TRUE' if domain.startswith('.') else 'FALSE'}\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
+
             cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
             with open(cookie_path, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(netscape_lines))
+
             await browser.close()
-            print(f"Cookies auto-refreshed: {len(cookies)} cookies")
+            print(f"Cookie gen: {len(cookies)} cookies saved {'(authenticated)' if did_login else '(anonymous)'}")
             return True
     except Exception as e:
-        print(f"Cookie auto-refresh failed (non-fatal): {e}")
+        print(f"Cookie gen failed (non-fatal): {e}")
         return False
 
 async def download_with_playwright(url: str, output_path: str) -> bool:
@@ -792,11 +822,13 @@ class YTDLPLogger:
 
 
 YTDLP_STRATEGIES = [
-    {'player_client': ['web'], 'player_skip': ['webpage']},
-    {'player_client': ['ios'], 'player_skip': ['webpage']},
-    {'player_client': ['android'], 'player_skip': ['webpage']},
     {'player_client': ['mweb'], 'player_skip': []},
     {'player_client': ['tv'], 'player_skip': []},
+    {'player_client': ['web_creator'], 'player_skip': []},
+    {'player_client': ['web_safari'], 'player_skip': []},
+    {'player_client': ['web'], 'player_skip': ['webpage']},
+    {'player_client': ['android'], 'player_skip': ['webpage']},
+    {'player_client': ['ios'], 'player_skip': ['webpage']},
 ]
 
 
@@ -821,12 +853,16 @@ def get_ydl_opts_for_strategy(strategy, proxy_url, cookie_path, output_template)
             'preferedformat': 'mp4',
         }],
     }
+    opts['geo_bypass'] = True
+    opts['geo_bypass_country'] = 'US'
     if proxy_url:
         opts['proxy'] = proxy_url
     if cookie_path and os.path.exists(cookie_path):
         opts['cookiefile'] = cookie_path
-    extractor_args = {'youtube': {}}
-    extractor_args['youtube']['player_client'] = strategy['player_client']
+    extractor_args = {'youtube': {
+        'player_client': strategy['player_client'],
+        'skip': ['dash', 'hls'],
+    }}
     if strategy.get('player_skip'):
         extractor_args['youtube']['player_skip'] = strategy['player_skip']
     # Add bgutil PO token provider if available (for web client)
@@ -878,6 +914,7 @@ async def test_ytdlp_on_startup():
     cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
 
     await check_js_runtime()
+    await generate_youtube_cookies_via_playwright()
 
     print("=== yt-dlp STARTUP TEST ===")
     print(f"Proxy: {proxy[:40] if proxy else 'NONE'}")
@@ -889,9 +926,11 @@ async def test_ytdlp_on_startup():
             opts = {
                 'quiet': True,
                 'no_warnings': True,
+                'geo_bypass': True,
+                'geo_bypass_country': 'US',
                 'proxy': proxy or None,
                 'cookiefile': cookie_path if os.path.exists(cookie_path) else None,
-                'extractor_args': {'youtube': {'player_client': [client]}},
+                'extractor_args': {'youtube': {'player_client': [client], 'skip': ['dash', 'hls']}},
                 'skip_download': True,
                 'format': 'best',
                 'logger': YTDLPLogger(),
@@ -907,7 +946,9 @@ async def test_ytdlp_on_startup():
         opts = {
             'quiet': True,
             'no_warnings': True,
-            'extractor_args': {'youtube': {'player_client': ['web']}},
+            'geo_bypass': True,
+            'geo_bypass_country': 'US',
+            'extractor_args': {'youtube': {'player_client': ['web'], 'skip': ['dash', 'hls']}},
             'skip_download': True,
             'format': 'best',
             'logger': YTDLPLogger(),
@@ -1662,13 +1703,11 @@ def process_video_background(job_id: str, user_id: str, url: str):
     local_files = [video_path, audio_path]
 
     try:
-        # Auto-refresh cookies if they exist (keeps session alive)
-        if os.environ.get('YOUTUBE_COOKIES_B64'):
-            refresh_youtube_cookies_sync()
+        # Generate fresh cookies via Playwright (with Google login if configured)
+        asyncio.run(generate_youtube_cookies_via_playwright())
         auth_cfg = get_youtube_auth_config()
 
         async def download_video_async(url: str, video_path: str, job_id: str) -> bool:
-            """Download video using multiple strategies, with and without proxy."""
             is_youtube = extract_youtube_video_id(url) is not None
             downloaded = False
             proxy = get_working_proxy()
@@ -1676,9 +1715,9 @@ def process_video_background(job_id: str, user_id: str, url: str):
             if not os.path.exists(cookie_path):
                 cookie_path = "cookies.txt" if os.path.exists("cookies.txt") else None
 
-            # ── Phase 1: yt-dlp with proxy (primary for YouTube) ──
+            # ── Phase 1: yt-dlp with proxy ──
             if is_youtube and not downloaded:
-                jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp (proxy)..."}
+                jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp..."}
                 downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, proxy, cookie_path)
 
             # ── Phase 2: yt-dlp without proxy ──
@@ -1686,7 +1725,22 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp (direct)..."}
                 downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, None, cookie_path)
 
-            # ── Phase 3: Piped / Invidious without proxy ──
+            # ── Phase 3: Playwright → refresh cookies (login if configured) ──
+            if is_youtube and not downloaded:
+                jobs_store[job_id] = {"status": "processing", "message": "Refreshing session..."}
+                await generate_youtube_cookies_via_playwright()
+
+            # ── Phase 4: yt-dlp retry with fresh cookies + proxy ──
+            if is_youtube and not downloaded:
+                jobs_store[job_id] = {"status": "processing", "message": "Retrying with fresh session..."}
+                downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, proxy, cookie_path)
+
+            # ── Phase 5: yt-dlp retry with fresh cookies, no proxy ──
+            if is_youtube and not downloaded:
+                jobs_store[job_id] = {"status": "processing", "message": "Retrying with fresh session (direct)..."}
+                downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, None, cookie_path)
+
+            # ── Phase 6: Piped / Invidious without proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious (direct)..."}
                 downloaded = (
@@ -1694,7 +1748,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     await asyncio.to_thread(download_with_invidious, url, video_path, None)
                 )
 
-            # ── Phase 4: Piped / Invidious with proxy ──
+            # ── Phase 7: Piped / Invidious with proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious (proxy)..."}
                 downloaded = (
@@ -1702,27 +1756,12 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     await asyncio.to_thread(download_with_invidious, url, video_path, proxy)
                 )
 
-            # ── Phase 5: Playwright browser (proxy first, then direct) ──
+            # ── Phase 8: cobalt.tools direct ──
             if is_youtube and not downloaded:
-                jobs_store[job_id] = {"status": "processing", "message": "Downloading with browser (proxy)..."}
-                downloaded = await download_with_playwright(url, video_path)
-            if is_youtube and not downloaded:
-                # Temporarily clear proxy env for direct playwright attempt
-                jobs_store[job_id] = {"status": "processing", "message": "Downloading with browser (direct)..."}
-                old_youtube_proxy = os.environ.pop('YOUTUBE_PROXY', None)
-                old_ytdlp_proxy = os.environ.pop('YTDLP_PROXY', None)
-                try:
-                    downloaded = await download_with_playwright(url, video_path)
-                finally:
-                    if old_youtube_proxy is not None:
-                        os.environ['YOUTUBE_PROXY'] = old_youtube_proxy
-                    if old_ytdlp_proxy is not None:
-                        os.environ['YTDLP_PROXY'] = old_ytdlp_proxy
-
-            # ── Phase 6: cobalt (direct first, then proxy) ──
-            if is_youtube and not downloaded:
-                jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools (direct)..."}
+                jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools..."}
                 downloaded = await asyncio.to_thread(download_with_cobalt, url, video_path, None)
+
+            # ── Phase 9: cobalt with proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools (proxy)..."}
                 downloaded = await asyncio.to_thread(download_with_cobalt, url, video_path, proxy)
