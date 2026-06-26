@@ -15,14 +15,6 @@ RUN curl -fsSL https://deno.land/install.sh | sh \
     && deno --version
 ENV PATH="/root/.deno/bin:${PATH}"
 
-# Build bgutil-ytdlp-pot-provider (script provider for PO tokens)
-RUN git clone --single-branch --branch master https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /root/bgutil-ytdlp-pot-provider \
-    && cd /root/bgutil-ytdlp-pot-provider/server \
-    && npm ci \
-    && npx tsc \
-    && ls -la /root/bgutil-ytdlp-pot-provider/server \
-    && find /root/bgutil-ytdlp-pot-provider/server -name "index.js" -type f 2>/dev/null | head -5
-
 WORKDIR /app
 
 COPY requirements.txt .
