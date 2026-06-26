@@ -492,7 +492,7 @@ async def download_with_playwright(url: str, output_path: str) -> bool:
         return False
 
 
-def download_with_invidious(url: str, output_path: str) -> bool:
+def download_with_invidious(url: str, output_path: str, proxy_url: str = None) -> bool:
     """Fallback downloader using Invidious instances for YouTube."""
     video_id = extract_youtube_video_id(url)
     if not video_id:
@@ -528,9 +528,21 @@ def download_with_invidious(url: str, output_path: str) -> bool:
             "https://vid.puffyan.us",
             "https://invidious.nerdvpn.de",
             "https://yt.artemislena.eu",
+            "https://iv.nboeck.de",
+            "https://iv.datura.network",
+            "https://iv.nboeck.de",
+            "https://iv.melmac.space",
+            "https://iv.datura.network",
         ]
 
-    with httpx.Client(timeout=60, follow_redirects=True) as client:
+    client_kwargs = {"timeout": 60, "follow_redirects": True}
+    if proxy_url:
+        client_kwargs["proxy"] = proxy_url
+        print(f"Invidious: using proxy {proxy_url[:40]}...")
+    else:
+        print("Invidious: no proxy")
+
+    with httpx.Client(**client_kwargs) as client:
         for base in invidious_instances:
             try:
                 print(f"Trying Invidious instance {base} for {video_id}")
@@ -573,7 +585,7 @@ def download_with_invidious(url: str, output_path: str) -> bool:
     return False
 
 
-def download_with_piped(url: str, output_path: str) -> bool:
+def download_with_piped(url: str, output_path: str, proxy_url: str = None) -> bool:
     """Fallback downloader using Piped instances for YouTube."""
     video_id = extract_youtube_video_id(url)
     if not video_id:
@@ -606,9 +618,21 @@ def download_with_piped(url: str, output_path: str) -> bool:
             "https://pipedapi.lunar.icu",
             "https://pipedapi.tokhmi.xyz",
             "https://pipedapi.syncpundit.io",
+            "https://api.piped.private.coffee",
+            "https://pipedapi.adminforge.de",
+            "https://pipedapi.drgns.space",
+            "https://pipedapi.mha.fi",
+            "https://pipedapi.adminforge.de",
         ]
 
-    with httpx.Client(timeout=60, follow_redirects=True) as client:
+    client_kwargs = {"timeout": 60, "follow_redirects": True}
+    if proxy_url:
+        client_kwargs["proxy"] = proxy_url
+        print(f"Piped: using proxy {proxy_url[:40]}...")
+    else:
+        print("Piped: no proxy")
+
+    with httpx.Client(**client_kwargs) as client:
         for base in piped_instances:
             try:
                 print(f"Trying Piped instance {base} for {video_id}")
@@ -647,11 +671,14 @@ def download_with_piped(url: str, output_path: str) -> bool:
     return False
 
 
-def download_with_cobalt(url: str, output_path: str) -> bool:
+def download_with_cobalt(url: str, output_path: str, proxy_url: str = None) -> bool:
     """Fallback downloader using cobalt.tools API for YouTube/TikTok/etc."""
     try:
-        print(f"Trying cobalt.tools fallback for {url}")
-        with httpx.Client(timeout=120) as client:
+        print(f"Trying cobalt.tools fallback for {url} (proxy={'yes' if proxy_url else 'no'})")
+        client_kwargs = {"timeout": 120}
+        if proxy_url:
+            client_kwargs["proxy"] = proxy_url
+        with httpx.Client(**client_kwargs) as client:
             # Try current cobalt API (v10+) with updated parameters
             r = client.post(
                 "https://api.cobalt.tools/",
@@ -1640,40 +1667,68 @@ def process_video_background(job_id: str, user_id: str, url: str):
         auth_cfg = get_youtube_auth_config()
 
         async def download_video_async(url: str, video_path: str, job_id: str) -> bool:
-            """Download video using multiple strategies."""
+            """Download video using multiple strategies, with and without proxy."""
             is_youtube = extract_youtube_video_id(url) is not None
             downloaded = False
+            proxy = get_working_proxy()
+            cookie_path = auth_cfg.get("cookies_path") or os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
+            if not os.path.exists(cookie_path):
+                cookie_path = "cookies.txt" if os.path.exists("cookies.txt") else None
 
-            # ── Phase 1: yt-dlp with multiple strategies (primary for YouTube) ──
-            if is_youtube:
-                jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp..."}
-                proxy = get_working_proxy()
-                cookie_path = auth_cfg.get("cookies_path") or os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
-                if not os.path.exists(cookie_path):
-                    cookie_path = "cookies.txt" if os.path.exists("cookies.txt") else None
+            # ── Phase 1: yt-dlp with proxy (primary for YouTube) ──
+            if is_youtube and not downloaded:
+                jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp (proxy)..."}
                 downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, proxy, cookie_path)
 
-            # ── Phase 2: Piped / Invidious (reliable public instances) ──
+            # ── Phase 2: yt-dlp without proxy ──
             if is_youtube and not downloaded:
-                jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious..."}
+                jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp (direct)..."}
+                downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, None, cookie_path)
+
+            # ── Phase 3: Piped / Invidious without proxy ──
+            if is_youtube and not downloaded:
+                jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious (direct)..."}
                 downloaded = (
-                    await asyncio.to_thread(download_with_piped, url, video_path) or
-                    await asyncio.to_thread(download_with_invidious, url, video_path)
+                    await asyncio.to_thread(download_with_piped, url, video_path, None) or
+                    await asyncio.to_thread(download_with_invidious, url, video_path, None)
                 )
 
-            # ── Phase 3: Playwright (browser) fallback for YouTube ──
+            # ── Phase 4: Piped / Invidious with proxy ──
             if is_youtube and not downloaded:
-                jobs_store[job_id] = {"status": "processing", "message": "Downloading with browser..."}
-                downloaded = await download_with_playwright(url, video_path)
+                jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious (proxy)..."}
+                downloaded = (
+                    await asyncio.to_thread(download_with_piped, url, video_path, proxy) or
+                    await asyncio.to_thread(download_with_invidious, url, video_path, proxy)
+                )
 
-            # ── Phase 4: cobalt (last resort) ──
+            # ── Phase 5: Playwright browser (proxy first, then direct) ──
             if is_youtube and not downloaded:
-                jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools..."}
-                downloaded = await asyncio.to_thread(download_with_cobalt, url, video_path)
+                jobs_store[job_id] = {"status": "processing", "message": "Downloading with browser (proxy)..."}
+                downloaded = await download_with_playwright(url, video_path)
+            if is_youtube and not downloaded:
+                # Temporarily clear proxy env for direct playwright attempt
+                jobs_store[job_id] = {"status": "processing", "message": "Downloading with browser (direct)..."}
+                old_youtube_proxy = os.environ.pop('YOUTUBE_PROXY', None)
+                old_ytdlp_proxy = os.environ.pop('YTDLP_PROXY', None)
+                try:
+                    downloaded = await download_with_playwright(url, video_path)
+                finally:
+                    if old_youtube_proxy is not None:
+                        os.environ['YOUTUBE_PROXY'] = old_youtube_proxy
+                    if old_ytdlp_proxy is not None:
+                        os.environ['YTDLP_PROXY'] = old_ytdlp_proxy
+
+            # ── Phase 6: cobalt (direct first, then proxy) ──
+            if is_youtube and not downloaded:
+                jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools (direct)..."}
+                downloaded = await asyncio.to_thread(download_with_cobalt, url, video_path, None)
+            if is_youtube and not downloaded:
+                jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools (proxy)..."}
+                downloaded = await asyncio.to_thread(download_with_cobalt, url, video_path, proxy)
 
             return downloaded
 
-        async def download_with_timeout(url, video_path, job_id, timeout_seconds=180):
+        async def download_with_timeout(url, video_path, job_id, timeout_seconds=300):
             try:
                 return await asyncio.wait_for(download_video_async(url, video_path, job_id), timeout=timeout_seconds)
             except asyncio.TimeoutError:
