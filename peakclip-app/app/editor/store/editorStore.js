@@ -1,5 +1,6 @@
 'use client'
 import { create } from 'zustand'
+import { parseSRT, segmentsToTrackItems } from '../../../lib/subtitles'
 
 const useEditorStore = create((set, get) => ({
   clip: null,
@@ -18,7 +19,8 @@ const useEditorStore = create((set, get) => ({
 
   trimStart: 0,
   trimEnd: 100,
-  subtitleText: '',
+  subtitles: [],           // [{ id, start, end, text, style? }]
+  selectedSubtitleId: null,
   subtitleStyle: 'bold-yellow',
   subtitlePosition: 'bottom',
   fontSize: 14,
@@ -58,7 +60,8 @@ const useEditorStore = create((set, get) => ({
     const snapshot = {
       trimStart: state.trimStart,
       trimEnd: state.trimEnd,
-      subtitleText: state.subtitleText,
+      subtitles: JSON.parse(JSON.stringify(state.subtitles)),
+      selectedSubtitleId: state.selectedSubtitleId,
       subtitleStyle: state.subtitleStyle,
       subtitlePosition: state.subtitlePosition,
       fontSize: state.fontSize,
@@ -88,7 +91,9 @@ const useEditorStore = create((set, get) => ({
     set({
       _historyIndex: newIndex,
       trimStart: snap.trimStart, trimEnd: snap.trimEnd,
-      subtitleText: snap.subtitleText, subtitleStyle: snap.subtitleStyle,
+      subtitles: JSON.parse(JSON.stringify(snap.subtitles)),
+      selectedSubtitleId: snap.selectedSubtitleId,
+      subtitleStyle: snap.subtitleStyle,
       subtitlePosition: snap.subtitlePosition, fontSize: snap.fontSize,
       watermark: snap.watermark, watermarkPosition: snap.watermarkPosition,
       music: snap.music, musicVolume: snap.musicVolume,
@@ -109,7 +114,9 @@ const useEditorStore = create((set, get) => ({
     set({
       _historyIndex: newIndex,
       trimStart: snap.trimStart, trimEnd: snap.trimEnd,
-      subtitleText: snap.subtitleText, subtitleStyle: snap.subtitleStyle,
+      subtitles: JSON.parse(JSON.stringify(snap.subtitles)),
+      selectedSubtitleId: snap.selectedSubtitleId,
+      subtitleStyle: snap.subtitleStyle,
       subtitlePosition: snap.subtitlePosition, fontSize: snap.fontSize,
       watermark: snap.watermark, watermarkPosition: snap.watermarkPosition,
       music: snap.music, musicVolume: snap.musicVolume,
@@ -127,7 +134,11 @@ const useEditorStore = create((set, get) => ({
   setPlaybackSpeed: (playbackSpeed) => set({ playbackSpeed }),
   setTimelineZoom: (timelineZoom) => set({ timelineZoom }),
   setCurrentTime: (currentTime) => set({ currentTime }),
-  setDuration: (duration) => set({ duration }),
+  setDuration: (duration) => set((state) => {
+    const textItems = segmentsToTrackItems(state.subtitles, duration)
+    const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
+    return { duration, tracks }
+  }),
   setVideoError: (videoError) => set({ videoError, videoLoading: false, videoLoaded: false }),
   setVideoLoading: (videoLoading) => set({ videoLoading }),
   setVideoLoaded: (videoLoaded) => set({ videoLoaded, videoLoading: false, videoError: null }),
@@ -140,13 +151,77 @@ const useEditorStore = create((set, get) => ({
     get()._pushHistory()
     set({ trimEnd })
   },
+  setSubtitles: (subtitles) => {
+    get()._pushHistory()
+    set((state) => {
+      const textItems = segmentsToTrackItems(subtitles, state.duration)
+      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
+      return { subtitles, tracks }
+    })
+  },
+
+  loadSubtitlesFromSRT: (srtContent) => {
+    const subtitles = parseSRT(srtContent)
+    set((state) => {
+      const textItems = segmentsToTrackItems(subtitles, state.duration)
+      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
+      return { subtitles, tracks, selectedSubtitleId: subtitles[0]?.id || null }
+    })
+  },
+
+  updateSubtitle: (id, updates) => {
+    get()._pushHistory()
+    set((state) => {
+      const subtitles = state.subtitles.map(s => s.id === id ? { ...s, ...updates } : s)
+      const textItems = segmentsToTrackItems(subtitles, state.duration)
+      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
+      return { subtitles, tracks }
+    })
+  },
+
+  addSubtitle: (start, end, text = '') => {
+    get()._pushHistory()
+    set((state) => {
+      const id = `sub-${Date.now()}`
+      const subtitles = [...state.subtitles, { id, start, end, text, style: {} }]
+        .sort((a, b) => a.start - b.start)
+      const textItems = segmentsToTrackItems(subtitles, state.duration)
+      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
+      return { subtitles, tracks, selectedSubtitleId: id }
+    })
+  },
+
+  deleteSubtitle: (id) => {
+    get()._pushHistory()
+    set((state) => {
+      const subtitles = state.subtitles.filter(s => s.id !== id)
+      const textItems = segmentsToTrackItems(subtitles, state.duration)
+      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
+      return { subtitles, tracks, selectedSubtitleId: state.selectedSubtitleId === id ? null : state.selectedSubtitleId }
+    })
+  },
+
+  setSelectedSubtitleId: (selectedSubtitleId) => set({ selectedSubtitleId }),
+
+  // Backwards-compatible: treat the global text input as the selected/active segment
   setSubtitleText: (subtitleText) => {
     get()._pushHistory()
     set((state) => {
-      const tracks = state.tracks.map(t => t.id === 'text' ? {
-        ...t, items: subtitleText ? [{ id: 'txt1', start: 0, end: 100, label: subtitleText.slice(0, 20) }] : []
-      } : t)
-      return { subtitleText, tracks }
+      let subtitles = state.subtitles
+      let selectedId = state.selectedSubtitleId
+      if (!selectedId && subtitles.length === 0) {
+        const duration = state.duration || 0
+        const id = `sub-1`
+        subtitles = [{ id, start: 0, end: duration || 5, text: subtitleText, style: {} }]
+        selectedId = id
+      } else if (selectedId) {
+        subtitles = subtitles.map(s => s.id === selectedId ? { ...s, text: subtitleText } : s)
+      } else if (subtitles.length > 0) {
+        subtitles = [{ ...subtitles[0], text: subtitleText }, ...subtitles.slice(1)]
+      }
+      const textItems = segmentsToTrackItems(subtitles, state.duration)
+      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
+      return { subtitles, tracks, selectedSubtitleId: selectedId }
     })
   },
   setSubtitleStyle: (subtitleStyle) => {
@@ -219,7 +294,7 @@ const useEditorStore = create((set, get) => ({
     clip: null, clipId: null, isPlaying: false, playheadPos: 0,
     currentTime: 0, duration: 0, videoError: null, videoLoading: true, videoLoaded: false,
     trimStart: 0, trimEnd: 100,
-    subtitleText: '', subtitleStyle: 'bold-yellow',
+    subtitles: [], selectedSubtitleId: null, subtitleStyle: 'bold-yellow',
     subtitlePosition: 'bottom', fontSize: 14, watermark: '',
     watermarkPosition: 'top-right', music: 'none', musicVolume: 30,
     activeFilter: 'none', selectedTransition: 'fade', activeTool: 'cursor',

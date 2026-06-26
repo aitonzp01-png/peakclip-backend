@@ -2,6 +2,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { brand, brandDim, brandBorder, surface, textPrimary, textSecondary, textDim, borderSoft, fonts } from '../../../lib/tokens'
 import { subtitleStyles, filters } from '../../../lib/utils'
+import { getActiveSegment } from '../../../lib/subtitles'
 import useEditorStore from '../store/editorStore'
 
 const ASPECT_RATIOS = {
@@ -13,7 +14,7 @@ const ASPECT_RATIOS = {
 export default function EditorPreview({ videoRef }) {
   const {
     clip, isPlaying, playheadPos, aspectRatio,
-    subtitleText, subtitleStyle, subtitlePosition, fontSize,
+    subtitles, currentTime, subtitleStyle, subtitlePosition, fontSize,
     watermark, watermarkPosition, activeFilter,
     videoError, videoLoading, videoLoaded,
   } = useEditorStore()
@@ -199,20 +200,15 @@ export default function EditorPreview({ videoRef }) {
         )}
 
         {/* Subtitles */}
-        {videoLoaded && subtitleText && (
-          <div style={{
-            position: 'absolute', left: '50%', transform: 'translateX(-50%)',
-            width: '90%', textAlign: 'center', pointerEvents: 'none', zIndex: 5,
-            ...(subtitlePosition === 'bottom' ? { bottom: '24px' } :
-               subtitlePosition === 'middle' ? { top: '50%', transform: 'translateX(-50%) translateY(-50%)' } :
-               { top: '24px', transform: 'translateX(-50%)' }),
-            ...selectedSubStyle,
-            fontSize: `${Math.round(fontSize * (scale || 1))}px`,
-            lineHeight: '1.3',
-            textShadow: '0 2px 8px rgba(0,0,0,0.5)',
-          }}>
-            {subtitleText}
-          </div>
+        {videoLoaded && (
+          <SubtitleOverlay
+            subtitles={subtitles}
+            currentTime={currentTime}
+            subtitlePosition={subtitlePosition}
+            selectedSubStyle={selectedSubStyle}
+            fontSize={fontSize}
+            scale={scale}
+          />
         )}
 
         {/* Watermark */}
@@ -318,6 +314,30 @@ export default function EditorPreview({ videoRef }) {
           }} />
         </div>
       </div>
+    </div>
+  )
+}
+
+function SubtitleOverlay({ subtitles, currentTime, subtitlePosition, selectedSubStyle, fontSize, scale }) {
+  const active = getActiveSegment(subtitles, currentTime)
+  if (!active || !active.text) return null
+  return (
+    <div style={{
+      position: 'absolute', left: '50%',
+      width: '90%', textAlign: 'center', pointerEvents: 'none', zIndex: 5,
+      ...(subtitlePosition === 'bottom'
+        ? { bottom: '24px', transform: 'translateX(-50%)' }
+        : subtitlePosition === 'middle'
+          ? { top: '50%', transform: 'translateX(-50%) translateY(-50%)' }
+          : { top: '24px', transform: 'translateX(-50%)' }),
+      ...selectedSubStyle,
+      fontSize: `${Math.round((active.style?.fontSize || fontSize) * (scale || 1))}px`,
+      lineHeight: '1.3',
+      textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+      color: active.style?.color || selectedSubStyle.color,
+      backgroundColor: active.style?.background || selectedSubStyle.backgroundColor,
+    }}>
+      {active.text}
     </div>
   )
 }

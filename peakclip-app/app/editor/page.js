@@ -63,7 +63,11 @@ export default function EditorPage() {
 
       if (data) {
         setClip(data)
-        store.setSubtitleText('')
+        if (data.subtitles_srt) {
+          store.loadSubtitlesFromSRT(data.subtitles_srt)
+        } else {
+          store.setSubtitles([])
+        }
       } else if (urlParam) {
         const title = urlParam.split('/').pop()?.slice(0, 40) || 'Video Clip'
         setClip({ id, title, video_url: urlParam, duration: 60, url: urlParam })

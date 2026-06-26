@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { brand, brandGrad, brandDim, brandBorder, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, fonts } from '../../../lib/tokens'
+import { generateSRT } from '../../../lib/subtitles'
 import useEditorStore from '../store/editorStore'
 import { getSupabaseClient } from '../../../lib/supabase'
 
@@ -41,6 +42,7 @@ export default function ExportModal() {
       return
     }
 
+    const srtContent = store.subtitles?.length ? generateSRT(store.subtitles) : '';
     try {
       const response = await fetch(`${BACKEND_URL}/export`, {
         method: 'POST',
@@ -50,7 +52,8 @@ export default function ExportModal() {
           video_url: clip.video_url || '',
           trim_start: store.trimStart || 0,
           trim_end: store.trimEnd || 100,
-          subtitle_text: store.subtitleText || '',
+          subtitle_text: '',
+          srt_content: srtContent,
           subtitle_style: store.subtitleStyle || 'bold-yellow',
           subtitle_position: store.subtitlePosition || 'bottom',
           font_size: store.fontSize || 14,

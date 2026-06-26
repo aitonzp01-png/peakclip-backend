@@ -74,3 +74,23 @@ export async function createCheckoutSession(priceId, returnUrl) {
   })
   return response
 }
+
+export async function saveSubtitles(clipId, srtContent) {
+  const token = await getSessionToken()
+  const response = await fetch(`${BACKEND_URL}/save-subtitles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ clip_id: clipId, srt_content: srtContent }),
+  })
+  return response
+}
+
+export async function burnSubtitles(style) {
+  const token = await getSessionToken()
+  const response = await fetch(`${BACKEND_URL}/burn-subtitles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify(style),
+  })
+  return response
+}

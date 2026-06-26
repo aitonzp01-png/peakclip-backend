@@ -1311,6 +1311,7 @@ class ExportRequest(BaseModel):
     trim_start: float = 0
     trim_end: float = 100
     subtitle_text: str = ""
+    srt_content: str = ""
     subtitle_style: str = "bold-yellow"
     subtitle_position: str = "bottom"
     font_size: int = 14
@@ -2196,9 +2197,37 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         elif req.filter_style == "cool":
             vf = f"{vf},colorbalance=rs=-.2:gs=.1:bs=.3"
 
-        # Subtitles via textfile (only if explicitly provided)
-        subtitle_text = req.subtitle_text or ""
-        if req.subtitle_style != "none" and subtitle_text.strip():
+        # Subtitles: SRT content (timed segments) or plain text fallback
+        srt_content = (req.srt_content or "").strip()
+        subtitle_text = (req.subtitle_text or "").strip()
+        if srt_content:
+            srt_file = tempfile.NamedTemporaryFile(mode="w", suffix=".srt", delete=False, encoding="utf-8")
+            srt_file.write(srt_content)
+            srt_file.close()
+            temp_files.append(srt_file.name)
+            srt_path_ff = srt_file.name.replace("\\", "/")
+            align_map = {"top": "8", "middle": "5", "bottom": "2"}
+            alignment = align_map.get(req.subtitle_position, "2")
+            fs = req.font_size
+            color_map = {
+                "bold-yellow": "&H0000FFFF",
+                "white-outline": "&H00FFFFFF",
+                "neon-green": "&H0000FF88",
+                "minimal-white": "&H00FFFFFF",
+                "tiktok-style": "&H00FFFFFF",
+            }
+            primary = color_map.get(req.subtitle_style, "&H00FFFFFF")
+            force_style = (
+                f"Fontname=DejaVu Sans,"
+                f"Fontsize={fs},"
+                f"PrimaryColour={primary},"
+                f"BackColour=&H80000000,"
+                f"Outline=2,Bold=1,"
+                f"Alignment={alignment},"
+                f"MarginV=60"
+            )
+            vf = f"{vf},subtitles={srt_path_ff}:force_style='{force_style}'"
+        elif req.subtitle_style != "none" and subtitle_text:
             fs = req.font_size
             style_configs = {
                 "bold-yellow": f"fontsize={fs}:fontcolor=yellow:borderw=3:bordercolor=black",
@@ -2417,6 +2446,50 @@ async def burn_subtitles_endpoint(style: SubtitleStyle, user: dict = Depends(get
         for f in local_files:
             try: os.unlink(f)
             except OSError: pass
+
+
+@app.post("/save-subtitles")
+async def save_subtitles_endpoint(data: dict, user: dict = Depends(get_current_user)):
+    """Save edited SRT content for a clip, upload to storage, and update the clip row."""
+    await check_rate_limit(f"save-subtitles:{user['sub']}")
+    user_id = user["sub"]
+    clip_id = data.get("clip_id")
+    srt_content = data.get("srt_content", "")
+
+    if not clip_id:
+        raise HTTPException(status_code=400, detail="Missing clip_id")
+
+    # Verify ownership
+    try:
+        clip_result = supabase.table("clips").select("id,user_id").eq("id", clip_id).single().execute()
+        clip = clip_result.data
+        if not clip or clip.get("user_id") != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to edit this clip")
+    except Exception as e:
+        print(f"save-subtitles ownership check failed: {e}")
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    srt_path = f"downloads/{clip_id}_subtitles.srt"
+    try:
+        with open(srt_path, "w", encoding="utf-8") as f:
+            f.write(srt_content)
+
+        storage_path = f"subtitles/{clip_id}_subtitles.srt"
+        srt_url = upload_to_storage(srt_path, "clips", storage_path, "text/srt")
+
+        update_payload = {"subtitles_srt": srt_content}
+        if srt_url:
+            update_payload["srt_url"] = srt_url
+
+        supabase.table("clips").update(update_payload).eq("id", clip_id).execute()
+
+        return {"success": True, "srt_url": srt_url or "", "subtitles_srt": srt_content}
+    finally:
+        try:
+            if os.path.exists(srt_path):
+                os.unlink(srt_path)
+        except OSError:
+            pass
 
 
 @app.post("/create-checkout-session")

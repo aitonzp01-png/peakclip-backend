@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import { brand, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
 import { subtitleStyles, musicTracks, filters, transitions } from '../../../lib/utils'
+import { generateSRT } from '../../../lib/subtitles'
+import { saveSubtitles, burnSubtitles } from '../../../lib/api'
 import icons from '../../../lib/icons'
 import useEditorStore from '../store/editorStore'
 import AIPanel from './AIPanel'
@@ -17,7 +19,9 @@ export default function EditorInspector({ videoRef }) {
   const {
     activeTool, activeInspectorTab, setActiveInspectorTab,
     trimStart, trimEnd, setTrimStart, setTrimEnd,
-    subtitleText, setSubtitleText, subtitleStyle, setSubtitleStyle,
+    clip, subtitles, selectedSubtitleId, setSelectedSubtitleId,
+    updateSubtitle, addSubtitle, deleteSubtitle, setSubtitleText,
+    subtitleStyle, setSubtitleStyle,
     subtitlePosition, setSubtitlePosition, fontSize, setFontSize,
     watermark, setWatermark, watermarkPosition, setWatermarkPosition,
     music, setMusic, musicVolume, setMusicVolume,
@@ -107,14 +111,123 @@ export default function EditorInspector({ videoRef }) {
     </>
   )
 
+  const [saveState, setSaveState] = useState('idle')
+  const [burnState, setBurnState] = useState('idle')
+
+  const selectedSub = subtitles.find(s => s.id === selectedSubtitleId) || subtitles[0] || null
+  const subText = selectedSub?.text || ''
+
+  const handleSaveSubtitles = async () => {
+    if (!clip?.id) return
+    setSaveState('saving')
+    try {
+      const srt = generateSRT(subtitles)
+      const res = await saveSubtitles(clip.id, srt)
+      if (!res.ok) throw new Error('Save failed')
+      const data = await res.json()
+      useEditorStore.setState(state => ({ clip: { ...state.clip, ...data } }))
+      setSaveState('saved')
+      setTimeout(() => setSaveState('idle'), 2000)
+    } catch (e) {
+      console.error(e)
+      setSaveState('error')
+      setTimeout(() => setSaveState('idle'), 2000)
+    }
+  }
+
+  const handleBurnSubtitles = async () => {
+    if (!clip?.video_url || !clip?.srt_url) return
+    setBurnState('burning')
+    try {
+      const style = {
+        clip_id: clip.id,
+        video_url: clip.video_url,
+        srt_url: clip.srt_url,
+        font_size: fontSize,
+        font_color: 'white',
+        background: true,
+        background_opacity: 0.6,
+        position: subtitlePosition,
+        bold: true,
+        outline: 2,
+        font_name: 'DejaVu Sans',
+      }
+      const res = await burnSubtitles(style)
+      if (!res.ok) throw new Error('Burn failed')
+      const data = await res.json()
+      if (data.video_url) {
+        useEditorStore.setState(state => ({ clip: { ...state.clip, video_url: data.video_url } }))
+      }
+      setBurnState('done')
+      setTimeout(() => setBurnState('idle'), 2000)
+    } catch (e) {
+      console.error(e)
+      setBurnState('error')
+      setTimeout(() => setBurnState('idle'), 2000)
+    }
+  }
+
   const renderTextPanel = () => (
     <>
-      <Section label="Text">
-        <input type="text" placeholder="Enter text..."
-          value={subtitleText}
-          onChange={e => setSubtitleText(e.target.value)}
-          className="editor-input" />
+      <Section label="Selected Caption">
+        <textarea placeholder="Enter caption text..."
+          value={subText}
+          onChange={e => selectedSub && setSubtitleText(e.target.value)}
+          disabled={!selectedSub}
+          className="editor-input"
+          style={{ minHeight: '60px', resize: 'vertical' }} />
       </Section>
+
+      <Section label="Captions">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflow: 'auto' }}>
+          {subtitles.length === 0 && (
+            <div style={{ fontSize: '11px', color: textDim, textAlign: 'center', padding: '12px' }}>
+              No captions yet
+            </div>
+          )}
+          {subtitles.map((s, idx) => (
+            <div key={s.id}
+              onClick={() => setSelectedSubtitleId(s.id)}
+              style={{
+                background: selectedSubtitleId === s.id ? brandDim : bgSecondary,
+                border: `1px solid ${selectedSubtitleId === s.id ? brand : borderSoft}`,
+                borderRadius: '8px', padding: '8px 10px', cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <span style={{ fontSize: '10px', color: selectedSubtitleId === s.id ? brand : textDim, fontFamily: fonts.mono }}>
+                  #{idx + 1}
+                </span>
+                <button onClick={(e) => { e.stopPropagation(); deleteSubtitle(s.id) }}
+                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '10px' }}>
+                  ✕
+                </button>
+              </div>
+              <div style={{ fontSize: '12px', color: textPrimary, lineHeight: '1.3' }}>
+                {s.text || <span style={{ color: textDim, fontStyle: 'italic' }}>Empty caption</span>}
+              </div>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                <TimeInput value={s.start} onChange={v => updateSubtitle(s.id, { start: v })} />
+                <TimeInput value={s.end} onChange={v => updateSubtitle(s.id, { end: v })} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => {
+          const dur = duration || 5
+          const start = subtitles.length ? subtitles[subtitles.length - 1].end : 0
+          const end = Math.min(dur, start + 3)
+          addSubtitle(start, end)
+        }}
+          style={{
+            width: '100%', marginTop: '10px', padding: '8px',
+            background: bgSecondary, border: `1px dashed ${borderSoft}`,
+            borderRadius: '6px', color: textDim, cursor: 'pointer', fontSize: '11px',
+          }}>
+          + Add Caption
+        </button>
+      </Section>
+
       <Section label="Style">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
           {subtitleStyles.map(s => (
@@ -162,6 +275,27 @@ export default function EditorInspector({ videoRef }) {
         <input type="range" min="10" max="32" value={fontSize}
           onChange={e => setFontSize(Number(e.target.value))}
           className="editor-slider" />
+      </Section>
+
+      <Section label="Actions">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <button onClick={handleSaveSubtitles} disabled={saveState === 'saving'}
+            style={{
+              width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
+              background: brand, color: '#000', fontWeight: '700', cursor: saveState === 'saving' ? 'wait' : 'pointer',
+              fontSize: '12px',
+            }}>
+            {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved!' : saveState === 'error' ? 'Error' : 'Save Captions'}
+          </button>
+          <button onClick={handleBurnSubtitles} disabled={burnState === 'burning'}
+            style={{
+              width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${brand}`,
+              background: 'transparent', color: brand, fontWeight: '600', cursor: burnState === 'burning' ? 'wait' : 'pointer',
+              fontSize: '12px',
+            }}>
+            {burnState === 'burning' ? 'Burning…' : burnState === 'done' ? 'Re-burned!' : burnState === 'error' ? 'Error' : 'Re-burn Subtitles'}
+          </button>
+        </div>
       </Section>
     </>
   )
@@ -360,6 +494,30 @@ export default function EditorInspector({ videoRef }) {
         {activeInspectorTab === 'ai' && <AIPanel videoRef={videoRef} />}
       </div>
     </div>
+  )
+}
+
+function TimeInput({ value, onChange }) {
+  const fmt = (v) => {
+    const m = Math.floor(v / 60)
+    const s = Math.floor(v % 60)
+    const ms = Math.round((v - Math.floor(v)) * 1000)
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`
+  }
+  return (
+    <input type="text" value={fmt(value)}
+      onChange={(e) => {
+        const parts = e.target.value.split(/[:.]/)
+        const m = parseFloat(parts[0]) || 0
+        const s = parseFloat(parts[1]) || 0
+        const ms = parseFloat(parts[2]) || 0
+        onChange(m * 60 + s + ms / 1000)
+      }}
+      style={{
+        flex: 1, background: '#0B0B0B', border: `1px solid ${borderSoft}`,
+        borderRadius: '4px', color: textDim, fontSize: '10px', padding: '4px 6px',
+        fontFamily: fonts.mono,
+      }} />
   )
 }
 

@@ -99,8 +99,13 @@ function TrimPanel({ videoRef }) {
 }
 
 function TextPanel() {
-  const subtitleText = useEditorStore(s => s.subtitleText)
+  const subtitles = useEditorStore(s => s.subtitles)
+  const selectedSubtitleId = useEditorStore(s => s.selectedSubtitleId)
+  const setSelectedSubtitleId = useEditorStore(s => s.setSelectedSubtitleId)
   const setSubtitleText = useEditorStore(s => s.setSubtitleText)
+  const addSubtitle = useEditorStore(s => s.addSubtitle)
+  const deleteSubtitle = useEditorStore(s => s.deleteSubtitle)
+  const duration = useEditorStore(s => s.duration)
   const subtitleStyle = useEditorStore(s => s.subtitleStyle)
   const setSubtitleStyle = useEditorStore(s => s.setSubtitleStyle)
   const subtitlePosition = useEditorStore(s => s.subtitlePosition)
@@ -108,12 +113,45 @@ function TextPanel() {
   const fontSize = useEditorStore(s => s.fontSize)
   const setFontSize = useEditorStore(s => s.setFontSize)
 
+  const selectedSub = subtitles.find(s => s.id === selectedSubtitleId) || subtitles[0] || null
+  const subText = selectedSub?.text || ''
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      <input type="text" placeholder="Enter text..."
-        value={subtitleText}
-        onChange={e => setSubtitleText(e.target.value)}
-        className="editor-input" />
+      <textarea placeholder="Enter caption text..."
+        value={subText}
+        onChange={e => selectedSub && setSubtitleText(e.target.value)}
+        disabled={!selectedSub}
+        className="editor-input"
+        style={{ minHeight: '50px', resize: 'none' }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '120px', overflow: 'auto' }}>
+        {subtitles.map((s, idx) => (
+          <div key={s.id} onClick={() => setSelectedSubtitleId(s.id)}
+            style={{
+              background: selectedSubtitleId === s.id ? 'rgba(217,180,74,0.12)' : bgSecondary,
+              border: `1px solid ${selectedSubtitleId === s.id ? brand : borderSoft}`,
+              borderRadius: '6px', padding: '6px 8px', cursor: 'pointer',
+            }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '10px', color: textDim }}>#{idx + 1}</span>
+              <button onClick={e => { e.stopPropagation(); deleteSubtitle(s.id) }}
+                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '10px' }}>✕</button>
+            </div>
+            <div style={{ fontSize: '11px', color: textPrimary }}>{s.text || <span style={{ color: textDim, fontStyle: 'italic' }}>Empty</span>}</div>
+          </div>
+        ))}
+      </div>
+      <button onClick={() => {
+        const dur = duration || 5
+        const start = subtitles.length ? subtitles[subtitles.length - 1].end : 0
+        addSubtitle(start, Math.min(dur, start + 3))
+      }}
+        style={{
+          padding: '6px', background: bgSecondary, border: `1px dashed ${borderSoft}`,
+          borderRadius: '6px', color: textDim, cursor: 'pointer', fontSize: '11px',
+        }}>
+        + Add Caption
+      </button>
       <div>
         <div style={{ fontSize: '9px', color: textDim, marginBottom: '6px' }}>Style</div>
         <div style={{ display: 'flex', gap: '4px', overflow: 'auto' }}>
