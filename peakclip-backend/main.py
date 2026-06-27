@@ -761,7 +761,14 @@ def start_bgutil_server():
 def get_bgutil_config():
     """Return bgutil configuration for yt-dlp extractor_args if available."""
     config = {}
-    # 1) Try pip-installed plugin
+    # 1) Try HTTP server (most reliable)
+    bgutil_url = os.environ.get('BGUTIL_POT_URL')
+    if bgutil_url:
+        config['youtubepot'] = {'pot_bgutil_base_url': bgutil_url}
+        print(f"yt-dlp using bgutil HTTP server at {bgutil_url}")
+        return config
+
+    # 2) Try pip-installed plugin
     try:
         import bgutil_ytdlp_pot_provider
         config['youtubepot'] = {'po_provider': 'bgutil'}
@@ -769,13 +776,6 @@ def get_bgutil_config():
         return config
     except ImportError:
         pass
-
-    # 2) Try running HTTP server from compiled JS
-    bgutil_url = os.environ.get('BGUTIL_POT_URL')
-    if bgutil_url:
-        config['youtubepot'] = {'pot_bgutil_base_url': bgutil_url}
-        print(f"yt-dlp using bgutil HTTP server at {bgutil_url}")
-        return config
 
     # 3) Try script provider from cloned repo
     bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
