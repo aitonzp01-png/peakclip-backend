@@ -25,6 +25,7 @@ export default function EditorInspector({ videoRef }) {
     subtitlePosition, setSubtitlePosition, fontSize, setFontSize,
     watermark, setWatermark, watermarkPosition, setWatermarkPosition,
     music, setMusic, musicVolume, setMusicVolume,
+    includeAudio, setIncludeAudio,
     activeFilter, setActiveFilter, selectedTransition, setSelectedTransition,
     playbackSpeed, setPlaybackSpeed, tracks, duration,
   } = useEditorStore()
@@ -378,37 +379,55 @@ export default function EditorInspector({ videoRef }) {
   )
 
   const renderAudioPanel = () => (
-    <Section label="Music">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {musicTracks.map(t => (
-          <button key={t.id} onClick={() => setMusic(t.id)}
-            className={`editor-music-item${music === t.id ? ' active' : ''}`}
+    <>
+      <Section label="Original Audio">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0' }}>
+          <span style={{ fontSize: '12px', color: textSecondary }}>Include in export</span>
+          <button onClick={() => setIncludeAudio(!includeAudio)}
             style={{
-              background: bgSecondary, border: `1px solid ${music === t.id ? brand : borderSoft}`,
-              borderRadius: '8px', padding: '10px 14px', cursor: 'pointer',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              color: music === t.id ? brand : textSecondary, fontSize: '12px',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => { if (music !== t.id) e.currentTarget.style.borderColor = brandDim }}
-            onMouseLeave={e => { if (music !== t.id) e.currentTarget.style.borderColor = borderSoft }}>
-            <span>{t.label}</span>
-            {music === t.id && <span style={{ color: brand, display: 'flex' }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
-            </span>}
+              width: '36px', height: '20px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+              background: includeAudio ? brand : borderSoft, position: 'relative', transition: 'all 0.2s',
+            }}>
+            <span style={{
+              position: 'absolute', top: '2px', width: '16px', height: '16px', borderRadius: '50%',
+              background: '#fff', transition: 'all 0.2s',
+              left: includeAudio ? '18px' : '2px',
+            }} />
           </button>
-        ))}
-      </div>
-      {music !== 'none' && (
-        <div style={{ marginTop: '14px' }}>
-          <SliderRow label="Volume" value={`${musicVolume}%`}>
-            <input type="range" min="0" max="100" value={musicVolume}
-              onChange={e => setMusicVolume(Number(e.target.value))}
-              className="editor-slider" />
-          </SliderRow>
         </div>
-      )}
-    </Section>
+      </Section>
+      <Section label="Music">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {musicTracks.map(t => (
+            <button key={t.id} onClick={() => setMusic(t.id)}
+              className={`editor-music-item${music === t.id ? ' active' : ''}`}
+              style={{
+                background: bgSecondary, border: `1px solid ${music === t.id ? brand : borderSoft}`,
+                borderRadius: '8px', padding: '10px 14px', cursor: 'pointer',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                color: music === t.id ? brand : textSecondary, fontSize: '12px',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { if (music !== t.id) e.currentTarget.style.borderColor = brandDim }}
+              onMouseLeave={e => { if (music !== t.id) e.currentTarget.style.borderColor = borderSoft }}>
+              <span>{t.label}</span>
+              {music === t.id && <span style={{ color: brand, display: 'flex' }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
+              </span>}
+            </button>
+          ))}
+        </div>
+        {music !== 'none' && (
+          <div style={{ marginTop: '14px' }}>
+            <SliderRow label="Volume" value={`${musicVolume}%`}>
+              <input type="range" min="0" max="100" value={musicVolume}
+                onChange={e => setMusicVolume(Number(e.target.value))}
+                className="editor-slider" />
+            </SliderRow>
+          </div>
+        )}
+      </Section>
+    </>
   )
 
   const renderOverlayPanel = () => (

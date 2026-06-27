@@ -28,6 +28,7 @@ const useEditorStore = create((set, get) => ({
   watermarkPosition: 'top-right',
   music: 'none',
   musicVolume: 30,
+  includeAudio: false,
   activeFilter: 'none',
   selectedTransition: 'fade',
   activeTool: 'ai',
@@ -69,6 +70,7 @@ const useEditorStore = create((set, get) => ({
       watermarkPosition: state.watermarkPosition,
       music: state.music,
       musicVolume: state.musicVolume,
+      includeAudio: state.includeAudio,
       activeFilter: state.activeFilter,
       selectedTransition: state.selectedTransition,
       tracks: JSON.parse(JSON.stringify(state.tracks)),
@@ -97,6 +99,7 @@ const useEditorStore = create((set, get) => ({
       subtitlePosition: snap.subtitlePosition, fontSize: snap.fontSize,
       watermark: snap.watermark, watermarkPosition: snap.watermarkPosition,
       music: snap.music, musicVolume: snap.musicVolume,
+      includeAudio: snap.includeAudio,
       activeFilter: snap.activeFilter, selectedTransition: snap.selectedTransition,
       tracks: JSON.parse(JSON.stringify(snap.tracks)),
     })
@@ -120,6 +123,7 @@ const useEditorStore = create((set, get) => ({
       subtitlePosition: snap.subtitlePosition, fontSize: snap.fontSize,
       watermark: snap.watermark, watermarkPosition: snap.watermarkPosition,
       music: snap.music, musicVolume: snap.musicVolume,
+      includeAudio: snap.includeAudio,
       activeFilter: snap.activeFilter, selectedTransition: snap.selectedTransition,
       tracks: JSON.parse(JSON.stringify(snap.tracks)),
     })
@@ -248,6 +252,15 @@ const useEditorStore = create((set, get) => ({
     get()._pushHistory()
     set({ musicVolume })
   },
+  setIncludeAudio: (includeAudio) => {
+    get()._pushHistory()
+    set((state) => {
+      const tracks = state.tracks.map(t => t.id === 'audio' ? {
+        ...t, items: includeAudio ? [{ id: 'a1', start: 0, end: 100, label: 'Original Audio' }] : []
+      } : t)
+      return { includeAudio, tracks }
+    })
+  },
   setActiveFilter: (activeFilter) => {
     get()._pushHistory()
     set({ activeFilter })
@@ -296,7 +309,7 @@ const useEditorStore = create((set, get) => ({
     trimStart: 0, trimEnd: 100,
     subtitles: [], selectedSubtitleId: null, subtitleStyle: 'bold-yellow',
     subtitlePosition: 'bottom', fontSize: 14, watermark: '',
-    watermarkPosition: 'top-right', music: 'none', musicVolume: 30,
+    watermarkPosition: 'top-right', music: 'none', musicVolume: 30, includeAudio: false,
     activeFilter: 'none', selectedTransition: 'fade', activeTool: 'cursor',
     tracks: [
       { id: 'video', label: 'Video', type: 'video', items: [{ id: 'v1', start: 0, end: 100, label: 'Main Clip' }] },

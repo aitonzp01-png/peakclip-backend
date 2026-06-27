@@ -58,6 +58,7 @@ export default function ExportModal() {
           watermark_position: store.watermarkPosition || 'top-right',
           music_track: store.music || 'none',
           music_volume: store.musicVolume || 30,
+          include_audio: store.includeAudio || false,
           filter_style: store.activeFilter || 'none',
           resolution: resolution,
           format: format,

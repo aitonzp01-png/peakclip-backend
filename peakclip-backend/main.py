@@ -1312,6 +1312,7 @@ class ExportRequest(BaseModel):
     watermark_position: str = "top-right"
     music_track: str = "none"
     music_volume: int = 30
+    include_audio: bool = False
     filter_style: str = "none"
     resolution: str = "1080p"
     format: str = "mp4"
@@ -2257,15 +2258,14 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             wm_filter = f"drawtext=textfile='{wm_sub_path}':fontsize=h/28:fontcolor=white@0.8:borderw=2:bordercolor=black@0.5:{wm_pos}:enable='between(t,0,{trim_d})'"
             vf = f"{vf},{wm_filter}"
 
-        # Audio filter chain
-        af_parts = []
-
-        # Background music mixing
+        # Audio handling — original audio optional, music optional
+        has_music = req.music_track not in ("none", "", 0, "0", None)
         music_path = None
-        if req.music_track not in ("none", "", 0, "0", None):
+        af_filter = None
+
+        if has_music:
             music_path = f"downloads/{job_id}_music.mp3"
             try:
-                # Map track IDs to SoundHelix free MP3 URLs
                 track_map = {
                     "epic": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
                     "hype": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
@@ -2282,15 +2282,15 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                     if os.path.exists(music_path):
                         local_files.append(music_path)
                         vol = max(0, min(req.music_volume, 100)) / 100.0
-                        af_parts.append(f"[1:a]volume={vol}[music]")
-                        af_parts.append("[0:a][music]amix=inputs=2:duration=first:dropout_transition=2")
+                        if req.include_audio:
+                            # Mix original audio with music
+                            af_filter = f"[1:a]volume={vol}[music];[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]"
+                        else:
+                            # Only music, no original audio
+                            af_filter = f"[1:a]volume={vol}[a]"
             except Exception as e:
                 print(f"Music mixing failed: {e}")
-
-        # Apply audio filter if any
-        af_filter = None
-        if af_parts:
-            af_filter = ";".join(af_parts)
+                music_path = None
 
         # Video codec selection
         vcodec = "libx264"
@@ -2317,12 +2317,13 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         ])
         if vcodec == 'libx264':
             cmd.extend(['-pix_fmt', 'yuv420p', '-movflags', '+faststart'])
-        cmd.extend([
-            '-preset', 'fast',
-            '-c:a', acodec,
-        ])
+        cmd.extend(['-preset', 'fast'])
         if af_filter:
-            cmd.extend(['-filter_complex', af_filter])
+            cmd.extend(['-filter_complex', af_filter, '-map', '0:v', '-map', '[a]', '-c:a', acodec])
+        elif req.include_audio:
+            cmd.extend(['-c:a', acodec])
+        else:
+            cmd.extend(['-an'])
         cmd.extend(['-y', output_path])
 
         result = subprocess.run(cmd, capture_output=True, text=True)
