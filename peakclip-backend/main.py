@@ -1658,8 +1658,6 @@ def process_video_background(job_id: str, user_id: str, url: str):
     local_files = [video_path, audio_path]
 
     try:
-        # Generate fresh cookies via Playwright (with Google login if configured)
-        asyncio.run(generate_youtube_cookies_via_playwright())
         auth_cfg = get_youtube_auth_config()
 
         async def download_video_async(url: str, video_path: str, job_id: str) -> bool:
@@ -1680,22 +1678,17 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp (direct)..."}
                 downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, None, cookie_path)
 
-            # ── Phase 3: Playwright → refresh cookies (login if configured) ──
+            # ── Phase 3: yt-dlp retry with proxy ──
             if is_youtube and not downloaded:
-                jobs_store[job_id] = {"status": "processing", "message": "Refreshing session..."}
-                await generate_youtube_cookies_via_playwright()
-
-            # ── Phase 4: yt-dlp retry with fresh cookies + proxy ──
-            if is_youtube and not downloaded:
-                jobs_store[job_id] = {"status": "processing", "message": "Retrying with fresh session..."}
+                jobs_store[job_id] = {"status": "processing", "message": "Retrying download..."}
                 downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, proxy, cookie_path)
 
-            # ── Phase 5: yt-dlp retry with fresh cookies, no proxy ──
+            # ── Phase 4: yt-dlp retry without proxy ──
             if is_youtube and not downloaded:
-                jobs_store[job_id] = {"status": "processing", "message": "Retrying with fresh session (direct)..."}
+                jobs_store[job_id] = {"status": "processing", "message": "Retrying download (direct)..."}
                 downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, None, cookie_path)
 
-            # ── Phase 6: Piped / Invidious without proxy ──
+            # ── Phase 5: Piped / Invidious without proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious (direct)..."}
                 downloaded = (
@@ -1703,7 +1696,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     await asyncio.to_thread(download_with_invidious, url, video_path, None)
                 )
 
-            # ── Phase 7: Piped / Invidious with proxy ──
+            # ── Phase 6: Piped / Invidious with proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious (proxy)..."}
                 downloaded = (
@@ -1711,12 +1704,12 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     await asyncio.to_thread(download_with_invidious, url, video_path, proxy)
                 )
 
-            # ── Phase 8: cobalt.tools direct ──
+            # ── Phase 7: cobalt.tools direct ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools..."}
                 downloaded = await asyncio.to_thread(download_with_cobalt, url, video_path, None)
 
-            # ── Phase 9: cobalt with proxy ──
+            # ── Phase 8: cobalt with proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools (proxy)..."}
                 downloaded = await asyncio.to_thread(download_with_cobalt, url, video_path, proxy)
