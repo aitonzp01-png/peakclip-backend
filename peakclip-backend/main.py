@@ -1957,12 +1957,8 @@ Return JSON with this exact format:
                     print(f"Render stderr: {r1.stderr.decode()[:500]}")
 
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                    print(f"Burning subtitles from {srt_path}")
-                    if burn_subtitles_onto_video(no_subs, srt_path, output_path):
-                        print("Subtitles OK")
-                    else:
-                        shutil.copy2(no_subs, output_path)
-                        print("Subtitles failed, copied without")
+                    print(f"Copying rendered video without subtitles (SRT saved separately for editor)")
+                    shutil.copy2(no_subs, output_path)
                 else:
                     # Last resort: handle missing audio with anullsrc+atrim
                     print("Last resort: ultrafast direct")
@@ -1983,7 +1979,7 @@ Return JSON with this exact format:
                             '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                     subprocess.run(last_resort_cmd, capture_output=True, timeout=600)
                     if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                        burn_subtitles_onto_video(no_subs, srt_path, output_path)
+                        shutil.copy2(no_subs, output_path)
 
                 local_files.append(output_path)
 
@@ -2788,15 +2784,8 @@ Return JSON with this exact format:
             subprocess.run(step1, capture_output=True, timeout=600)
 
             if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                # Step 2: burn subtitles onto the rendered video
-                srt_path_ff = srt_path.replace('\\', '/')
-                step2 = ['ffmpeg', '-i', no_subs,
-                         '-vf', f"subtitles={srt_path_ff}:force_style='Fontname=DejaVu Sans,Fontsize=36,PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV=20'",
-                         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                         '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                subprocess.run(step2, capture_output=True, timeout=300)
-                if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                    shutil.copy2(no_subs, output_path)
+                print(f"Copying rendered video without subtitles (SRT saved separately)")
+                shutil.copy2(no_subs, output_path)
             else:
                 # Fallback: render at 720p (lower memory), handle missing audio
                 print("Fallback: 720p render")
@@ -2818,7 +2807,7 @@ Return JSON with this exact format:
                         '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
                 subprocess.run(last_resort, capture_output=True, timeout=600)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                    burn_subtitles_onto_video(no_subs, srt_path, output_path)
+                    shutil.copy2(no_subs, output_path)
                 else:
                     subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
                                     '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
