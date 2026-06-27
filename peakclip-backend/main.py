@@ -86,9 +86,8 @@ def extract_youtube_video_id(url: str) -> str | None:
 
 
 async def generate_youtube_cookies_via_playwright() -> bool:
-    """Use Playwright to generate fresh YouTube cookies.
-    If GOOGLE_EMAIL and GOOGLE_PASSWORD env vars are set, logs in for authenticated cookies.
-    Always saves anonymous session cookies as fallback."""
+    """Use Playwright to get anonymous YouTube session cookies.
+    Quick: visits youtube.com, waits 5s, extracts cookies. No login needed since Deno handles JS challenges."""
     try:
         proxy_url = (
             os.environ.get('YOUTUBE_PROXY') or
@@ -114,61 +113,15 @@ async def generate_youtube_cookies_via_playwright() -> bool:
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=True,
-                args=['--no-sandbox', '--disable-dev-shm-usage', '--disable-setuid-sandbox']
+                args=['--no-sandbox', '--disable-dev-shm-usage']
             )
             context = await browser.new_context(
                 proxy=playwright_proxy,
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-                viewport={'width': 1920, 'height': 1080},
             )
             page = await context.new_page()
-            await page.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
-                Object.defineProperty(navigator, 'languages', {get: () => ['en-US','en']});
-                window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){} };
-            """)
-
-            google_email = os.environ.get('GOOGLE_EMAIL', '').strip()
-            google_password = os.environ.get('GOOGLE_PASSWORD', '').strip()
-            did_login = False
-            if google_email and google_password:
-                try:
-                    print("Cookie gen: attempting Google login...")
-                    await page.goto(
-                        'https://accounts.google.com/ServiceLogin?service=youtube&continue=https://www.youtube.com',
-                        wait_until='domcontentloaded', timeout=60000
-                    )
-                    await page.wait_for_timeout(3000)
-                    email_input = await page.wait_for_selector('input[type="email"], #identifierId', timeout=15000)
-                    if email_input:
-                        await email_input.fill(google_email)
-                        await page.wait_for_timeout(1000)
-                        next_btn = await page.wait_for_selector('#identifierNext button, button:has-text("Next")', timeout=5000)
-                        if next_btn:
-                            await next_btn.click()
-                            await page.wait_for_timeout(3000)
-                    password_input = await page.wait_for_selector('input[type="password"]', timeout=20000)
-                    if password_input:
-                        await password_input.fill(google_password)
-                        await page.wait_for_timeout(1000)
-                        pw_next = await page.wait_for_selector('#passwordNext button, button:has-text("Next")', timeout=5000)
-                        if pw_next:
-                            await pw_next.click()
-                            await page.wait_for_timeout(5000)
-                    try:
-                        await page.wait_for_url('https://www.youtube.com/**', timeout=30000)
-                        did_login = True
-                        print("Cookie gen: Google login successful")
-                    except Exception:
-                        print("Cookie gen: Google login redirect not detected (may need 2FA)")
-                except Exception as e:
-                    print(f"Cookie gen: Google login failed (non-fatal): {e}")
-
-            if not did_login:
-                print("Cookie gen: getting anonymous session cookies...")
-                await page.goto('https://www.youtube.com', wait_until='domcontentloaded', timeout=60000)
-                await page.wait_for_timeout(5000)
+            await page.goto('https://www.youtube.com', wait_until='domcontentloaded', timeout=30000)
+            await page.wait_for_timeout(5000)
 
             cookies = await context.cookies()
             netscape_lines = ["# Netscape HTTP Cookie File", ""]
@@ -186,7 +139,7 @@ async def generate_youtube_cookies_via_playwright() -> bool:
                 f.write('\n'.join(netscape_lines))
 
             await browser.close()
-            print(f"Cookie gen: {len(cookies)} cookies saved {'(authenticated)' if did_login else '(anonymous)'}")
+            print(f"Cookie gen: {len(cookies)} anonymous cookies saved")
             return True
     except Exception as e:
         print(f"Cookie gen failed (non-fatal): {e}")
