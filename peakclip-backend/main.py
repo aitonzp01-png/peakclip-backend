@@ -120,8 +120,9 @@ async def generate_youtube_cookies_via_playwright() -> bool:
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
             )
             page = await context.new_page()
-            await page.goto('https://www.youtube.com', wait_until='domcontentloaded', timeout=30000)
-            await page.wait_for_timeout(5000)
+            # Visit a real video page to trigger proper session cookies + JS challenge
+            await page.goto('https://www.youtube.com/watch?v=dQw4w9WgXcQ', wait_until='networkidle', timeout=30000)
+            await page.wait_for_timeout(10000)
 
             cookies = await context.cookies()
             netscape_lines = ["# Netscape HTTP Cookie File", ""]
@@ -808,6 +809,7 @@ def get_ydl_opts_for_strategy(strategy, proxy_url, cookie_path, output_template)
     }
     opts['geo_bypass'] = True
     opts['geo_bypass_country'] = 'US'
+    opts['noplaylist'] = True
     if proxy_url:
         opts['proxy'] = proxy_url
     if cookie_path and os.path.exists(cookie_path):
