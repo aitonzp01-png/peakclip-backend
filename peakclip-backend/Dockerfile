@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev pkg-config \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
+    && npm install -g bgutil-ytdlp-pot-provider \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Deno (JavaScript runtime required by yt-dlp for YouTube challenge solving)

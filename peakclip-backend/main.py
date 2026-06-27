@@ -702,34 +702,56 @@ _bgutil_process = None
 
 
 def start_bgutil_server():
-    """Start bgutil-ytdlp-pot-provider HTTP server if compiled JS exists."""
+    """Start bgutil-ytdlp-pot-provider HTTP server."""
     global _bgutil_process
-    bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
-    server_js = None
-    for sub in ["build", "dist", "lib", "."]:
-        candidate = os.path.join(bgutil_home, sub, "index.js")
-        if os.path.exists(candidate):
-            server_js = candidate
-            break
-    if not server_js:
-        return None
-    try:
-        import socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        result = sock.connect_ex(('127.0.0.1', 4416))
-        sock.close()
-        if result == 0:
-            return "http://127.0.0.1:4416"
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(1)
+    result = sock.connect_ex(('127.0.0.1', 4416))
+    sock.close()
+    if result == 0:
+        return "http://127.0.0.1:4416"
 
+    # Find the package in common install locations
+    candidates = [
+        "/root/bgutil-ytdlp-pot-provider/server",
+        "/usr/local/lib/node_modules/bgutil-ytdlp-pot-provider/server",
+        "/app/node_modules/bgutil-ytdlp-pot-provider/server",
+    ]
+    try:
+        npm_root = subprocess.run(['npm', 'root', '-g'], capture_output=True, text=True, timeout=5).stdout.strip()
+        if npm_root:
+            candidates.insert(0, os.path.join(npm_root, 'bgutil-ytdlp-pot-provider', 'server'))
+    except Exception:
+        pass
+
+    server_js = None
+    server_home = None
+    for base in candidates:
+        if not os.path.isdir(base):
+            continue
+        for sub in ["build", "dist", "lib", "."]:
+            candidate = os.path.join(base, sub, "index.js")
+            if os.path.exists(candidate):
+                server_js = candidate
+                server_home = base
+                break
+        if server_js:
+            break
+
+    if not server_js:
+        print("bgutil server JS not found")
+        return None
+
+    try:
         proc = subprocess.Popen(
             ['node', server_js],
-            cwd=bgutil_home,
+            cwd=server_home,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
         _bgutil_process = proc
-        print(f"Started bgutil server (pid={proc.pid})")
+        print(f"Started bgutil server (pid={proc.pid}) from {server_js}")
         return "http://127.0.0.1:4416"
     except Exception as e:
         print(f"Failed to start bgutil server: {e}")
@@ -810,6 +832,12 @@ def get_ydl_opts_for_strategy(strategy, proxy_url, cookie_path, output_template)
     opts['geo_bypass'] = True
     opts['geo_bypass_country'] = 'US'
     opts['noplaylist'] = True
+    # TV authentication via username/password for YouTube
+    email = os.environ.get('GOOGLE_EMAIL', '').strip()
+    password = os.environ.get('GOOGLE_PASSWORD', '').strip()
+    if email and password:
+        opts['username'] = email
+        opts['password'] = password
     if proxy_url:
         opts['proxy'] = proxy_url
     if cookie_path and os.path.exists(cookie_path):
