@@ -30,22 +30,34 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from contextlib import asynccontextmanager
 
+COOKIE_PATH = None
 
-def get_youtube_auth_config():
-    """Load YouTube cookies/PO token from environment variables to bypass bot checks."""
-    config = {"cookies_path": None, "extractor_args": {}}
+
+def init_youtube_cookies():
+    """Initialize YouTube cookies from base64 environment variable and set global COOKIE_PATH."""
+    global COOKIE_PATH
     cookies_b64 = os.getenv("YOUTUBE_COOKIES_B64")
     if cookies_b64:
         try:
-            import base64
             cookies_content = base64.b64decode(cookies_b64).decode('utf-8')
             path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
             with open(path, "w", encoding="utf-8") as f:
                 f.write(cookies_content)
-            config["cookies_path"] = path
-            print(f"YouTube cookies loaded ({len(cookies_content)} chars)")
+            COOKIE_PATH = path
+            print(f"YouTube cookies initialized from env variable ({len(cookies_content)} chars, path: {path})")
         except Exception as e:
-            print(f"YouTube cookies decode error: {e}")
+            print(f"YouTube cookies init error: {e}")
+            COOKIE_PATH = None
+    elif not COOKIE_PATH and os.path.exists("cookies.txt"):
+        COOKIE_PATH = "cookies.txt"
+        print(f"YouTube cookies initialized from cookies.txt")
+    else:
+        print(f"No YouTube cookies configured (YOUTUBE_COOKIES_B64 or cookies.txt)")
+
+
+def get_youtube_auth_config():
+    """Load YouTube cookies/PO token from environment variables to bypass bot checks."""
+    config = {"cookies_path": COOKIE_PATH, "extractor_args": {}}
     po_token = os.getenv("YOUTUBE_PO_TOKEN")
     visitor_data = os.getenv("YOUTUBE_VISITOR_DATA")
     if po_token:
@@ -798,50 +810,67 @@ class YTDLPLogger:
 
 
 YTDLP_STRATEGIES = [
-    {'player_client': ['mweb'], 'player_skip': []},
+    {'player_client': ['tv_embedded'], 'player_skip': []},
     {'player_client': ['tv'], 'player_skip': []},
-    {'player_client': ['web_creator'], 'player_skip': []},
     {'player_client': ['web_safari'], 'player_skip': []},
+    {'player_client': ['mweb'], 'player_skip': []},
     {'player_client': ['web'], 'player_skip': ['webpage']},
     {'player_client': ['android'], 'player_skip': ['webpage']},
     {'player_client': ['ios'], 'player_skip': ['webpage']},
+    {'player_client': ['web', 'tv'], 'player_skip': []},
 ]
 
 
-def get_ydl_opts_for_strategy(strategy, proxy_url, cookie_path, output_template):
+def build_ydl_opts(strategy, proxy_url, output_template):
     opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
         'outtmpl': output_template,
         'quiet': True,
         'no_warnings': True,
-        'extractor_retries': 3,
-        'file_access_retries': 3,
-        'fragment_retries': 3,
-        'retries': 3,
-        'socket_timeout': 60,
+        'extractor_retries': 5,
+        'file_access_retries': 5,
+        'fragment_retries': 5,
+        'retries': 5,
+        'socket_timeout': 120,
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
         },
         'merge_output_format': 'mp4',
         'logger': YTDLPLogger(),
-        'postprocessors': [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4',
-        }],
+        'writesubtitles': True,
+        'writeautomaticsub': True,
+        'subtitleslangs': ['es', 'en', 'es-419'],
+        'postprocessors': [
+            {
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            },
+            {
+                'key': 'FFmpegSubtitlesConvertor',
+                'format': 'srt',
+                'when': 'after_success'
+            }
+        ],
     }
     opts['geo_bypass'] = True
     opts['geo_bypass_country'] = 'US'
     opts['noplaylist'] = True
-    # TV authentication via username/password for YouTube
-    email = os.environ.get('GOOGLE_EMAIL', '').strip()
-    password = os.environ.get('GOOGLE_PASSWORD', '').strip()
-    if email and password:
-        opts['username'] = email
-        opts['password'] = password
+    opts['username'] = os.environ.get('GOOGLE_EMAIL', '').strip()
+    opts['password'] = os.environ.get('GOOGLE_PASSWORD', '').strip()
     if proxy_url:
         opts['proxy'] = proxy_url
-    if cookie_path and os.path.exists(cookie_path):
-        opts['cookiefile'] = cookie_path
+    if COOKIE_PATH and os.path.exists(COOKIE_PATH):
+        opts['cookiefile'] = COOKIE_PATH
     extractor_args = {'youtube': {
         'player_client': strategy['player_client'],
         'skip': ['dash', 'hls'],
@@ -856,23 +885,43 @@ def get_ydl_opts_for_strategy(strategy, proxy_url, cookie_path, output_template)
     return opts
 
 
-def download_with_ytdlp(url: str, output_path: str, proxy_url: str = None, cookie_path: str = None) -> bool:
+def download_with_ytdlp(url: str, output_path: str, proxy_url: str = None) -> tuple[bool, str | None, str | None]:
     """Download video with yt-dlp trying multiple player_client strategies."""
     import yt_dlp
+    video_path = output_path
+    subtitle_path = None
+    
     for i, strategy in enumerate(YTDLP_STRATEGIES):
         print(f"yt-dlp strategy {i+1}/{len(YTDLP_STRATEGIES)}: player_client={strategy['player_client']}")
         try:
-            opts = get_ydl_opts_for_strategy(strategy, proxy_url, cookie_path, output_path)
+            opts = build_ydl_opts(strategy, proxy_url, output_path)
             with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.download([url])
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 1024:
-                print(f"yt-dlp success with strategy {i+1}")
-                return True
+                info = ydl.extract_info(url, download=True)
+            if os.path.exists(video_path) and os.path.getsize(video_path) > 1024:
+                print(f"yt-dlp success with strategy {i+1}, video size: {os.path.getsize(video_path)} bytes")
+                
+                # Find subtitle files after successful download
+                import glob
+                srt_files = glob.glob(os.path.join(os.path.dirname(video_path), '*.srt'))
+                if srt_files:
+                    subtitle_path = srt_files[0]
+                    print(f"Found subtitle file: {subtitle_path}")
+                    # Prefer Spanish subtitles (.es or .es-419)
+                    es_files = [f for f in srt_files if '.es' in f]
+                    if es_files:
+                        # Prefer es-419 over es
+                        es419_files = [f for f in es_files if '.es-419.' in f]
+                        if es419_files:
+                            subtitle_path = es419_files[0]
+                        else:
+                            subtitle_path = es_files[0]
+                        print(f"Using Spanish subtitle file: {subtitle_path}")
+                return True, video_path, subtitle_path
         except Exception as e:
             err = str(e)[:120]
             print(f"yt-dlp strategy {i+1} failed: {err}")
             continue
-    return False
+    return False, None, None
 
 
 async def check_js_runtime():
@@ -944,7 +993,14 @@ async def test_ytdlp_on_startup():
     print("=== END yt-dlp TEST ===")
 
 
-@asynccontextmanager
+def init_youtube_cookies_at_startup():
+    """Initialize YouTube cookies at startup using init_youtube_cookies()."""
+    try:
+        init_youtube_cookies()
+    except Exception as e:
+        print(f"Failed to initialize YouTube cookies: {e}")
+
+
 async def lifespan(app: FastAPI):
     # Startup - fast yt-dlp upgrade only
     try:
@@ -960,6 +1016,9 @@ async def lifespan(app: FastAPI):
     bgutil_url = start_bgutil_server()
     if bgutil_url:
         os.environ['BGUTIL_POT_URL'] = bgutil_url
+
+    # Initialize YouTube cookies
+    init_youtube_cookies_at_startup()
 
     # Diagnostic yt-dlp test on startup
     try:
@@ -1688,61 +1747,92 @@ def process_video_background(job_id: str, user_id: str, url: str):
     try:
         auth_cfg = get_youtube_auth_config()
 
-        async def download_video_async(url: str, video_path: str, job_id: str) -> bool:
+        async def download_video_async(url: str, video_path: str, job_id: str) -> tuple[bool, str | None, str | None]:
             is_youtube = extract_youtube_video_id(url) is not None
             downloaded = False
+            video_path_result = None
+            subtitle_path_result = None
             proxy = get_working_proxy()
-            cookie_path = auth_cfg.get("cookies_path") or os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
-            if not os.path.exists(cookie_path):
-                cookie_path = "cookies.txt" if os.path.exists("cookies.txt") else None
 
             # ── Phase 1: yt-dlp with proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp..."}
-                downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, proxy, cookie_path)
+                success, v_path, s_path = await asyncio.to_thread(download_with_ytdlp, url, video_path, proxy)
+                if success:
+                    downloaded = True
+                    video_path_result = v_path
+                    subtitle_path_result = s_path
 
             # ── Phase 2: yt-dlp without proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Downloading with yt-dlp (direct)..."}
-                downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, None, cookie_path)
+                success, v_path, s_path = await asyncio.to_thread(download_with_ytdlp, url, video_path, None)
+                if success:
+                    downloaded = True
+                    video_path_result = v_path
+                    subtitle_path_result = s_path
 
             # ── Phase 3: yt-dlp retry with proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Retrying download..."}
-                downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, proxy, cookie_path)
+                success, v_path, s_path = await asyncio.to_thread(download_with_ytdlp, url, video_path, proxy)
+                if success:
+                    downloaded = True
+                    video_path_result = v_path
+                    subtitle_path_result = s_path
 
             # ── Phase 4: yt-dlp retry without proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Retrying download (direct)..."}
-                downloaded = await asyncio.to_thread(download_with_ytdlp, url, video_path, None, cookie_path)
+                success, v_path, s_path = await asyncio.to_thread(download_with_ytdlp, url, video_path, None)
+                if success:
+                    downloaded = True
+                    video_path_result = v_path
+                    subtitle_path_result = s_path
 
             # ── Phase 5: Piped / Invidious without proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious (direct)..."}
-                downloaded = (
+                success = (
                     await asyncio.to_thread(download_with_piped, url, video_path, None) or
                     await asyncio.to_thread(download_with_invidious, url, video_path, None)
                 )
+                if success:
+                    downloaded = True
+                    video_path_result = video_path
+                    subtitle_path_result = None
 
             # ── Phase 6: Piped / Invidious with proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Trying Piped/Invidious (proxy)..."}
-                downloaded = (
+                success = (
                     await asyncio.to_thread(download_with_piped, url, video_path, proxy) or
                     await asyncio.to_thread(download_with_invidious, url, video_path, proxy)
                 )
+                if success:
+                    downloaded = True
+                    video_path_result = video_path
+                    subtitle_path_result = None
 
             # ── Phase 7: cobalt.tools direct ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools..."}
-                downloaded = await asyncio.to_thread(download_with_cobalt, url, video_path, None)
+                success = await asyncio.to_thread(download_with_cobalt, url, video_path, None)
+                if success:
+                    downloaded = True
+                    video_path_result = video_path
+                    subtitle_path_result = None
 
             # ── Phase 8: cobalt with proxy ──
             if is_youtube and not downloaded:
                 jobs_store[job_id] = {"status": "processing", "message": "Trying cobalt.tools (proxy)..."}
-                downloaded = await asyncio.to_thread(download_with_cobalt, url, video_path, proxy)
+                success = await asyncio.to_thread(download_with_cobalt, url, video_path, proxy)
+                if success:
+                    downloaded = True
+                    video_path_result = video_path
+                    subtitle_path_result = None
 
-            return downloaded
+            return downloaded, video_path_result, subtitle_path_result
 
         async def download_with_timeout(url, video_path, job_id, timeout_seconds=300):
             try:
@@ -1751,11 +1841,17 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 print(f"DOWNLOAD TIMEOUT after {timeout_seconds}s for {url}")
                 return False
 
-        downloaded = asyncio.run(download_with_timeout(url, video_path, job_id))
+        downloaded, video_path_result, subtitle_path_result = asyncio.run(download_with_timeout(url, video_path, job_id))
 
         if not downloaded:
             jobs_store[job_id] = {"status": "error", "message": "Could not download video from this URL. Please try another video or upload the file directly."}
             return
+
+        # Use video_path_result if available (more reliable path)
+        if video_path_result and video_path_result != video_path:
+            video_path = video_path_result
+        if subtitle_path_result and os.path.exists(subtitle_path_result):
+            subtitle_path = subtitle_path_result
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
         # Check if video has an audio track first
