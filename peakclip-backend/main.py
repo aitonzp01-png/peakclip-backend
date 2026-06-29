@@ -2231,14 +2231,20 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             if stored_url and not extract_youtube_video_id(stored_url):
                 source_path = f"downloads/{job_id}_source.mp4"
                 print(f"Export: fetching stored clip from {stored_url[:80]}...")
-                r = httpx.get(stored_url, timeout=120, follow_redirects=True)
-                if r.status_code == 200 and len(r.content) >= 1024:
-                    with open(source_path, "wb") as f:
-                        f.write(r.content)
-                    print(f"Export: using stored clip from Supabase ({os.path.getsize(source_path)} bytes)")
-                else:
-                    print(f"Export: stored clip fetch failed (status={r.status_code}, size={len(r.content)})")
-                    source_path = None
+                with httpx.stream("GET", stored_url, timeout=120, follow_redirects=True) as r:
+                    if r.status_code == 200:
+                        with open(source_path, "wb") as f:
+                            for chunk in r.iter_bytes(chunk_size=1024*1024):
+                                f.write(chunk)
+                        size = os.path.getsize(source_path)
+                        if size >= 1024:
+                            print(f"Export: using stored clip from Supabase ({size} bytes)")
+                        else:
+                            print(f"Export: stored clip too small ({size} bytes)")
+                            source_path = None
+                    else:
+                        print(f"Export: stored clip fetch failed (status={r.status_code})")
+                        source_path = None
             elif stored_url:
                 print(f"Export: stored video_url is a YouTube URL, skipping (use req.video_url as fallback)")
     except Exception as e:
@@ -2297,7 +2303,12 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
 
     try:
         # Build filter chain
-        vf = f"scale={target_res}:force_original_aspect_ratio=increase,crop={target_res}"
+        vf = (
+            f"scale={target_res}:force_original_aspect_ratio=increase,"
+            f"crop={target_res},"
+            f"setsar=1,"
+            f"format=yuv420p"
+        )
 
         if req.filter_style == "vivid":
             vf = f"{vf},eq=saturation=1.5:contrast=1.1"
@@ -2437,7 +2448,17 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             '-c:v', vcodec,
         ])
         if vcodec == 'libx264':
-            cmd.extend(['-pix_fmt', 'yuv420p', '-movflags', '+faststart'])
+            cmd.extend([
+                '-pix_fmt', 'yuv420p',
+                '-colorspace', 'bt709',
+                '-color_trc', 'bt709',
+                '-color_primaries', 'bt709',
+                '-color_range', 'tv',
+                '-movflags', '+faststart',
+            ])
+        crf_map = {'720p': '23', '1080p': '22', '4k': '24'}
+        crf = crf_map.get(req.resolution, '23')
+        cmd.extend(['-crf', crf])
         cmd.extend(['-preset', 'fast'])
         if af_filter:
             cmd.extend(['-filter_complex', af_filter, '-map', '0:v', '-map', '[a]', '-c:a', acodec])
@@ -2450,7 +2471,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         result = subprocess.run(cmd, capture_output=True, text=True)
         print(f"Export: ffmpeg exit={result.returncode} output_size={os.path.getsize(output_path) if os.path.exists(output_path) else 0}")
         if result.returncode != 0:
-            err_lines = result.stderr.strip().split('\n')[-10:] if result.stderr else ["unknown ffmpeg error"]
+            print(f"EXPORT FFMPEG STDERR:\n{result.stderr[-2000:]}")
+            err_lines = result.stderr.strip().split('\n')[-5:] if result.stderr else ["unknown ffmpeg error"]
             raise HTTPException(status_code=400, detail=f"Export error: {' | '.join(err_lines)[:500]}")
 
         if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
