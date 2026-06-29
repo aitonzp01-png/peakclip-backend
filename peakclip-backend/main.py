@@ -768,14 +768,14 @@ def get_bgutil_config():
         print(f"yt-dlp using bgutil HTTP server at {bgutil_url}")
         return config
 
-    # 2) Try pip-installed plugin
+    # 2) Try pip-installed plugin (installed as yt-dlp plugin at yt_dlp_plugins/extractor/)
     try:
-        import bgutil_ytdlp_pot_provider
+        import yt_dlp_plugins.extractor.getpot_bgutil
         config['youtubepot'] = {'po_provider': 'bgutil'}
         print("yt-dlp using bgutil pip plugin")
         return config
     except ImportError:
-        pass
+        print("bgutil pip plugin not available")
 
     # 3) Try script provider from cloned repo
     bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
