@@ -37,6 +37,9 @@ def init_youtube_cookies():
     """Initialize YouTube cookies from base64 environment variable and set global COOKIE_PATH."""
     global COOKIE_PATH
     cookies_b64 = os.getenv("YOUTUBE_COOKIES_B64")
+    b64_present = bool(cookies_b64)
+    b64_len = len(cookies_b64) if cookies_b64 else 0
+    print(f"[COOKIES] YOUTUBE_COOKIES_B64 present: {b64_present}, length: {b64_len}, raw start: {cookies_b64[:30] if cookies_b64 else 'N/A'}...")
     if cookies_b64:
         try:
             cookies_content = base64.b64decode(cookies_b64).decode('utf-8')
@@ -858,7 +861,6 @@ def build_ydl_opts(strategy, proxy_url, output_template):
             {
                 'key': 'FFmpegSubtitlesConvertor',
                 'format': 'srt',
-                'when': 'after_success'
             }
         ],
     }
@@ -1016,6 +1018,9 @@ async def lifespan(app: FastAPI):
     bgutil_url = start_bgutil_server()
     if bgutil_url:
         os.environ['BGUTIL_POT_URL'] = bgutil_url
+        print(f"[bgutil] Server running at {bgutil_url}")
+    else:
+        print("[bgutil] Server not available — pip plugin fallback will be used")
 
     # Initialize YouTube cookies
     init_youtube_cookies_at_startup()
