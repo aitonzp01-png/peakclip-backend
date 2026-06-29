@@ -730,76 +730,104 @@ def download_with_cobalt(url: str, output_path: str, proxy_url: str = None) -> b
 
 
 _bgutil_process = None
+_BGUTIL_JS = None
+
+
+def find_bgutil_js():
+    """Find bgutil server JS in the filesystem."""
+    search_paths = [
+        '/root/bgutil-ytdlp-pot-provider/server/build/index.js',
+        '/root/bgutil-ytdlp-pot-provider/server/dist/index.js',
+        '/root/bgutil-ytdlp-pot-provider/build/index.js',
+        '/root/bgutil-ytdlp-pot-provider/index.js',
+    ]
+    import glob as _glob
+    found = _glob.glob('/root/bgutil-ytdlp-pot-provider/**/*.js', recursive=True)
+    for f in found:
+        print(f"bgutil JS candidate: {f}")
+    for path in search_paths:
+        if os.path.exists(path):
+            print(f"bgutil server found: {path}")
+            return path
+    if found:
+        print(f"bgutil JS files exist but none match expected paths: {found}")
+    return None
+
+
+def is_bgutil_running():
+    """Check if bgutil HTTP server is responding on port 4416."""
+    try:
+        import urllib.request
+        urllib.request.urlopen('http://127.0.0.1:4416/ping', timeout=2)
+        return True
+    except Exception:
+        return False
 
 
 def start_bgutil_server():
-    """Start bgutil-ytdlp-pot-provider HTTP server."""
-    global _bgutil_process
-    import socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(1)
-    result = sock.connect_ex(('127.0.0.1', 4416))
-    sock.close()
-    if result == 0:
+    """Start bgutil-ytdlp-pot-provider HTTP server and wait until ready."""
+    global _bgutil_process, _BGUTIL_JS
+
+    if is_bgutil_running():
+        print("bgutil server already running")
         return "http://127.0.0.1:4416"
 
-    # Find the package in common install locations
-    candidates = [
-        "/root/bgutil-ytdlp-pot-provider/server",
-        "/usr/local/lib/node_modules/bgutil-ytdlp-pot-provider/server",
-        "/app/node_modules/bgutil-ytdlp-pot-provider/server",
-    ]
-    try:
-        npm_root = subprocess.run(['npm', 'root', '-g'], capture_output=True, text=True, timeout=5).stdout.strip()
-        if npm_root:
-            candidates.insert(0, os.path.join(npm_root, 'bgutil-ytdlp-pot-provider', 'server'))
-    except Exception:
-        pass
-
-    server_js = None
-    server_home = None
-    for base in candidates:
-        if not os.path.isdir(base):
-            continue
-        for sub in ["build", "dist", "lib", "."]:
-            candidate = os.path.join(base, sub, "index.js")
-            if os.path.exists(candidate):
-                server_js = candidate
-                server_home = base
-                break
-        if server_js:
-            break
-
-    if not server_js:
+    bgutil_js = find_bgutil_js()
+    if not bgutil_js:
         print("bgutil server JS not found")
         return None
 
+    _BGUTIL_JS = bgutil_js
     try:
+        import urllib.request
+        print(f"Starting bgutil server: node {bgutil_js}")
         proc = subprocess.Popen(
-            ['node', server_js],
-            cwd=server_home,
+            ['node', bgutil_js],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            cwd=os.path.dirname(bgutil_js),
         )
         _bgutil_process = proc
-        print(f"Started bgutil server (pid={proc.pid}) from {server_js}")
-        return "http://127.0.0.1:4416"
-    except Exception as e:
-        print(f"Failed to start bgutil server: {e}")
+
+        for i in range(15):
+            time.sleep(1)
+            try:
+                urllib.request.urlopen('http://127.0.0.1:4416/ping', timeout=1)
+                print(f"bgutil server ready after {i+1}s (pid={proc.pid})")
+                return "http://127.0.0.1:4416"
+            except Exception:
+                continue
+
+        print("bgutil server did not respond after 15s")
         return None
+    except Exception as e:
+        print(f"bgutil start failed: {e}")
+        return None
+
+
+def monitor_bgutil():
+    """Restart bgutil if it crashes."""
+    while True:
+        time.sleep(30)
+        if not is_bgutil_running():
+            print("bgutil server down, restarting...")
+            start_bgutil_server()
 
 
 def get_bgutil_config():
     """Return bgutil configuration for yt-dlp extractor_args if available."""
     config = {}
-    # 1) Try HTTP server (most reliable)
+    if is_bgutil_running():
+        config['youtubepot'] = {'pot_bgutil_base_url': 'http://127.0.0.1:4416'}
+        print("yt-dlp using bgutil HTTP server")
+        return config
+
     bgutil_url = os.environ.get('BGUTIL_POT_URL')
     if bgutil_url:
         config['youtubepot'] = {'pot_bgutil_base_url': bgutil_url}
         print(f"yt-dlp using bgutil HTTP server at {bgutil_url}")
         return config
 
-    # 2) Try pip-installed plugin (installed as yt-dlp plugin at yt_dlp_plugins/extractor/)
     try:
         import yt_dlp_plugins.extractor.getpot_bgutil
         config['youtubepot'] = {'po_provider': 'bgutil'}
@@ -808,7 +836,6 @@ def get_bgutil_config():
     except ImportError:
         print("bgutil pip plugin not available")
 
-    # 3) Try script provider from cloned repo
     bgutil_home = "/root/bgutil-ytdlp-pot-provider/server"
     if os.path.isdir(bgutil_home):
         config['youtubepot-bgutilscript'] = {'server_home': bgutil_home}
@@ -816,6 +843,24 @@ def get_bgutil_config():
         return config
 
     return config
+
+
+def try_install_oauth2_plugin():
+    """Install yt-dlp-youtube-oauth2 plugin as fallback auth."""
+    try:
+        result = subprocess.run(
+            ['pip', 'install', 'yt-dlp-youtube-oauth2', '--quiet'],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            print("yt-dlp-youtube-oauth2 plugin installed")
+            return True
+        else:
+            print(f"oauth2 plugin install failed: {result.stderr[-200:]}")
+            return False
+    except Exception as e:
+        print(f"oauth2 plugin install failed: {e}")
+        return False
 
 
 class YTDLPLogger:
@@ -885,12 +930,11 @@ def build_ydl_opts(strategy, proxy_url, output_template):
     opts['noplaylist'] = True
     if proxy_url:
         opts['proxy'] = proxy_url
+    bgutil_ok = is_bgutil_running()
     cookie_file = get_fresh_cookie_path()
+    print(f"yt-dlp: cookies={bool(cookie_file)} bgutil={bgutil_ok}")
     if cookie_file:
-        print(f"yt-dlp using cookies from: {cookie_file}")
         opts['cookiefile'] = cookie_file
-    else:
-        print("WARNING: No cookie file available for yt-dlp")
     extractor_args = {'youtube': {
         'player_client': strategy['player_client'],
         'skip': ['dash', 'hls'],
@@ -1032,13 +1076,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
 
-    # Start bgutil PO token provider server if compiled JS exists
+    # Start bgutil PO token provider server
     bgutil_url = start_bgutil_server()
     if bgutil_url:
         os.environ['BGUTIL_POT_URL'] = bgutil_url
-        print(f"[bgutil] Server running at {bgutil_url}")
+        threading.Thread(target=monitor_bgutil, daemon=True).start()
+        print("bgutil monitor started")
     else:
         print("[bgutil] Server not available — pip plugin fallback will be used")
+
+    # Install yt-dlp-youtube-oauth2 as fallback auth
+    try_install_oauth2_plugin()
 
     # Initialize YouTube cookies
     init_youtube_cookies_at_startup()
@@ -2525,6 +2573,26 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         for f in temp_files:
             try: os.unlink(f)
             except OSError: pass
+
+
+@app.post("/admin/update-cookies")
+async def update_cookies(
+    cookies_b64: str = Form(...),
+    admin_key: str = Form(...),
+):
+    """Update YouTube cookies without redeploy."""
+    if admin_key != os.environ.get('ADMIN_KEY', ''):
+        raise HTTPException(403, "Unauthorized")
+    try:
+        content = base64.b64decode(cookies_b64).decode('utf-8')
+        cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
+        with open(cookie_path, 'w') as f:
+            f.write(content)
+        lines = [l for l in content.split('\n') if l and not l.startswith('#')]
+        print(f"Cookies updated: {len(lines)} cookies via admin endpoint")
+        return {"success": True, "cookies": len(lines)}
+    except Exception as e:
+        raise HTTPException(400, f"Invalid cookies: {e}")
 
 
 @app.post("/burn-subtitles")
