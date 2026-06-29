@@ -15,6 +15,7 @@ import uuid
 import json
 import stripe
 import tempfile
+import shutil
 import re
 import time
 import httpx
