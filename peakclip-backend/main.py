@@ -31,32 +31,47 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from contextlib import asynccontextmanager
 
-COOKIE_PATH = None
-
-
 def init_youtube_cookies():
-    """Initialize YouTube cookies from base64 environment variable and set global COOKIE_PATH."""
-    global COOKIE_PATH
-    cookies_b64 = os.getenv("YOUTUBE_COOKIES_B64")
-    b64_present = bool(cookies_b64)
-    b64_len = len(cookies_b64) if cookies_b64 else 0
-    print(f"[COOKIES] YOUTUBE_COOKIES_B64 present: {b64_present}, length: {b64_len}, raw start: {cookies_b64[:30] if cookies_b64 else 'N/A'}...")
+    """Decode YOUTUBE_COOKIES_B64 env var into a Netscape cookie file."""
+    cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
+
+    cookies_b64 = os.environ.get('YOUTUBE_COOKIES_B64', '').strip()
     if cookies_b64:
         try:
-            cookies_content = base64.b64decode(cookies_b64).decode('utf-8')
-            path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
-            with open(path, "w", encoding="utf-8") as f:
+            cookies_b64_clean = cookies_b64.replace(' ', '').replace('\n', '')
+            cookies_content = base64.b64decode(cookies_b64_clean).decode('utf-8')
+            with open(cookie_path, 'w') as f:
                 f.write(cookies_content)
-            COOKIE_PATH = path
-            print(f"YouTube cookies initialized from env variable ({len(cookies_content)} chars, path: {path})")
+            lines = [l for l in cookies_content.split('\n')
+                     if l and not l.startswith('#')]
+            print(f"Cookies OK: {len(lines)} cookies -> {cookie_path}")
+            return cookie_path
         except Exception as e:
-            print(f"YouTube cookies init error: {e}")
-            COOKIE_PATH = None
-    elif not COOKIE_PATH and os.path.exists("cookies.txt"):
-        COOKIE_PATH = "cookies.txt"
-        print(f"YouTube cookies initialized from cookies.txt")
+            print(f"Cookie decode failed: {e}")
     else:
-        print(f"No YouTube cookies configured (YOUTUBE_COOKIES_B64 or cookies.txt)")
+        print("WARNING: YOUTUBE_COOKIES_B64 not set or empty")
+
+    for path in ['cookies.txt', '/app/cookies.txt']:
+        if os.path.exists(path) and os.path.getsize(path) > 100:
+            print(f"Using cookie file: {path}")
+            return path
+
+    print("ERROR: No YouTube cookies available - downloads will fail")
+    return None
+
+
+COOKIE_PATH = init_youtube_cookies()
+print(f"COOKIE_PATH = {COOKIE_PATH}, exists = {COOKIE_PATH and os.path.exists(COOKIE_PATH)}")
+
+
+def get_fresh_cookie_path():
+    """Re-decode from env var if cookie file is older than 1 hour."""
+    cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
+    if os.path.exists(cookie_path):
+        age = time.time() - os.path.getmtime(cookie_path)
+        if age < 3600:
+            return cookie_path
+    return init_youtube_cookies()
 
 
 def get_youtube_auth_config():
@@ -868,12 +883,14 @@ def build_ydl_opts(strategy, proxy_url, output_template):
     opts['geo_bypass'] = True
     opts['geo_bypass_country'] = 'US'
     opts['noplaylist'] = True
-    opts['username'] = os.environ.get('GOOGLE_EMAIL', '').strip()
-    opts['password'] = os.environ.get('GOOGLE_PASSWORD', '').strip()
     if proxy_url:
         opts['proxy'] = proxy_url
-    if COOKIE_PATH and os.path.exists(COOKIE_PATH):
-        opts['cookiefile'] = COOKIE_PATH
+    cookie_file = get_fresh_cookie_path()
+    if cookie_file:
+        print(f"yt-dlp using cookies from: {cookie_file}")
+        opts['cookiefile'] = cookie_file
+    else:
+        print("WARNING: No cookie file available for yt-dlp")
     extractor_args = {'youtube': {
         'player_client': strategy['player_client'],
         'skip': ['dash', 'hls'],
