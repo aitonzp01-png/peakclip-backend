@@ -27,7 +27,7 @@ export const subtitleStyles = [
   { id: 'bold-yellow', label: 'Bold Yellow', preview: { color: '#FFD700', fontWeight: 'bold', textShadow: '2px 2px 4px #000' } },
   { id: 'neon-green', label: 'Neon', preview: { color: '#00ff88', fontWeight: 'bold', textShadow: '0 0 8px #00ff88' } },
   { id: 'red-fire', label: 'Fire', preview: { color: '#ff4444', fontWeight: 'bold', textShadow: '0 0 8px #ff0000, 0 0 16px #ff0000' } },
-  { id: 'minimal-white', label: 'Minimal', preview: { color: '#fff', fontWeight: '400', background: 'rgba(0,0,0,0.6)', padding: '2px 8px', borderRadius: '4px' } },
+  { id: 'minimal-white', label: 'Minimal', preview: { color: '#fff', fontWeight: '400', textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' } },
   { id: 'tiktok-style', label: 'TikTok', preview: { color: '#fff', fontWeight: '900', textShadow: '2px 2px 0 #fe2c55, -2px -2px 0 #00f2ea' } },
 ]
 

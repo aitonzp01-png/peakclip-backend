@@ -340,6 +340,7 @@ function SubtitleOverlay({ subtitles, currentTime, subtitlePosition, selectedSub
       ...selectedSubStyle,
       color: active.style?.color || selectedSubStyle.color,
       backgroundColor: 'transparent',
+      background: 'none',
       textShadow: selectedSubStyle.textShadow || '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.5)',
     }}>
       {active.text}
