@@ -48,7 +48,7 @@
 .how-card:hover {
   transform: translateY(-6px);
   border-color: var(--brand-border);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 40px rgba(217, 179, 71, 0.05);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 40px rgba(99, 102, 241, 0.05);
 }
 
 .how-card:hover::before {
@@ -59,7 +59,7 @@
   font-family: 'Bebas Neue', sans-serif;
   font-size: 64px;
   line-height: 1;
-  color: rgba(217, 179, 71, 0.12);
+  color: rgba(99, 102, 241, 0.12);
   position: absolute;
   top: 12px;
   right: 20px;
@@ -84,7 +84,7 @@
 }
 
 .how-card:hover .how-icon {
-  background: rgba(217, 179, 71, 0.15);
+  background: rgba(99, 102, 241, 0.15);
   border-color: var(--brand-primary);
   box-shadow: 0 0 30px var(--brand-glow);
 }
@@ -149,7 +149,7 @@
 
   .how-card:nth-child(1)::after,
   .how-card:nth-child(2)::after {
-    content: '→';
+    content: '\2192';
     position: absolute;
     top: 46px;
     right: -24px;
@@ -159,6 +159,7 @@
     animation: connectorPulse 2s ease-in-out infinite;
     opacity: 0.6;
   }
+
 
   .how-card:nth-child(2)::after {
     animation-delay: 0.5s;
@@ -233,8 +234,8 @@
   height: 100%;
   background: radial-gradient(
     ellipse 160% 130% at 0% 0%,
-    rgba(217, 179, 71, 0.4) 0%,
-    rgba(217, 179, 71, 0.12) 25%,
+    rgba(99, 102, 241, 0.4) 0%,
+    rgba(99, 102, 241, 0.12) 25%,
     transparent 55%
   );
   opacity: 0;
@@ -266,7 +267,7 @@
 }
 
 .feature-card:hover .feature-icon {
-  background: rgba(217, 179, 71, 0.15);
+  background: rgba(99, 102, 241, 0.15);
   box-shadow: 0 0 25px var(--brand-glow);
 }
 
@@ -430,6 +431,138 @@
 }
 
 /* ════════════════════════════════════════════════════════════════
+   13. SUCCESS STORIES
+   ════════════════════════════════════════════════════════════════ */
+
+.stories-section {
+  padding: 120px 50px;
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.stories-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.story-card {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 20px;
+  padding: 28px 24px;
+  transition: all 300ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.story-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--brand-grad);
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.story-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--brand-border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.story-card:hover::before {
+  opacity: 0.6;
+}
+
+.story-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.story-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--brand-grad);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 18px;
+  color: var(--bg-primary);
+  flex-shrink: 0;
+  letter-spacing: 1px;
+}
+
+.story-name {
+  font-family: 'Poppins', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.story-username {
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.story-stat {
+  display: inline-flex;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand-primary);
+  background: var(--brand-dim);
+  border: 1px solid var(--brand-border);
+  padding: 4px 14px;
+  border-radius: 999px;
+  margin-bottom: 14px;
+}
+
+.story-quote {
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* ── Stories responsive ── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .stories-section {
+    padding: 80px 32px;
+  }
+}
+
+@media (max-width: 768px) {
+  .stories-section {
+    padding: 60px 20px;
+  }
+
+  .stories-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .story-card {
+    padding: 24px 20px;
+  }
+
+  .story-quote {
+    font-size: 13px;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
    4. FAQ SECTION
    ════════════════════════════════════════════════════════════════ */
 
@@ -545,7 +678,7 @@
 }
 
 .cta-box {
-  background: linear-gradient(135deg, rgba(217, 179, 71, 0.08) 0%, rgba(217, 179, 71, 0.02) 100%);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%);
   border: 1px solid var(--brand-border);
   border-radius: 32px;
   padding: 80px 40px;
@@ -569,7 +702,7 @@
   content: '';
   position: absolute;
   inset: -50%;
-  background: radial-gradient(circle at 50% 0%, rgba(217, 179, 71, 0.06), transparent 60%);
+  background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.06), transparent 60%);
   pointer-events: none;
 }
 
@@ -619,7 +752,7 @@
 .cta-btn:hover {
   transform: translateY(-3px);
   background: var(--brand-hover);
-  box-shadow: 0 20px 50px rgba(217, 179, 71, 0.35);
+  box-shadow: 0 20px 50px rgba(99, 102, 241, 0.35);
 }
 
 .cta-btn:focus-visible {
@@ -870,6 +1003,15 @@
   z-index: 2;
 }
 
+.hero-clip-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
 .hero-clip-play {
   position: absolute;
   top: 50%;
@@ -905,13 +1047,32 @@
   z-index: 1;
 }
 
-.showcase-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+.showcase-carousel-wrap {
+  position: relative;
+}
+
+.showcase-carousel {
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 8px 0 20px;
+}
+
+.showcase-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.showcase-track {
+  display: flex;
+  gap: 16px;
+  width: max-content;
+  padding: 0 4px;
 }
 
 .showcase-card {
+  flex: 0 0 200px;
+  scroll-snap-align: start;
   background: var(--surface);
   border: 1px solid var(--border-soft);
   border-radius: 16px;
@@ -934,6 +1095,16 @@
   flex-direction: column;
   justify-content: space-between;
   padding: 12px;
+  overflow: hidden;
+}
+
+.showcase-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
 }
 
 .showcase-overlay {
@@ -941,6 +1112,7 @@
   inset: 0;
   background: linear-gradient(180deg, transparent 50%, rgba(0, 0, 0, 0.6) 100%);
   pointer-events: none;
+  z-index: 1;
 }
 
 .showcase-duration {
@@ -1004,14 +1176,30 @@
   opacity: 0.4;
 }
 
+.showcase-fade-left,
+.showcase-fade-right {
+  position: absolute;
+  top: 0;
+  bottom: 20px;
+  width: 60px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.showcase-fade-left {
+  left: 0;
+  background: linear-gradient(90deg, var(--bg-primary), transparent);
+}
+
+.showcase-fade-right {
+  right: 0;
+  background: linear-gradient(270deg, var(--bg-primary), transparent);
+}
+
 /* ── Showcase responsive ── */
 @media (min-width: 769px) and (max-width: 1024px) {
   .showcase-section {
     padding: 80px 32px;
-  }
-
-  .showcase-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -1020,9 +1208,13 @@
     padding: 60px 20px;
   }
 
-  .showcase-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+  .showcase-card {
+    flex: 0 0 160px;
+  }
+
+  .showcase-fade-left,
+  .showcase-fade-right {
+    width: 30px;
   }
 
   .showcase-info {
@@ -2114,14 +2306,14 @@
    10. RESPONSIVE STYLES
    ════════════════════════════════════════════════════════════════ */
 
-/* ── Gold hover effect on icons ── */
+/* ── Brand hover effect on icons ── */
 button:hover svg,
 a:hover svg,
 .dash-quick-action:hover svg,
 .sidebar-item:hover svg,
 .process-btn:hover svg,
 .dash-clip-action-btn:hover svg {
-  color: #D9B44A !important;
+  color: var(--brand-primary) !important;
   transition: color 0.2s ease;
 }
 
@@ -2459,42 +2651,4 @@ a:hover svg,
     order: 2;
   }
 
-  /* ── Pipeline mobile ── */
-  .pipeline-container {
-    height: auto !important;
-    min-height: 420px;
-    padding: 20px !important;
-    border-radius: 24px !important;
-  }
-
-  .pipeline-header {
-    margin-bottom: 24px !important;
-  }
-
-  .pipeline-steps {
-    gap: 12px !important;
-  }
-
-  .pipeline-step {
-    padding: 14px 16px !important;
-    gap: 12px !important;
-  }
-
-  .pipeline-step-label {
-    font-size: 13px !important;
-  }
-
-  .pipeline-step-desc {
-    font-size: 10px !important;
-  }
-
-  .pipeline-step-status {
-    font-size: 10px !important;
-    min-width: 70px;
-    text-align: right;
-  }
-
-  .pipeline-progress-wrap {
-    margin-top: 16px !important;
-  }
 }

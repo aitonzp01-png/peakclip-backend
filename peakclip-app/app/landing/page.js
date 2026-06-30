@@ -6,6 +6,7 @@ import Hero from './components/Hero'
 import Showcase from './components/Testimonials'
 import Features from './components/Features'
 import HowItWorks from './components/HowItWorks'
+import SuccessStories from './components/SuccessStories'
 import Pricing from './components/Pricing'
 import FAQ from './components/FAQ'
 import CTA from './components/CTA'
@@ -50,11 +51,15 @@ export default function Landing() {
       </div>
 
       <div className="reveal">
+        <HowItWorks />
+      </div>
+
+      <div className="reveal">
         <Features />
       </div>
 
       <div className="reveal">
-        <HowItWorks />
+        <SuccessStories />
       </div>
 
       <div className="reveal">

@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 /* ── PeakClip Design System ──
-   Gold/Dark Premium SaaS Identity.
-   --brand-primary (#D9B347) = signature gold, cinematic warmth.
+   Indigo/Dark Premium SaaS Identity.
+   --brand-primary (#6366F1) = signature indigo, modern & vibrant.
    --bg-primary (#050505) = absolute black backdrop.
    All surfaces, borders, and text derive from this 7-color system.
 */
 :root {
-  --brand-primary: #D9B347;
-  --brand-hover: #E8C760;
-  --brand-glow: rgba(217, 179, 71, 0.35);
-  --brand-dim: rgba(217, 179, 71, 0.08);
-  --brand-border: rgba(217, 179, 71, 0.2);
-  --brand-grad: linear-gradient(135deg, #D9B347, #E8C760);
+  --brand-primary: #6366F1;
+  --brand-hover: #818CF8;
+  --brand-glow: rgba(99, 102, 241, 0.35);
+  --brand-dim: rgba(99, 102, 241, 0.08);
+  --brand-border: rgba(99, 102, 241, 0.2);
+  --brand-grad: linear-gradient(135deg, #6366F1, #818CF8);
 
   --bg-primary: #050505;
   --bg-secondary: #0B0B0B;
@@ -1190,8 +1190,8 @@ body {
 .landing-bg {
   background: var(--bg-primary);
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(217, 179, 71, 0.05), transparent 70%),
-    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(217, 179, 71, 0.03), transparent 60%);
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99, 102, 241, 0.06), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(99, 102, 241, 0.03), transparent 60%);
 }
 
 .landing-bg::before {
@@ -1365,12 +1365,12 @@ body {
   margin-bottom: 32px;
   position: relative;
   z-index: 2;
-  box-shadow: 0 0 40px rgba(212, 175, 55, 0.12);
+  box-shadow: 0 0 40px rgba(99, 102, 241, 0.12);
 }
 
 @keyframes breatheGlow {
-  0%, 100% { box-shadow: 0 0 0px rgba(217, 179, 71, 0); }
-  50% { box-shadow: 0 0 20px rgba(217, 179, 71, 0.2), 0 0 40px rgba(217, 179, 71, 0.1); }
+  0%, 100% { box-shadow: 0 0 0px rgba(99, 102, 241, 0); }
+  50% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.2), 0 0 40px rgba(99, 102, 241, 0.1); }
 }
 
 .hero-title {

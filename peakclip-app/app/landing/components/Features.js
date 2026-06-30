@@ -52,17 +52,6 @@ export default function Features() {
   return (
     <section className="features-section" id="features">
       <motion.div
-        className="section-heading"
-        initial={{ opacity: 0, y: 40 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div className="section-label">WHAT YOU GET</div>
-        <h2 className="section-title">Everything you need to clip faster</h2>
-      </motion.div>
-
-      <motion.div
         className="features-grid"
         variants={container}
         initial="hidden"

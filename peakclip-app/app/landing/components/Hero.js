@@ -9,10 +9,10 @@ const fadeUp = (delay = 0) => ({
 })
 
 const clips = [
-  { views: '633.2K', likes: '2.2K', creator: 'YoSoyPlex', gradient: 'linear-gradient(135deg, #1a1a2e, #16213e)' },
-  { views: '241.2K', likes: '1.4K', creator: 'FlexCidine', gradient: 'linear-gradient(135deg, #0f3460, #533483)' },
-  { views: '191.2K', likes: '884', creator: 'TheWillyrex', gradient: 'linear-gradient(135deg, #e94560, #533483)' },
-  { views: '88.4K', likes: '1.2K', creator: 'Greinher', gradient: 'linear-gradient(135deg, #16213e, #0f3460)' },
+  { views: '633.2K', likes: '2.2K', creator: 'YoSoyPlex', video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4' },
+  { views: '241.2K', likes: '1.4K', creator: 'FlexCidine', video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4' },
+  { views: '191.2K', likes: '884', creator: 'TheWillyrex', video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4' },
+  { views: '88.4K', likes: '1.2K', creator: 'Greinher', video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4' },
 ]
 
 export default function Hero() {
@@ -32,12 +32,12 @@ export default function Hero() {
               ],
             }}
             transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
-            opacity={0.06}
+            opacity={0.08}
           />
           <defs>
             <radialGradient id="blob-grad">
-              <stop offset="0%" stopColor="#D9B44A" />
-              <stop offset="100%" stopColor="#D9B44A" stopOpacity="0" />
+              <stop offset="0%" stopColor="#6366F1" />
+              <stop offset="100%" stopColor="#6366F1" stopOpacity="0" />
             </radialGradient>
           </defs>
         </svg>
@@ -84,7 +84,15 @@ export default function Hero() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.5 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
               >
-                <div className="hero-clip-thumb" style={{ background: clip.gradient }}>
+                <div className="hero-clip-thumb">
+                  <video
+                    src={clip.video}
+                    muted
+                    autoPlay
+                    loop
+                    playsInline
+                    className="hero-clip-video"
+                  />
                   <div className="hero-clip-overlay" />
                   <div className="hero-clip-metrics">
                     <span className="hero-clip-stat">{clip.views} views</span>
