@@ -2304,6 +2304,15 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
     trim_d = max(trim_d, 2)
     print(f"Export: source={os.path.getsize(source_path)}B dur={total_duration}s trim={trim_s}-{trim_s+trim_d}s")
 
+    # Audio stream detection
+    audio_probe = subprocess.run([
+        'ffprobe', '-v', 'error', '-select_streams', 'a:0',
+        '-show_entries', 'stream=codec_type', '-of', 'csv=p=0',
+        source_path
+    ], capture_output=True, text=True)
+    has_audio_stream = audio_probe.stdout.strip() == 'audio'
+    print(f"Export: source has audio stream: {has_audio_stream}")
+
     # Resolution mapping
     res_map = {"720p": "720:1280", "1080p": "1080:1920", "4k": "2160:3840"}
     target_res = res_map.get(req.resolution, "1080:1920")
@@ -2403,6 +2412,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         has_music = req.music_track not in ("none", "", 0, "0", None)
         music_path = None
         af_filter = None
+        use_source_audio = has_audio_stream and req.include_audio
 
         if has_music:
             music_path = f"downloads/{job_id}_music.mp3"
@@ -2423,7 +2433,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                     if os.path.exists(music_path):
                         local_files.append(music_path)
                         vol = max(0, min(req.music_volume, 100)) / 100.0
-                        if req.include_audio:
+                        if use_source_audio:
                             # Mix original audio with music
                             af_filter = f"[1:a]volume={vol}[music];[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]"
                         else:
@@ -2471,7 +2481,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         cmd.extend(['-preset', 'fast'])
         if af_filter:
             cmd.extend(['-filter_complex', af_filter, '-map', '0:v', '-map', '[a]', '-c:a', acodec])
-        elif req.include_audio:
+        elif use_source_audio:
             cmd.extend(['-c:a', acodec])
         else:
             cmd.extend(['-an'])
