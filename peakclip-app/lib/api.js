@@ -94,3 +94,13 @@ export async function burnSubtitles(style) {
   })
   return response
 }
+
+export async function analyzeFaces(videoUrl) {
+  const token = await getSessionToken()
+  const response = await fetch(`${BACKEND_URL}/analyze-faces`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ video_url: videoUrl }),
+  })
+  return response
+}

@@ -30,6 +30,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from contextlib import asynccontextmanager
+import cv2
+import numpy as np
 
 # ── Env vars debug ──
 print("=== ENV VARS DEBUG ===")
@@ -1421,6 +1423,12 @@ class ExportRequest(BaseModel):
     resolution: str = "1080p"
     format: str = "mp4"
     fps: int = 30
+    face_tracking: bool = False
+    face_data: list | None = None  # [[timestamp, center_x_ratio, center_y_ratio], ...]
+
+
+class AnalyzeFacesRequest(BaseModel):
+    video_url: str
 
 
 class SubtitleStyle(BaseModel):
@@ -2194,6 +2202,170 @@ Return JSON with this exact format:
         jobs_store[job_id] = {"status": "error", "message": str(e)[:200]}
 
 
+# ── Face Tracking ──────────────────────────────────────────────────────
+
+def detect_face_crop_positions(video_path: str, sample_rate: int = 10):
+    """
+    Analyze video and return crop positions to keep face centered.
+    Samples every N frames. Returns (positions, src_width, src_height).
+    positions: [(timestamp, center_x_ratio, center_y_ratio), ...]
+    """
+    face_cascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+    )
+
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    print(f"Face tracking: video {width}x{height}, {frame_count} frames @ {fps}fps, sample every {sample_rate}")
+
+    positions = []
+    last_known_x = 0.5
+    frame_idx = 0
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        if frame_idx % sample_rate == 0:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, 1.1, 5, minSize=(60, 60))
+
+            if len(faces) > 0:
+                largest = max(faces, key=lambda f: f[2] * f[3])
+                fx, fy, fw, fh = largest
+                center_x_ratio = (fx + fw / 2) / width
+                center_y_ratio = (fy + fh / 2) / height
+                last_known_x = center_x_ratio
+            else:
+                center_x_ratio = last_known_x
+                center_y_ratio = 0.4  # default vertical center for talking head
+
+            timestamp = frame_idx / fps
+            positions.append((timestamp, center_x_ratio, center_y_ratio))
+
+        frame_idx += 1
+
+    cap.release()
+    print(f"Face tracking: {len(positions)} sample points")
+    return positions, width, height
+
+
+def smooth_positions(positions, smoothing_window=5):
+    """Smooth positions to avoid jerky camera movement."""
+    if len(positions) < smoothing_window:
+        return positions
+
+    smoothed = []
+    for i in range(len(positions)):
+        start = max(0, i - smoothing_window // 2)
+        end = min(len(positions), i + smoothing_window // 2 + 1)
+        window = positions[start:end]
+        avg_x = sum(p[1] for p in window) / len(window)
+        avg_y = sum(p[2] for p in window) / len(window)
+        smoothed.append((positions[i][0], avg_x, avg_y))
+    return smoothed
+
+
+def build_dynamic_crop_filter(positions, src_width, src_height,
+                              target_w=720, target_h=1280):
+    """Build ffmpeg sendcmd + crop expressions for dynamic face tracking."""
+    target_ratio = target_w / target_h
+    src_ratio = src_width / src_height
+
+    if src_ratio > target_ratio:
+        crop_h = src_height
+        crop_w = int(crop_h * target_ratio)
+    else:
+        crop_w = src_width
+        crop_h = int(crop_w / target_ratio)
+
+    sendcmd_lines = []
+    for ts, cx, cy in positions:
+        crop_x = int(cx * src_width - crop_w / 2)
+        crop_x = max(0, min(crop_x, src_width - crop_w))
+        sendcmd_lines.append(f"{ts} crop x {crop_x};")
+
+    return crop_w, crop_h, sendcmd_lines
+
+
+def apply_face_tracking_crop(input_path, output_path,
+                             target_w=720, target_h=1280):
+    """Main function: apply face tracking crop to a video."""
+    print("Face tracking: detecting faces...")
+    positions, src_w, src_h = detect_face_crop_positions(input_path, sample_rate=10)
+    positions = smooth_positions(positions, smoothing_window=5)
+
+    crop_w, crop_h, sendcmd_lines = build_dynamic_crop_filter(
+        positions, src_w, src_h, target_w, target_h
+    )
+
+    sendcmd_file = tempfile.NamedTemporaryFile(
+        mode='w', suffix='.txt', delete=False
+    )
+    sendcmd_file.write('\n'.join(sendcmd_lines))
+    sendcmd_file.close()
+
+    initial_x = int(src_w / 2 - crop_w / 2)
+
+    cmd = [
+        'ffmpeg', '-i', input_path,
+        '-vf',
+        f"sendcmd=f='{sendcmd_file.name}',"
+        f"crop={crop_w}:{crop_h}:{initial_x}:0,"
+        f"scale={target_w}:{target_h}",
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+        '-c:a', 'copy',
+        '-y', output_path
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, timeout=300)
+
+    try:
+        os.unlink(sendcmd_file.name)
+    except Exception:
+        pass
+
+    return result.returncode == 0
+
+
+class AnalyzeFacesResponse(BaseModel):
+    positions: list  # [[ts, cx, cy], ...]
+    src_width: int
+    src_height: int
+
+
+@app.post("/analyze-faces")
+async def analyze_faces(req: AnalyzeFacesRequest, user: dict = Depends(get_current_user)):
+    """Analyze a video and return face tracking positions."""
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        local_path = os.path.join(tmp_dir, "source.mp4")
+        subprocess.run([
+            'curl', '-s', '-L', '-o', local_path, req.video_url
+        ], timeout=120)
+
+        if not os.path.exists(local_path) or os.path.getsize(local_path) < 1000:
+            raise HTTPException(status_code=400, detail="Failed to download source video")
+
+        positions, src_w, src_h = detect_face_crop_positions(local_path, sample_rate=10)
+        positions = smooth_positions(positions, smoothing_window=5)
+
+        return AnalyzeFacesResponse(
+            positions=[[round(ts, 3), round(cx, 4), round(cy, 4)] for ts, cx, cy in positions],
+            src_width=src_w,
+            src_height=src_h,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Face analysis failed: {str(e)[:200]}")
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 @app.post("/process")
 async def process_video(req: VideoRequest, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     await check_rate_limit(f"process:{user['sub']}")
@@ -2323,13 +2495,65 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
     temp_files = []
 
     try:
-        # Build filter chain
-        vf = (
-            f"scale={target_res}:force_original_aspect_ratio=increase,"
-            f"crop={target_res},"
-            f"setsar=1,"
-            f"format=yuv420p"
-        )
+        # Build filter chain — with or without face tracking
+        target_w, target_h = [int(x) for x in target_res.split(':')]
+
+        if req.face_tracking and req.face_data and len(req.face_data) > 1:
+            # Dynamic face-tracking crop
+            src_w, src_h = 0, 0
+            # Probe dimensions from source
+            dim_probe = subprocess.run([
+                'ffprobe', '-v', 'error',
+                '-select_streams', 'v:0',
+                '-show_entries', 'stream=width,height',
+                '-of', 'csv=p=0', source_path
+            ], capture_output=True, text=True, timeout=15)
+            dims = dim_probe.stdout.strip().split(',')
+            if len(dims) == 2:
+                src_w, src_h = int(dims[0]), int(dims[1])
+            else:
+                # fallback to target res if probe fails
+                src_w, src_h = target_w * 2, target_h * 2
+
+            target_ratio = target_w / target_h
+            src_ratio = src_w / src_h
+
+            if src_ratio > target_ratio:
+                crop_h = src_h
+                crop_w = int(crop_h * target_ratio)
+            else:
+                crop_w = src_w
+                crop_h = int(crop_w / target_ratio)
+
+            sendcmd_lines = []
+            for ts, cx, cy in req.face_data:
+                crop_x = int(cx * src_w - crop_w / 2)
+                crop_x = max(0, min(crop_x, src_w - crop_w))
+                sendcmd_lines.append(f"{ts} crop x {crop_x};")
+
+            sendcmd_file = tempfile.NamedTemporaryFile(
+                mode='w', suffix='.txt', delete=False
+            )
+            sendcmd_file.write('\n'.join(sendcmd_lines))
+            sendcmd_file.close()
+            temp_files.append(sendcmd_file.name)
+
+            initial_x = int(src_w / 2 - crop_w / 2)
+            sendcmd_path = sendcmd_file.name.replace('\\', '/')
+            vf = (
+                f"sendcmd=f='{sendcmd_path}',"
+                f"crop={crop_w}:{crop_h}:{initial_x}:0,"
+                f"scale={target_res},"
+                f"setsar=1,"
+                f"format=yuv420p"
+            )
+        else:
+            vf = (
+                f"scale={target_res}:force_original_aspect_ratio=increase,"
+                f"crop={target_res},"
+                f"setsar=1,"
+                f"format=yuv420p"
+            )
 
         if req.filter_style == "vivid":
             vf = f"{vf},eq=saturation=1.5:contrast=1.1"

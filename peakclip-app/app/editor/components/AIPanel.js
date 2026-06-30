@@ -2,7 +2,10 @@
 import { useState } from 'react'
 import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
 import useEditorStore from '../store/editorStore'
+import { getSupabaseClient } from '../../../lib/supabase'
 import icons from '../../../lib/icons'
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
 const aiTools = [
   {
@@ -84,11 +87,32 @@ export default function AIPanel() {
         s.showHint('B-roll footage added')
         break
       case 'face-tracking':
-        s.showHint('Face tracking enabled')
+      case 'smart-crop': {
+        s.showHint('Analyzing faces...')
+        try {
+          const { data: { session } } = await getSupabaseClient().auth.getSession()
+          const res = await fetch(`${BACKEND_URL}/analyze-faces`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token || ''}`,
+            },
+            body: JSON.stringify({ video_url: clip.video_url }),
+          })
+          if (res.ok) {
+            const data = await res.json()
+            s.setFaceTracking(true)
+            s.setFaceData(data.positions)
+            s.showHint(`Face tracking ready (${data.positions.length} frames sampled)`)
+          } else {
+            const err = await res.text()
+            s.showHint(`Face analysis failed: ${err.slice(0, 60)}`)
+          }
+        } catch (e) {
+          s.showHint('Face analysis: server unavailable')
+        }
         break
-      case 'smart-crop':
-        s.showHint('Smart crop applied')
-        break
+      }
       case 'color-enhance':
         s.setActiveFilter('cinema')
         s.showHint('Color enhanced')

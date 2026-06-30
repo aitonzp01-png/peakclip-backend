@@ -66,6 +66,8 @@ export default function ExportModal() {
           resolution: resolution,
           format: format,
           fps: fps,
+          face_tracking: store.faceTracking || false,
+          face_data: store.faceData || null,
         }),
       })
 
