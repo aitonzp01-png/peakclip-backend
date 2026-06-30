@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { brand, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
 import { subtitleStyles, musicTracks, filters, transitions } from '../../../lib/utils'
 import { generateSRT } from '../../../lib/subtitles'
-import { saveSubtitles, burnSubtitles } from '../../../lib/api'
+import { saveSubtitles } from '../../../lib/api'
 import icons from '../../../lib/icons'
 import useEditorStore from '../store/editorStore'
 import AIPanel from './AIPanel'
@@ -113,7 +113,6 @@ export default function EditorInspector({ videoRef }) {
   )
 
   const [saveState, setSaveState] = useState('idle')
-  const [burnState, setBurnState] = useState('idle')
 
   const selectedSub = subtitles.find(s => s.id === selectedSubtitleId) || subtitles[0] || null
   const subText = selectedSub?.text || ''
@@ -133,38 +132,6 @@ export default function EditorInspector({ videoRef }) {
       console.error(e)
       setSaveState('error')
       setTimeout(() => setSaveState('idle'), 2000)
-    }
-  }
-
-  const handleBurnSubtitles = async () => {
-    if (!clip?.video_url || !clip?.srt_url) return
-    setBurnState('burning')
-    try {
-      const style = {
-        clip_id: clip.id,
-        video_url: clip.video_url,
-        srt_url: clip.srt_url,
-        font_size: fontSize,
-        font_color: 'white',
-        background: true,
-        background_opacity: 0.6,
-        position: subtitlePosition,
-        bold: true,
-        outline: 2,
-        font_name: 'DejaVu Sans',
-      }
-      const res = await burnSubtitles(style)
-      if (!res.ok) throw new Error('Burn failed')
-      const data = await res.json()
-      if (data.video_url) {
-        useEditorStore.setState(state => ({ clip: { ...state.clip, video_url: data.video_url } }))
-      }
-      setBurnState('done')
-      setTimeout(() => setBurnState('idle'), 2000)
-    } catch (e) {
-      console.error(e)
-      setBurnState('error')
-      setTimeout(() => setBurnState('idle'), 2000)
     }
   }
 
@@ -279,24 +246,14 @@ export default function EditorInspector({ videoRef }) {
       </Section>
 
       <Section label="Actions">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <button onClick={handleSaveSubtitles} disabled={saveState === 'saving'}
-            style={{
-              width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
-              background: brand, color: '#000', fontWeight: '700', cursor: saveState === 'saving' ? 'wait' : 'pointer',
-              fontSize: '12px',
-            }}>
-            {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved!' : saveState === 'error' ? 'Error' : 'Save Captions'}
-          </button>
-          <button onClick={handleBurnSubtitles} disabled={burnState === 'burning'}
-            style={{
-              width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${brand}`,
-              background: 'transparent', color: brand, fontWeight: '600', cursor: burnState === 'burning' ? 'wait' : 'pointer',
-              fontSize: '12px',
-            }}>
-            {burnState === 'burning' ? 'Burning…' : burnState === 'done' ? 'Re-burned!' : burnState === 'error' ? 'Error' : 'Re-burn Subtitles'}
-          </button>
-        </div>
+        <button onClick={handleSaveSubtitles} disabled={saveState === 'saving'}
+          style={{
+            width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
+            background: brand, color: '#000', fontWeight: '700', cursor: saveState === 'saving' ? 'wait' : 'pointer',
+            fontSize: '12px',
+          }}>
+          {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved!' : saveState === 'error' ? 'Error' : 'Save Captions'}
+        </button>
       </Section>
     </>
   )
