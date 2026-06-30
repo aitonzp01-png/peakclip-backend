@@ -2314,8 +2314,11 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
     print(f"Export: source has audio stream: {has_audio_stream}")
 
     # Resolution mapping
-    res_map = {"720p": "720:1280", "1080p": "1080:1920", "4k": "2160:3840"}
+    res_map = {"720p": "720:1280", "1080p": "1080:1920", "4k": "1080:1920"}  # 4k→1080p to avoid OOM
     target_res = res_map.get(req.resolution, "1080:1920")
+
+    if req.resolution == '4k':
+        raise HTTPException(400, "4K export not supported on this plan. Use 1080p or 720p.")
 
     temp_files = []
 
@@ -2453,41 +2456,78 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             vcodec = "libx264"
             acodec = "aac"
 
-        cmd = [
-            'ffmpeg',
-            '-ss', str(trim_s),
-            '-i', source_path,
-        ]
-        if music_path and os.path.exists(music_path):
-            cmd.extend(['-i', music_path])
-        cmd.extend([
-            '-t', str(trim_d),
-            '-vf', vf,
-            '-r', str(req.fps),
-            '-c:v', vcodec,
-        ])
-        if vcodec == 'libx264':
-            cmd.extend([
-                '-pix_fmt', 'yuv420p',
-                '-colorspace', 'bt709',
-                '-color_trc', 'bt709',
-                '-color_primaries', 'bt709',
-                '-color_range', 'tv',
-                '-movflags', '+faststart',
-            ])
-        crf_map = {'720p': '23', '1080p': '22', '4k': '24'}
-        crf = crf_map.get(req.resolution, '23')
-        cmd.extend(['-crf', crf])
-        cmd.extend(['-preset', 'fast'])
-        if af_filter:
-            cmd.extend(['-filter_complex', af_filter, '-map', '0:v', '-map', '[a]', '-c:a', acodec])
-        elif use_source_audio:
-            cmd.extend(['-c:a', acodec])
-        else:
-            cmd.extend(['-an'])
-        cmd.extend(['-y', output_path])
+        # Check if we can stream copy (no re-encode needed)
+        can_copy = (
+            req.filter_style == 'none' and
+            not req.srt_content and
+            not req.subtitle_text and
+            not req.watermark_text and
+            not has_music and
+            req.fps == 30
+        )
+        if can_copy:
+            probe_res = subprocess.run([
+                'ffprobe', '-v', 'error',
+                '-select_streams', 'v:0',
+                '-show_entries', 'stream=width,height',
+                '-of', 'csv=p=0',
+                source_path
+            ], capture_output=True, text=True, timeout=15)
+            source_dims = probe_res.stdout.strip()
+            target_dims = target_res.replace(':', ',')
+            if source_dims == target_dims:
+                cmd = [
+                    'ffmpeg', '-ss', str(trim_s), '-i', source_path,
+                    '-t', str(trim_d),
+                    '-c', 'copy',
+                    '-movflags', '+faststart',
+                    '-y', output_path
+                ]
+                print("Export: using stream copy (no re-encode)")
+            else:
+                can_copy = False
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        if not can_copy:
+            cmd = [
+                'ffmpeg',
+                '-ss', str(trim_s),
+                '-i', source_path,
+            ]
+            if music_path and os.path.exists(music_path):
+                cmd.extend(['-i', music_path])
+            cmd.extend([
+                '-t', str(trim_d),
+                '-vf', vf,
+                '-r', str(req.fps),
+                '-c:v', vcodec,
+            ])
+            if vcodec == 'libx264':
+                cmd.extend([
+                    '-pix_fmt', 'yuv420p',
+                    '-colorspace', 'bt709',
+                    '-color_trc', 'bt709',
+                    '-color_primaries', 'bt709',
+                    '-color_range', 'tv',
+                    '-movflags', '+faststart',
+                    '-threads', '2',
+                    '-x264-params', 'threads=2',
+                ])
+            crf_map = {'720p': '28', '1080p': '28', '4k': '30'}
+            crf = crf_map.get(req.resolution, '28')
+            cmd.extend(['-crf', crf])
+            cmd.extend(['-preset', 'ultrafast'])
+            if af_filter:
+                cmd.extend(['-filter_complex', af_filter, '-map', '0:v', '-map', '[a]', '-c:a', acodec])
+            elif use_source_audio:
+                cmd.extend(['-c:a', acodec])
+            else:
+                cmd.extend(['-an'])
+            cmd.extend(['-y', output_path])
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        except subprocess.TimeoutExpired:
+            raise HTTPException(400, "Export timed out after 5 minutes. Try a shorter clip or lower resolution.")
         print(f"Export: ffmpeg exit={result.returncode} output_size={os.path.getsize(output_path) if os.path.exists(output_path) else 0}")
         if result.returncode != 0:
             print(f"EXPORT FFMPEG STDERR:\n{result.stderr[-2000:]}")
