@@ -2346,11 +2346,15 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         srt_content = (req.srt_content or "").strip()
         subtitle_text = (req.subtitle_text or "").strip()
         if srt_content:
-            srt_file = tempfile.NamedTemporaryFile(mode="w", suffix=".srt", delete=False, encoding="utf-8")
+            srt_file = tempfile.NamedTemporaryFile(
+                mode="w", suffix=".srt", delete=False, encoding="utf-8"
+            )
             srt_file.write(srt_content)
             srt_file.close()
             temp_files.append(srt_file.name)
-            srt_path_ff = srt_file.name.replace("\\", "/")
+            print(f"Export: SRT file created: {srt_file.name} ({os.path.getsize(srt_file.name)} bytes)")
+            print(f"Export: SRT preview: {srt_content[:100]}")
+            srt_path_ff = os.path.abspath(srt_file.name).replace('\\', '/')
             align_map = {"top": "8", "middle": "5", "bottom": "2"}
             alignment = align_map.get(req.subtitle_position, "2")
             fs = req.font_size
@@ -2371,7 +2375,14 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                 f"Alignment={alignment},"
                 f"MarginV=60"
             )
-            vf = f"{vf},subtitles={srt_path_ff}:force_style='{force_style}'"
+            if not os.path.exists(srt_file.name):
+                print(f"ERROR: SRT file not found: {srt_file.name}")
+            else:
+                vf += (
+                    f",subtitles='{srt_path_ff}'"
+                    f":force_style='{force_style}'"
+                )
+                print(f"Export: subtitles filter added: {srt_path_ff}")
         elif req.subtitle_style != "none" and subtitle_text:
             fs = req.font_size
             style_configs = {
@@ -2479,7 +2490,11 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                 cmd = [
                     'ffmpeg', '-ss', str(trim_s), '-i', source_path,
                     '-t', str(trim_d),
-                    '-c', 'copy',
+                    '-c:v', 'copy',
+                    '-c:a', 'aac',
+                    '-b:a', '192k',
+                    '-map', '0:v:0',
+                    '-map', '0:a:0',
                     '-movflags', '+faststart',
                     '-y', output_path
                 ]
@@ -2516,10 +2531,30 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             crf = crf_map.get(req.resolution, '28')
             cmd.extend(['-crf', crf])
             cmd.extend(['-preset', 'ultrafast'])
+            # Detect audio in source
+            probe_audio = subprocess.run([
+                'ffprobe', '-v', 'quiet',
+                '-select_streams', 'a:0',
+                '-show_entries', 'stream=codec_type',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                source_path
+            ], capture_output=True, text=True, timeout=10)
+            source_has_audio = bool(probe_audio.stdout.strip())
             if af_filter:
-                cmd.extend(['-filter_complex', af_filter, '-map', '0:v', '-map', '[a]', '-c:a', acodec])
-            elif use_source_audio:
-                cmd.extend(['-c:a', acodec])
+                cmd.extend([
+                    '-filter_complex', af_filter,
+                    '-map', '0:v:0',
+                    '-map', '[a]',
+                    '-c:a', acodec,
+                    '-b:a', '192k',
+                ])
+            elif source_has_audio:
+                cmd.extend([
+                    '-map', '0:v:0',
+                    '-map', '0:a:0',
+                    '-c:a', acodec,
+                    '-b:a', '192k',
+                ])
             else:
                 cmd.extend(['-an'])
             cmd.extend(['-y', output_path])
