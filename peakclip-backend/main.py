@@ -50,7 +50,6 @@ def get_fresh_cookie_path() -> str | None:
 
     cookies_b64 = os.environ.get('YOUTUBE_COOKIES_B64', '').strip()
     if not cookies_b64:
-        print("WARNING: YOUTUBE_COOKIES_B64 not set or empty")
         return None
 
     try:
@@ -1005,58 +1004,9 @@ async def check_js_runtime():
 
 
 async def test_ytdlp_on_startup():
-    """Probar yt-dlp al iniciar para diagnosticar el problema."""
-    import yt_dlp
-    test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    """Check JS runtime + proxy config at startup."""
     proxy = os.environ.get('YOUTUBE_PROXY', '')
-    cookie_path = os.path.join(tempfile.gettempdir(), "youtube_cookies.txt")
-
-    await check_js_runtime()
-
-    print("=== yt-dlp STARTUP TEST ===")
-    print(f"Proxy: {proxy[:40] if proxy else 'NONE'}")
-    print(f"Cookies: {os.path.exists(cookie_path)}")
-
-    clients = [s['player_client'][0] for s in YTDLP_STRATEGIES]
-    for client in clients:
-        try:
-            opts = {
-                'quiet': True,
-                'no_warnings': True,
-                'geo_bypass': True,
-                'geo_bypass_country': 'US',
-                'proxy': proxy or None,
-                'cookiefile': cookie_path if os.path.exists(cookie_path) else None,
-                'extractor_args': {'youtube': {'player_client': [client], 'skip': ['dash', 'hls']}},
-                'skip_download': True,
-                'format': 'best',
-                'logger': YTDLPLogger(),
-            }
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(test_url, download=False)
-                print(f"TEST {client} CON proxy: OK - {info.get('title', '?')[:40]}")
-        except Exception as e:
-            print(f"TEST {client} CON proxy: FAIL - {str(e)[:120]}")
-
-    # Test web client without proxy
-    try:
-        opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'geo_bypass': True,
-            'geo_bypass_country': 'US',
-            'extractor_args': {'youtube': {'player_client': ['web'], 'skip': ['dash', 'hls']}},
-            'skip_download': True,
-            'format': 'best',
-            'logger': YTDLPLogger(),
-        }
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(test_url, download=False)
-            print(f"TEST web SIN proxy: OK - {info.get('title', '?')[:40]}")
-    except Exception as e:
-        print(f"TEST web SIN proxy: FAIL - {str(e)[:120]}")
-
-    print("=== END yt-dlp TEST ===")
+    print(f"YouTube proxy configured: {proxy[:40] if proxy else 'NONE'}")
 
 
 
