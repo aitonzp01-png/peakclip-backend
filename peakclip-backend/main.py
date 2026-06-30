@@ -2293,7 +2293,7 @@ def build_dynamic_crop_filter(positions, src_width, src_height,
     for ts, cx, cy in positions:
         crop_x = int(cx * src_width - crop_w / 2)
         crop_x = max(0, min(crop_x, src_width - crop_w))
-        sendcmd_lines.append(f"{ts} crop x {crop_x};")
+        sendcmd_lines.append(f"{ts} [cropfilter] x '{crop_x}';")
 
     return crop_w, crop_h, sendcmd_lines
 
@@ -2314,6 +2314,8 @@ def apply_face_tracking_crop(input_path, output_path,
     )
     sendcmd_file.write('\n'.join(sendcmd_lines))
     sendcmd_file.close()
+    print(f"Face tracking: sendcmd file with {len(sendcmd_lines)} commands")
+    print(f"Face tracking: first 3 lines: {sendcmd_lines[:3]}")
 
     initial_x = int(src_w / 2 - crop_w / 2)
 
@@ -2321,7 +2323,7 @@ def apply_face_tracking_crop(input_path, output_path,
         'ffmpeg', '-i', input_path,
         '-vf',
         f"sendcmd=f='{sendcmd_file.name}',"
-        f"crop={crop_w}:{crop_h}:{initial_x}:0,"
+        f"crop@cropfilter={crop_w}:{crop_h}:{initial_x}:0,"
         f"scale={target_w}:{target_h}",
         '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
         '-c:a', 'copy',
@@ -2611,7 +2613,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             for ts, cx, cy in req.face_data:
                 crop_x = int(cx * src_w - crop_w / 2)
                 crop_x = max(0, min(crop_x, src_w - crop_w))
-                sendcmd_lines.append(f"{ts} crop x {crop_x};")
+                sendcmd_lines.append(f"{ts} [cropfilter] x '{crop_x}';")
 
             sendcmd_file = tempfile.NamedTemporaryFile(
                 mode='w', suffix='.txt', delete=False
@@ -2619,12 +2621,14 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             sendcmd_file.write('\n'.join(sendcmd_lines))
             sendcmd_file.close()
             temp_files.append(sendcmd_file.name)
+            print(f"Export face tracking: sendcmd file with {len(sendcmd_lines)} commands")
+            print(f"Export face tracking: first 3 lines: {sendcmd_lines[:3]}")
 
             initial_x = int(src_w / 2 - crop_w / 2)
             sendcmd_path = sendcmd_file.name.replace('\\', '/')
             vf = (
                 f"sendcmd=f='{sendcmd_path}',"
-                f"crop={crop_w}:{crop_h}:{initial_x}:0,"
+                f"crop@cropfilter={crop_w}:{crop_h}:{initial_x}:0,"
                 f"scale={target_res},"
                 f"setsar=1,"
                 f"format=yuv420p"
