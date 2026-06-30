@@ -2487,17 +2487,27 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             source_dims = probe_res.stdout.strip()
             target_dims = target_res.replace(':', ',')
             if source_dims == target_dims:
-                cmd = [
-                    'ffmpeg', '-ss', str(trim_s), '-i', source_path,
-                    '-t', str(trim_d),
-                    '-c:v', 'copy',
-                    '-c:a', 'aac',
-                    '-b:a', '192k',
-                    '-map', '0:v:0',
-                    '-map', '0:a:0',
-                    '-movflags', '+faststart',
-                    '-y', output_path
-                ]
+                if has_audio_stream:
+                    cmd = [
+                        'ffmpeg', '-ss', str(trim_s), '-i', source_path,
+                        '-t', str(trim_d),
+                        '-c:v', 'copy',
+                        '-c:a', 'aac', '-b:a', '192k',
+                        '-map', '0:v:0', '-map', '0:a:0',
+                        '-movflags', '+faststart', '-y', output_path
+                    ]
+                else:
+                    cmd = [
+                        'ffmpeg',
+                        '-ss', str(trim_s), '-i', source_path,
+                        '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
+                        '-t', str(trim_d),
+                        '-c:v', 'copy',
+                        '-c:a', 'aac', '-b:a', '128k',
+                        '-map', '0:v:0', '-map', '1:a:0',
+                        '-shortest',
+                        '-movflags', '+faststart', '-y', output_path
+                    ]
                 print("Export: using stream copy (no re-encode)")
             else:
                 can_copy = False

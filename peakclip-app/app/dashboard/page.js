@@ -29,6 +29,7 @@ export default function Dashboard() {
   const [settingsStatus, setSettingsStatus] = useState('')
   const [saving, setSaving] = useState(false)
   const [showSidebarMenu, setShowSidebarMenu] = useState(false)
+  const [downloadingId, setDownloadingId] = useState(null)
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -338,25 +339,51 @@ export default function Dashboard() {
   const closeSidebar = () => setSidebarOpen(false)
 
   const handleDownload = async (clip) => {
-    const filename = `${clip.title?.slice(0, 40) || 'clip'}.mp4`
+    setDownloadingId(clip.id)
     try {
-      const response = await fetch(`${clip.video_url}?download=${encodeURIComponent(filename)}`, { mode: 'cors' })
-      if (!response.ok) throw new Error('Download failed')
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 60000)
-    } catch {
-      const a = document.createElement('a')
-      a.href = `${clip.video_url}?download=${encodeURIComponent(filename)}`
-      a.target = '_blank'
-      a.rel = 'noopener noreferrer'
-      a.click()
+      const { data: { session } } = await getSupabaseClient().auth.getSession()
+      const token = session?.access_token
+      const response = await fetch(`${BACKEND_URL}/export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          clip_id: clip.id,
+          video_url: clip.video_url,
+          srt_content: clip.subtitles_srt || '',
+          trim_start: 0,
+          trim_end: 100,
+          subtitle_style: 'bold-yellow',
+          subtitle_position: 'bottom',
+          font_size: 18,
+          watermark_text: '',
+          music_track: 'none',
+          music_volume: 30,
+          include_audio: true,
+          filter_style: 'none',
+          resolution: '720p',
+          format: 'mp4',
+          fps: 30,
+        }),
+      })
+      const data = await response.json()
+      if (data.success && data.video_url) {
+        const filename = `${clip.title?.slice(0, 40) || 'clip'}.mp4`
+        const a = document.createElement('a')
+        a.href = data.video_url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      } else {
+        alert('Download failed: ' + (data.detail || 'Unknown error'))
+      }
+    } catch (err) {
+      alert('Download failed: ' + err.message)
+    } finally {
+      setDownloadingId(null)
     }
   }
 
@@ -414,8 +441,8 @@ export default function Dashboard() {
                     <a href={clip.video_url} target="_blank" rel="noopener noreferrer" className="dash-clip-action-btn secondary">
                       View
                     </a>
-                    <button onClick={() => handleDownload(clip)} className="dash-clip-action-btn secondary">
-                      Download
+                    <button onClick={() => handleDownload(clip)} disabled={downloadingId === clip.id} className="dash-clip-action-btn secondary">
+                      {downloadingId === clip.id ? 'Preparing...' : 'Download'}
                     </button>
                   </>
                 )}
