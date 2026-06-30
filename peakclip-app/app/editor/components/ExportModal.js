@@ -56,7 +56,7 @@ export default function ExportModal() {
           subtitle_text: '',
           subtitle_style: store.subtitleStyle || 'bold-yellow',
           subtitle_position: store.subtitlePosition || 'bottom',
-          font_size: store.fontSize || 14,
+          font_size: store.fontSize || 20,
           watermark_text: store.watermark || '',
           watermark_position: store.watermarkPosition || 'top-right',
           music_track: store.music || 'none',

@@ -326,22 +326,22 @@ function SubtitleOverlay({ subtitles, currentTime, subtitlePosition, selectedSub
       position: 'absolute', left: '50%',
       width: '90%', textAlign: 'center', pointerEvents: 'none', zIndex: 5,
       ...(subtitlePosition === 'bottom'
-        ? { bottom: '24px', transform: 'translateX(-50%)' }
+        ? { bottom: '8%', transform: 'translateX(-50%)' }
         : subtitlePosition === 'middle'
           ? { top: '50%', transform: 'translateX(-50%) translateY(-50%)' }
-          : { top: '24px', transform: 'translateX(-50%)' }),
+          : { top: '8%', transform: 'translateX(-50%)' }),
       fontSize: `${Math.round((active.style?.fontSize || fontSize) * (scale || 1))}px`,
-      fontWeight: '800',
-      fontFamily: '"Arial Black", Arial, sans-serif',
-      letterSpacing: '0.3px',
-      lineHeight: '1.3',
+      fontWeight: '500',
+      fontFamily: '"Helvetica Neue", Arial, sans-serif',
+      letterSpacing: '0.2px',
+      lineHeight: 1.35,
       maxWidth: '85%',
       whiteSpace: 'pre-wrap',
       ...selectedSubStyle,
       color: active.style?.color || selectedSubStyle.color,
       backgroundColor: 'transparent',
       background: 'none',
-      textShadow: selectedSubStyle.textShadow || '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.5)',
+      textShadow: '0 1px 3px rgba(0,0,0,0.8), 0 2px 8px rgba(0,0,0,0.5)',
     }}>
       {active.text}
     </div>

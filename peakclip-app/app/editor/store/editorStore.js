@@ -23,7 +23,7 @@ const useEditorStore = create((set, get) => ({
   selectedSubtitleId: null,
   subtitleStyle: 'white-outline',
   subtitlePosition: 'bottom',
-  fontSize: 14,
+  fontSize: 20,
   watermark: '',
   watermarkPosition: 'top-right',
   music: 'none',
@@ -308,7 +308,7 @@ const useEditorStore = create((set, get) => ({
     currentTime: 0, duration: 0, videoError: null, videoLoading: true, videoLoaded: false,
     trimStart: 0, trimEnd: 100,
     subtitles: [], selectedSubtitleId: null, subtitleStyle: 'white-outline',
-    subtitlePosition: 'bottom', fontSize: 14, watermark: '',
+    subtitlePosition: 'bottom', fontSize: 20, watermark: '',
     watermarkPosition: 'top-right', music: 'none', musicVolume: 30, includeAudio: false,
     activeFilter: 'none', selectedTransition: 'fade', activeTool: 'cursor',
     tracks: [
