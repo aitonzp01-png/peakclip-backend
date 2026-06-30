@@ -150,6 +150,7 @@ export default function EditorTopBar({ videoRef }) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
         {/* Aspect ratio selector */}
+        {aspectRatios.length > 1 && (
         <div style={{ display: 'flex', gap: '4px', background: bgSecondary, borderRadius: '8px', padding: '3px', border: `1px solid ${borderSoft}` }}>
           {aspectRatios.map(a => (
             <button key={a.id} onClick={() => setAspectRatio(a.id)}
@@ -166,6 +167,7 @@ export default function EditorTopBar({ videoRef }) {
             </button>
           ))}
         </div>
+        )}
 
         {/* Undo/Redo */}
         <button style={{ background: 'none', border: 'none', color: textDim, cursor: 'pointer', padding: '4px', display: 'flex', borderRadius: '6px' }}

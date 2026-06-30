@@ -58,8 +58,6 @@ export const transitions = [
 
 export const aspectRatios = [
   { id: '9:16', label: '9:16', icon: 'mobile', desc: 'TikTok / Reels / Shorts' },
-  { id: '16:9', label: '16:9', icon: 'monitor', desc: 'YouTube / Desktop' },
-  { id: '1:1', label: '1:1', icon: 'camera', desc: 'Instagram Square' },
 ]
 
 export const resolutions = [
