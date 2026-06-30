@@ -2594,12 +2594,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         if not public_url:
             raise HTTPException(status_code=400, detail="Export failed: could not upload to storage")
 
-        # Update clip record
-        supabase.table("clips").update({
-            "video_url": public_url,
-            "status": "done"
-        }).eq("id", req.clip_id).eq("user_id", user_id).execute()
-
+        # Do NOT update the clip's video_url — keep the original (no subs) intact for re-editing
         return {
             "success": True,
             "video_url": public_url,
