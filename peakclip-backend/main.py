@@ -2330,6 +2330,7 @@ def apply_face_tracking_crop(input_path, output_path,
         '-y', output_path
     ]
 
+    print(f"Face tracking ffmpeg cmd: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, timeout=300)
 
     try:
@@ -2337,7 +2338,13 @@ def apply_face_tracking_crop(input_path, output_path,
     except Exception:
         pass
 
-    return result.returncode == 0
+    if result.returncode != 0:
+        stderr_text = result.stderr.decode('utf-8', errors='replace')
+        print(f"Face tracking ffmpeg FAILED (exit={result.returncode}):")
+        print(stderr_text[-2000:])
+        return False, stderr_text[-500:]
+
+    return True, None
 
 
 class AnalyzeFacesResponse(BaseModel):
@@ -2415,10 +2422,10 @@ async def apply_face_tracking_endpoint(
 
     try:
         print(f"Face tracking: processing {source_path}")
-        success = apply_face_tracking_crop(source_path, output_path)
+        success, error_msg = apply_face_tracking_crop(source_path, output_path)
 
         if not success or not os.path.exists(output_path):
-            raise HTTPException(400, "Face tracking processing failed")
+            raise HTTPException(400, f"Face tracking processing failed: {error_msg or 'unknown error'}")
 
         if not verify_video_valid(output_path):
             raise HTTPException(400, "Face tracking produced invalid video")
