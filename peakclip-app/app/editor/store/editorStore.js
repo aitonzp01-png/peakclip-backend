@@ -21,9 +21,9 @@ const useEditorStore = create((set, get) => ({
   trimEnd: 100,
   subtitles: [],           // [{ id, start, end, text, style? }]
   selectedSubtitleId: null,
-  subtitleStyle: 'bold-yellow',
+  subtitleStyle: 'white-outline',
   subtitlePosition: 'bottom',
-  fontSize: 14,
+  fontSize: 22,
   watermark: '',
   watermarkPosition: 'top-right',
   music: 'none',
@@ -307,8 +307,8 @@ const useEditorStore = create((set, get) => ({
     clip: null, clipId: null, isPlaying: false, playheadPos: 0,
     currentTime: 0, duration: 0, videoError: null, videoLoading: true, videoLoaded: false,
     trimStart: 0, trimEnd: 100,
-    subtitles: [], selectedSubtitleId: null, subtitleStyle: 'bold-yellow',
-    subtitlePosition: 'bottom', fontSize: 14, watermark: '',
+    subtitles: [], selectedSubtitleId: null, subtitleStyle: 'white-outline',
+    subtitlePosition: 'bottom', fontSize: 22, watermark: '',
     watermarkPosition: 'top-right', music: 'none', musicVolume: 30, includeAudio: false,
     activeFilter: 'none', selectedTransition: 'fade', activeTool: 'cursor',
     tracks: [

@@ -330,12 +330,17 @@ function SubtitleOverlay({ subtitles, currentTime, subtitlePosition, selectedSub
         : subtitlePosition === 'middle'
           ? { top: '50%', transform: 'translateX(-50%) translateY(-50%)' }
           : { top: '24px', transform: 'translateX(-50%)' }),
-      ...selectedSubStyle,
       fontSize: `${Math.round((active.style?.fontSize || fontSize) * (scale || 1))}px`,
+      fontWeight: '800',
+      fontFamily: '"Arial Black", Arial, sans-serif',
+      letterSpacing: '0.3px',
       lineHeight: '1.3',
-      textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+      maxWidth: '85%',
+      whiteSpace: 'pre-wrap',
+      ...selectedSubStyle,
       color: active.style?.color || selectedSubStyle.color,
-      backgroundColor: active.style?.background || selectedSubStyle.backgroundColor,
+      backgroundColor: 'transparent',
+      textShadow: selectedSubStyle.textShadow || '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.5)',
     }}>
       {active.text}
     </div>

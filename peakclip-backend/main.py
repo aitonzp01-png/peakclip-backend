@@ -1715,7 +1715,7 @@ def burn_subtitles_onto_video(input_path: str, srt_path: str, output_path: str, 
         font_size = max(16, min(34, height // 70))
         margin_v = max(8, height // 100)
         print(f"Subtitle burn: video height={height}, font_size={font_size}, margin_v={margin_v}")
-        force_style = f"Fontname=DejaVu Sans,Fontsize={font_size},PrimaryColour=&H00FFFFFF,BackColour=&HCC000000,Outline=2,Bold=1,Alignment=2,MarginV={margin_v}"
+        force_style = f"Fontname=DejaVu Sans,Fontsize={font_size},PrimaryColour=&H00FFFFFF,BorderStyle=1,Outline=3,Shadow=0.5,Bold=1,Alignment=2,MarginV={margin_v}"
 
     styles = [
         f"subtitles={srt_path_ff}:force_style='{force_style}'",
@@ -2370,8 +2370,10 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                 f"Fontname=DejaVu Sans,"
                 f"Fontsize={fs},"
                 f"PrimaryColour={primary},"
-                f"BackColour=&H80000000,"
-                f"Outline=2,Bold=1,"
+                f"BorderStyle=1,"
+                f"Outline=3,"
+                f"Shadow=0.5,"
+                f"Bold=1,"
                 f"Alignment={alignment},"
                 f"MarginV=60"
             )
@@ -2677,8 +2679,9 @@ async def burn_subtitles_endpoint(style: SubtitleStyle, user: dict = Depends(get
             f"Fontname={style.font_name},"
             f"Fontsize={style.font_size},"
             f"PrimaryColour={primary_color},"
-            f"BackColour={back_color},"
+            f"BorderStyle=1,"
             f"Outline={style.outline},"
+            f"Shadow=0.5,"
             f"Bold={1 if style.bold else 0},"
             f"Alignment={alignment},"
             f"MarginV={margin_v}"
