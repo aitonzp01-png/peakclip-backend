@@ -1431,6 +1431,11 @@ class AnalyzeFacesRequest(BaseModel):
     video_url: str
 
 
+class FaceTrackRequest(BaseModel):
+    clip_id: str
+    video_url: str
+
+
 class SubtitleStyle(BaseModel):
     clip_id: str
     video_url: str
@@ -2364,6 +2369,83 @@ async def analyze_faces(req: AnalyzeFacesRequest, user: dict = Depends(get_curre
         raise HTTPException(status_code=500, detail=f"Face analysis failed: {str(e)[:200]}")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@app.post("/apply-face-tracking")
+async def apply_face_tracking_endpoint(
+    req: FaceTrackRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Apply face tracking crop to an existing clip. Uploads as NEW file, never overwrites original."""
+    await check_rate_limit(f"facetrack:{user['sub']}")
+    user_id = user["sub"]
+    job_id = str(uuid.uuid4())
+
+    # Verify clip belongs to user
+    clip_check = supabase.table("clips").select("id").eq("id", req.clip_id).eq("user_id", user_id).execute()
+    if not clip_check.data:
+        raise HTTPException(404, "Clip not found")
+
+    # Download source video
+    source_path = f"downloads/{job_id}_facetrack_source.mp4"
+    try:
+        print(f"Face tracking: downloading source from {req.video_url[:80]}...")
+        with httpx.stream("GET", req.video_url, timeout=120, follow_redirects=True) as r:
+            if r.status_code != 200:
+                raise HTTPException(400, f"Could not download source video (status {r.status_code})")
+            with open(source_path, "wb") as f:
+                for chunk in r.iter_bytes(chunk_size=1024*1024):
+                    f.write(chunk)
+        size = os.path.getsize(source_path)
+        print(f"Face tracking: downloaded {size} bytes")
+    except Exception as e:
+        if os.path.exists(source_path):
+            try: os.remove(source_path)
+            except Exception: pass
+        raise HTTPException(400, f"Download failed: {str(e)[:200]}")
+
+    if not os.path.exists(source_path) or os.path.getsize(source_path) < 1024:
+        try: os.remove(source_path)
+        except Exception: pass
+        raise HTTPException(400, "Downloaded video is invalid (too small)")
+
+    output_path = f"outputs/{job_id}_facetrack.mp4"
+
+    try:
+        print(f"Face tracking: processing {source_path}")
+        success = apply_face_tracking_crop(source_path, output_path)
+
+        if not success or not os.path.exists(output_path):
+            raise HTTPException(400, "Face tracking processing failed")
+
+        if not verify_video_valid(output_path):
+            raise HTTPException(400, "Face tracking produced invalid video")
+
+        # Upload as NEW file — different path, never overwrite original
+        storage_path = f"facetrack/{job_id}_facetrack.mp4"
+        public_url = upload_to_storage(
+            output_path, "clips", storage_path, "video/mp4"
+        )
+
+        if not public_url:
+            raise HTTPException(400, "Could not upload result to storage")
+
+        # Return URL only — NO update to clips table
+        return {
+            "success": True,
+            "video_url": public_url,
+            "message": "Face tracking applied successfully"
+        }
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(500, f"Face tracking failed: {str(e)[:200]}")
+    finally:
+        for f in [source_path, output_path]:
+            try:
+                if os.path.exists(f): os.remove(f)
+            except Exception:
+                pass
 
 
 @app.post("/process")

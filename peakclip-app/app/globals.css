@@ -2437,6 +2437,17 @@ body {
   color: var(--peak);
 }
 
+.dash-clip-action-btn.accent {
+  background: var(--peak-dim);
+  color: var(--peak);
+  border: 1px solid var(--peak-border);
+}
+
+.dash-clip-action-btn.accent:hover {
+  background: var(--peak);
+  color: #000;
+}
+
 .dash-header {
   display: flex;
   justify-content: space-between;

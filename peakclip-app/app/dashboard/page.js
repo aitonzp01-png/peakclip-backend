@@ -30,6 +30,9 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false)
   const [showSidebarMenu, setShowSidebarMenu] = useState(false)
   const [downloadingId, setDownloadingId] = useState(null)
+  const [facetrackingId, setFacetrackingId] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [previewClipTitle, setPreviewClipTitle] = useState('')
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -387,6 +390,37 @@ export default function Dashboard() {
     }
   }
 
+  const handleApplyFaceTracking = async (clip) => {
+    setFacetrackingId(clip.id)
+    setPreviewUrl(null)
+    setPreviewClipTitle(clip.title || 'Untitled')
+    try {
+      const { data: { session } } = await getSupabaseClient().auth.getSession()
+      const token = session?.access_token
+      const response = await fetch(`${BACKEND_URL}/apply-face-tracking`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          clip_id: clip.id,
+          video_url: clip.video_url,
+        }),
+      })
+      const data = await response.json()
+      if (data.success && data.video_url) {
+        setPreviewUrl(data.video_url)
+      } else {
+        alert('Smart Crop failed: ' + (data.detail || 'Unknown error'))
+      }
+    } catch (err) {
+      alert('Smart Crop failed: ' + err.message)
+    } finally {
+      setFacetrackingId(null)
+    }
+  }
+
   function renderClipCard(clip) {
     return (
       <motion.div
@@ -441,6 +475,9 @@ export default function Dashboard() {
                     <a href={clip.video_url} target="_blank" rel="noopener noreferrer" className="dash-clip-action-btn secondary">
                       View
                     </a>
+                    <button onClick={() => handleApplyFaceTracking(clip)} disabled={facetrackingId === clip.id} className="dash-clip-action-btn accent">
+                      {facetrackingId === clip.id ? 'Cropping...' : 'Smart Crop'}
+                    </button>
                     <button onClick={() => handleDownload(clip)} disabled={downloadingId === clip.id} className="dash-clip-action-btn secondary">
                       {downloadingId === clip.id ? 'Preparing...' : 'Download'}
                     </button>
@@ -1111,6 +1148,75 @@ export default function Dashboard() {
         </div>
       </nav>
     </div>
+
+    {/* Smart Crop Preview Modal */}
+    {previewUrl && (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.8)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        backdropFilter: 'blur(8px)',
+      }} onClick={() => { setPreviewUrl(null); setPreviewClipTitle('') }}>
+        <div onClick={e => e.stopPropagation()} style={{
+          background: surface, border: `1px solid ${borderSoft}`,
+          borderRadius: '16px', width: '420px', maxWidth: '95vw',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '20px', borderBottom: `1px solid ${borderSoft}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div>
+              <div style={{ fontSize: '16px', fontWeight: '700', fontFamily: fonts.display, letterSpacing: '1px' }}>
+                Smart Crop Preview
+              </div>
+              <div style={{ fontSize: '11px', color: textDim, marginTop: '2px' }}>
+                {previewClipTitle}
+              </div>
+            </div>
+            <button onClick={() => { setPreviewUrl(null); setPreviewClipTitle('') }}
+              style={{
+                width: '32px', height: '32px', borderRadius: '8px',
+                border: `1px solid ${borderSoft}`, background: 'transparent',
+                color: textDim, cursor: 'pointer', fontSize: '16px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div style={{ padding: '20px' }}>
+            <video src={previewUrl} controls style={{
+              width: '100%', borderRadius: '10px',
+              maxHeight: '60vh', background: '#000',
+            }} />
+          </div>
+          <div style={{
+            padding: '16px 20px', borderTop: `1px solid ${borderSoft}`,
+            display: 'flex', gap: '10px', justifyContent: 'flex-end',
+          }}>
+            <button onClick={() => { setPreviewUrl(null); setPreviewClipTitle('') }}
+              style={{
+                padding: '10px 20px', borderRadius: '8px', border: `1px solid ${borderSoft}`,
+                background: 'transparent', color: textSecondary, cursor: 'pointer',
+                fontSize: '12px', fontFamily: fonts.body,
+              }}>
+              Discard
+            </button>
+            <a href={previewUrl} target="_blank" rel="noopener noreferrer"
+              onClick={() => { setPreviewUrl(null); setPreviewClipTitle('') }}
+              style={{
+                padding: '10px 24px', borderRadius: '8px', border: 'none',
+                background: brandGrad, color: '#000', fontWeight: '700',
+                cursor: 'pointer', fontSize: '12px', fontFamily: fonts.body,
+                textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px',
+              }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download
+            </a>
+          </div>
+        </div>
+      </div>
+    )}
     </ErrorBoundary>
   )
 }
