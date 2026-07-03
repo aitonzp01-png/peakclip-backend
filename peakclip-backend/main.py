@@ -498,10 +498,19 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
 
     user_result = supabase.table("users").select("credits,plan").eq("id", user_id).execute()
     if not user_result.data:
-        raise HTTPException(status_code=404, detail="User not found")
-    user_data = user_result.data[0]
-    if user_data["plan"] != "pro" and user_data["credits"] <= 0:
-        raise HTTPException(status_code=402, detail="No credits remaining")
+        supabase.table("users").insert({"id": user_id, "credits": 3, "plan": "free"}).execute()
+        supabase.table("credit_transactions").insert({"user_id": user_id, "amount": 3, "type": "free_grant"}).execute()
+        user_data = {"plan": "free", "credits": 3}
+    else:
+        user_data = user_result.data[0]
+        if user_data["plan"] != "pro" and user_data["credits"] <= 0:
+            tx_result = supabase.table("credit_transactions").select("id").eq("user_id", user_id).eq("type", "free_grant").limit(1).execute()
+            if not tx_result.data:
+                supabase.table("users").update({"credits": 3}).eq("id", user_id).execute()
+                supabase.table("credit_transactions").insert({"user_id": user_id, "amount": 3, "type": "free_grant"}).execute()
+                user_data["credits"] = 3
+            else:
+                raise HTTPException(status_code=402, detail="No credits remaining")
 
     if user_data["plan"] != "pro":
         dedent_credits(user_id)
@@ -1112,10 +1121,19 @@ async def upload_video(
 
     user_result = supabase.table("users").select("credits,plan").eq("id", user_id).execute()
     if not user_result.data:
-        raise HTTPException(status_code=404, detail="User not found")
-    user_data = user_result.data[0]
-    if user_data["plan"] != "pro" and user_data["credits"] <= 0:
-        raise HTTPException(status_code=402, detail="No credits remaining")
+        supabase.table("users").insert({"id": user_id, "credits": 3, "plan": "free"}).execute()
+        supabase.table("credit_transactions").insert({"user_id": user_id, "amount": 3, "type": "free_grant"}).execute()
+        user_data = {"plan": "free", "credits": 3}
+    else:
+        user_data = user_result.data[0]
+        if user_data["plan"] != "pro" and user_data["credits"] <= 0:
+            tx_result = supabase.table("credit_transactions").select("id").eq("user_id", user_id).eq("type", "free_grant").limit(1).execute()
+            if not tx_result.data:
+                supabase.table("users").update({"credits": 3}).eq("id", user_id).execute()
+                supabase.table("credit_transactions").insert({"user_id": user_id, "amount": 3, "type": "free_grant"}).execute()
+                user_data["credits"] = 3
+            else:
+                raise HTTPException(status_code=402, detail="No credits remaining")
 
     if user_data["plan"] != "pro":
         dedent_credits(user_id)
