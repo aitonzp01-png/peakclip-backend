@@ -242,6 +242,19 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(openai.RateLimitError)
+async def openai_rate_limit_handler(request: Request, exc: openai.RateLimitError):
+    origin = request.headers.get("origin", "")
+    headers = {}
+    if origin in ALLOWED_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+    print(f"[ERROR] OpenAI quota exceeded: {exc}")
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "La clave de OpenAI se qued\u00f3 sin cr\u00e9dito. Av\u00edsale al admin para que la recargue."},
+        headers=headers,
+    )
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     origin = request.headers.get("origin", "")
