@@ -1,6 +1,5 @@
 from dotenv import load_dotenv
 load_dotenv()
-import traceback
 from fastapi import FastAPI, HTTPException, Depends, Header, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -256,6 +255,14 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": f"Internal server error: {type(exc).__name__}: {str(exc)[:200]}"},
         headers=headers,
     )
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    elapsed = time.time() - start
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {request.method} {request.url.path} -> {response.status_code} ({elapsed:.2f}s)")
+    return response
 
 
 os.makedirs("downloads", exist_ok=True)
