@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
+import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/editor-tokens'
 import useEditorStore from '../store/editorStore'
 import { getSupabaseClient } from '../../../lib/supabase'
 import icons from '../../../lib/icons'
@@ -38,7 +38,7 @@ const aiTools = [
   },
   {
     id: 'generate-shorts', title: 'Generate Shorts', desc: 'One-click viral short creation',
-    color: '#D9B44A', icon: icons.generateShorts,
+    color: '#c4ff3d', icon: icons.generateShorts,
   },
   {
     id: 'thumbnail-gen', title: 'Thumbnail Generator', desc: 'AI-generated clickable thumbnails',
@@ -189,7 +189,7 @@ export default function AIPanel() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ color: tool.color, display: 'flex', width: '24px', height: '24px', alignItems: 'center', justifyContent: 'center' }}>
                 {processing === tool.id ? (
-                  <span className="ai-spinner" style={{ display: 'inline-block', width: '16px', height: '16px', border: '2px solid rgba(217,180,74,0.2)', borderTopColor: brand, borderRadius: '50%' }} />
+                  <span className="ai-spinner" style={{ display: 'inline-block', width: '16px', height: '16px', border: `2px solid ${brandDim}`, borderTopColor: brand, borderRadius: '50%' }} />
                 ) : tool.icon}
               </span>
               <span style={{ fontSize: '12px', fontWeight: '600', color: textPrimary }}>{tool.title}</span>

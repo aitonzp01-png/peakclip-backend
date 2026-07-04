@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { brand, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
+import { brand, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, hoverBg, fonts } from '../../../lib/editor-tokens'
 import { subtitleStyles, musicTracks, filters, transitions } from '../../../lib/utils'
 import { generateSRT } from '../../../lib/subtitles'
 import { saveSubtitles } from '../../../lib/api'
@@ -490,7 +490,7 @@ function TimeInput({ value, onChange }) {
         onChange(m * 60 + s + ms / 1000)
       }}
       style={{
-        flex: 1, background: '#0B0B0B', border: `1px solid ${borderSoft}`,
+        flex: 1, background: bgSecondary, border: `1px solid ${borderSoft}`,
         borderRadius: '4px', color: textDim, fontSize: '10px', padding: '4px 6px',
         fontFamily: fonts.mono,
       }} />

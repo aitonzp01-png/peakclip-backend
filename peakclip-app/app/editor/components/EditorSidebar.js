@@ -1,5 +1,5 @@
 'use client'
-import { brand, brandDim, textPrimary, textSecondary, textDim, borderSoft, fonts } from '../../../lib/tokens'
+import { brand, brandDim, bgSecondary, textPrimary, textSecondary, textDim, borderSoft, hoverBg, fonts } from '../../../lib/editor-tokens'
 import useEditorStore from '../store/editorStore'
 import icons from '../../../lib/icons'
 
@@ -23,7 +23,7 @@ export default function EditorSidebar() {
   return (
     <div className="editor-sidebar" style={{
       width: sidebarExpanded ? '200px' : '64px',
-      background: 'rgba(11,11,11,0.95)', borderRight: `1px solid ${borderSoft}`,
+      background: bgSecondary, borderRight: `1px solid ${borderSoft}`,
       display: 'flex', flexDirection: 'column', flexShrink: 0,
       transition: 'width 0.2s cubic-bezier(0.16,1,0.3,1)',
       overflow: 'hidden', backdropFilter: 'blur(20px)',
@@ -60,7 +60,7 @@ export default function EditorSidebar() {
               position: 'relative',
               minHeight: '42px',
             }}
-            onMouseEnter={e => { if (activeTool !== t.id) { e.currentTarget.style.background = 'rgba(217,180,74,0.08)'; e.currentTarget.style.color = brand; e.currentTarget.style.borderLeftColor = brand } }}
+            onMouseEnter={e => { if (activeTool !== t.id) { e.currentTarget.style.background = brandDim; e.currentTarget.style.color = brand; e.currentTarget.style.borderLeftColor = brand } }}
             onMouseLeave={e => { if (activeTool !== t.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = textDim; e.currentTarget.style.borderLeftColor = 'transparent' } }}>
             <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px' }}>
               {t.icon}

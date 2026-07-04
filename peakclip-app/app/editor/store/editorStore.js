@@ -1,6 +1,6 @@
 'use client'
 import { create } from 'zustand'
-import { parseSRT, segmentsToTrackItems } from '../../../lib/subtitles'
+import { defaultSubtitleStyle } from '../../../lib/utils'
 
 const useEditorStore = create((set, get) => ({
   clip: null,
@@ -19,117 +19,80 @@ const useEditorStore = create((set, get) => ({
 
   trimStart: 0,
   trimEnd: 100,
-  subtitles: [],           // [{ id, start, end, text, style? }]
-  selectedSubtitleId: null,
-  subtitleStyle: 'white-outline',
-  subtitlePosition: 'bottom',
-  fontSize: 20,
-  watermark: '',
-  watermarkPosition: 'top-right',
-  music: 'none',
-  musicVolume: 30,
-  includeAudio: false,
-  activeFilter: 'none',
-  selectedTransition: 'fade',
-  activeTool: 'ai',
-  activeInspectorTab: 'edit',
+  aspectRatio: '9:16',
 
-  tracks: [
-    { id: 'video', label: 'Video', type: 'video', items: [{ id: 'v1', start: 0, end: 100, label: 'Main Clip' }] },
-    { id: 'audio', label: 'Audio', type: 'audio', items: [] },
-    { id: 'text', label: 'Text', type: 'text', items: [] },
-    { id: 'music', label: 'Music', type: 'music', items: [] },
-  ],
-  selectedTrackId: 'video',
-  showKeyframes: false,
+  transcript: [],
+  subtitleStyle: { ...defaultSubtitleStyle },
+  selectedSubtitlePreset: null,
+  subtitleEnabled: true,
+
+  textOverlays: [],
+  selectedTextId: null,
+
+  audioLayers: [],
+  musicTrack: 'none',
+  musicVolume: 30,
+  audioCleanEnabled: false,
+  originalVolume: 100,
+
+  activeTool: 'ai',
+  toolsPanelOpen: false,
+  selectedTransition: 'none',
+  transitionDuration: 0.3,
+  activeFilter: 'none',
+
+  faceTrackingEnabled: false,
+  faceTrackingSmoothness: 50,
+  faceTrackingZoom: 100,
+  showFaceBox: true,
+  modelsLoaded: false,
+  cropX: 0,
+  cropY: 0,
+
+  brandSettings: {
+    primaryColor: '#c4ff3d',
+    secondaryColor: '#f5f5f0',
+    logoUrl: null,
+    logoPosition: 'bottom-right',
+    logoSize: 50,
+    applyToAll: false,
+  },
+
+  exportRes: '1080p',
+  exportFmt: 'MP4',
+  includeSubs: true,
+  showExportModal: false,
   saving: false,
   exportStatus: '',
   exportUrl: '',
-  showExportModal: false,
-  showAIPanel: true,
-  faceTracking: false,
-  faceData: null,
-  sidebarExpanded: false,
-  aspectRatio: '9:16',
+
+  trackTimelineZoom: 1,
+  timelineHidden: false,
+  playheadDragging: false,
+  aiPending: {},
+
+  addClipToTimeline: (clipId) => {
+    set((state) => ({
+      textOverlays: [...state.textOverlays, { id: `broll_${Date.now()}`, text: clipId, x: 50, y: 50, fontSize: 24, color: '#ffffff' }],
+    }))
+  },
+
+  addMediaTrack: (track) => set((state) => ({
+    audioLayers: [...state.audioLayers, { id: Date.now().toString(), ...track }],
+  })),
+
+  applyAIEnhance: (toolId) => {
+    set((state) => ({ aiPending: { ...state.aiPending, [toolId]: true } }))
+    setTimeout(() => {
+      set((state) => ({ aiPending: { ...state.aiPending, [toolId]: false } }))
+    }, 3000)
+  },
+
+  undoStack: [],
+  redoStack: [],
+
   keyboardHint: '',
-
-  // Undo/Redo history
-  _history: [],
-  _historyIndex: -1,
-  _maxHistory: 50,
-
-  _pushHistory: () => {
-    const state = get()
-    const snapshot = {
-      trimStart: state.trimStart,
-      trimEnd: state.trimEnd,
-      subtitles: JSON.parse(JSON.stringify(state.subtitles)),
-      selectedSubtitleId: state.selectedSubtitleId,
-      subtitleStyle: state.subtitleStyle,
-      subtitlePosition: state.subtitlePosition,
-      fontSize: state.fontSize,
-      watermark: state.watermark,
-      watermarkPosition: state.watermarkPosition,
-      music: state.music,
-      musicVolume: state.musicVolume,
-      includeAudio: state.includeAudio,
-      activeFilter: state.activeFilter,
-      selectedTransition: state.selectedTransition,
-      tracks: JSON.parse(JSON.stringify(state.tracks)),
-    }
-    const newHistory = state._history.slice(0, state._historyIndex + 1)
-    newHistory.push(snapshot)
-    if (newHistory.length > state._maxHistory) newHistory.shift()
-    set({ _history: newHistory, _historyIndex: newHistory.length - 1 })
-  },
-
-  undo: () => {
-    const state = get()
-    if (state._historyIndex <= 0) {
-      set({ keyboardHint: 'Nothing to undo' })
-      setTimeout(() => set({ keyboardHint: '' }), 1500)
-      return
-    }
-    const newIndex = state._historyIndex - 1
-    const snap = state._history[newIndex]
-    set({
-      _historyIndex: newIndex,
-      trimStart: snap.trimStart, trimEnd: snap.trimEnd,
-      subtitles: JSON.parse(JSON.stringify(snap.subtitles)),
-      selectedSubtitleId: snap.selectedSubtitleId,
-      subtitleStyle: snap.subtitleStyle,
-      subtitlePosition: snap.subtitlePosition, fontSize: snap.fontSize,
-      watermark: snap.watermark, watermarkPosition: snap.watermarkPosition,
-      music: snap.music, musicVolume: snap.musicVolume,
-      includeAudio: snap.includeAudio,
-      activeFilter: snap.activeFilter, selectedTransition: snap.selectedTransition,
-      tracks: JSON.parse(JSON.stringify(snap.tracks)),
-    })
-  },
-
-  redo: () => {
-    const state = get()
-    if (state._historyIndex >= state._history.length - 1) {
-      set({ keyboardHint: 'Nothing to redo' })
-      setTimeout(() => set({ keyboardHint: '' }), 1500)
-      return
-    }
-    const newIndex = state._historyIndex + 1
-    const snap = state._history[newIndex]
-    set({
-      _historyIndex: newIndex,
-      trimStart: snap.trimStart, trimEnd: snap.trimEnd,
-      subtitles: JSON.parse(JSON.stringify(snap.subtitles)),
-      selectedSubtitleId: snap.selectedSubtitleId,
-      subtitleStyle: snap.subtitleStyle,
-      subtitlePosition: snap.subtitlePosition, fontSize: snap.fontSize,
-      watermark: snap.watermark, watermarkPosition: snap.watermarkPosition,
-      music: snap.music, musicVolume: snap.musicVolume,
-      includeAudio: snap.includeAudio,
-      activeFilter: snap.activeFilter, selectedTransition: snap.selectedTransition,
-      tracks: JSON.parse(JSON.stringify(snap.tracks)),
-    })
-  },
+  loading: true,
 
   setClip: (clip) => set({ clip }),
   setClipId: (clipId) => set({ clipId }),
@@ -137,195 +100,186 @@ const useEditorStore = create((set, get) => ({
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   setPlayheadPos: (playheadPos) => set({ playheadPos }),
   setVolume: (volume) => set({ volume }),
-  setPlaybackSpeed: (playbackSpeed) => set({ playbackSpeed }),
-  setTimelineZoom: (timelineZoom) => set({ timelineZoom }),
-  setCurrentTime: (currentTime) => set({ currentTime }),
-  setDuration: (duration) => set((state) => {
-    const textItems = segmentsToTrackItems(state.subtitles, duration)
-    const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
-    return { duration, tracks }
-  }),
-  setVideoError: (videoError) => set({ videoError, videoLoading: false, videoLoaded: false }),
-  setVideoLoading: (videoLoading) => set({ videoLoading }),
-  setVideoLoaded: (videoLoaded) => set({ videoLoaded, videoLoading: false, videoError: null }),
+  setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
+  setTimelineZoom: (zoom) => set({ timelineZoom: zoom }),
+  setCurrentTime: (time) => set({ currentTime: time }),
+  setDuration: (duration) => set({ duration }),
+  setVideoError: (error) => set({ videoError: error, videoLoading: false, videoLoaded: false }),
+  setVideoLoading: (loading) => set({ videoLoading: loading }),
+  setVideoLoaded: () => set({ videoLoaded: true, videoLoading: false, videoError: null }),
 
-  setTrimStart: (trimStart) => {
-    get()._pushHistory()
-    set({ trimStart })
+  setTrimStart: (s) => set({ trimStart: s }),
+  setTrimEnd: (e) => set({ trimEnd: e }),
+  setAspectRatio: (ratio) => set({ aspectRatio: ratio }),
+
+  setTranscript: (t) => set({ transcript: t }),
+  updateWord: (wordId, updates) => set((state) => ({
+    transcript: state.transcript.map(w => w.id === wordId ? { ...w, ...updates } : w),
+  })),
+  toggleWordDeleted: (wordId) => set((state) => ({
+    transcript: state.transcript.map(w => w.id === wordId ? { ...w, deleted: !w.deleted } : w),
+  })),
+
+  setSubtitleStyle: (style) => set({ subtitleStyle: style }),
+  updateSubtitleStyle: (updates) => set((state) => ({
+    subtitleStyle: { ...state.subtitleStyle, ...updates },
+  })),
+  setSelectedSubtitlePreset: (id) => set({ selectedSubtitlePreset: id }),
+  setSubtitleEnabled: (v) => set({ subtitleEnabled: v }),
+
+  addTextOverlay: (overlay) => set((state) => ({
+    textOverlays: [...state.textOverlays, { id: Date.now().toString(), text: 'Texto', x: 50, y: 50, fontSize: 24, color: '#ffffff', ...overlay }],
+  })),
+  updateTextOverlay: (id, updates) => set((state) => ({
+    textOverlays: state.textOverlays.map(t => t.id === id ? { ...t, ...updates } : t),
+  })),
+  removeTextOverlay: (id) => set((state) => ({
+    textOverlays: state.textOverlays.filter(t => t.id !== id),
+    selectedTextId: state.selectedTextId === id ? null : state.selectedTextId,
+  })),
+  setSelectedTextId: (id) => set({ selectedTextId: id }),
+
+  setMusicTrack: (t) => set({ musicTrack: t }),
+  setMusicVolume: (v) => set({ musicVolume: v }),
+  setAudioCleanEnabled: (v) => set({ audioCleanEnabled: v }),
+  setOriginalVolume: (v) => set({ originalVolume: v }),
+
+  setActiveTool: (tool) => set((state) => ({
+    activeTool: tool,
+    toolsPanelOpen: state.activeTool === tool ? !state.toolsPanelOpen : true,
+  })),
+  setToolsPanelOpen: (v) => set({ toolsPanelOpen: v }),
+  setSelectedTransition: (t) => set({ selectedTransition: t }),
+  setTransitionDuration: (d) => set({ transitionDuration: d }),
+  setActiveFilter: (f) => set({ activeFilter: f }),
+
+  setFaceTrackingEnabled: (v) => set({ faceTrackingEnabled: v }),
+  setFaceTrackingSmoothness: (v) => set({ faceTrackingSmoothness: v }),
+  setFaceTrackingZoom: (v) => set({ faceTrackingZoom: v }),
+  setShowFaceBox: (v) => set({ showFaceBox: v }),
+  setModelsLoaded: (v) => set({ modelsLoaded: v }),
+  setCropX: (v) => set({ cropX: v }),
+  setCropY: (v) => set({ cropY: v }),
+
+  setBrandSettings: (s) => set({ brandSettings: { ...get().brandSettings, ...s } }),
+
+  setExportRes: (r) => set({ exportRes: r }),
+  setExportFmt: (f) => set({ exportFmt: f }),
+  setIncludeSubs: (v) => set({ includeSubs: v }),
+  setShowExportModal: (v) => set({ showExportModal: v }),
+  setSaving: (v) => set({ saving: v }),
+  setExportStatus: (s) => set({ exportStatus: s }),
+  setExportUrl: (u) => set({ exportUrl: u }),
+
+  setTrackTimelineZoom: (z) => set({ trackTimelineZoom: z }),
+  setTimelineHidden: (v) => set({ timelineHidden: v }),
+  setPlayheadDragging: (v) => set({ playheadDragging: v }),
+
+  pushUndo: (snapshot) => set((state) => ({
+    undoStack: [...state.undoStack.slice(-49), snapshot],
+    redoStack: [],
+  })),
+  undo: () => {
+    const { undoStack, redoStack } = get()
+    if (!undoStack.length) return
+    const prev = undoStack[undoStack.length - 1]
+    const current = {
+      transcript: get().transcript,
+      subtitleStyle: get().subtitleStyle,
+      trimStart: get().trimStart,
+      trimEnd: get().trimEnd,
+      cropX: get().cropX,
+      cropY: get().cropY,
+    }
+    set((state) => ({
+      ...prev,
+      undoStack: state.undoStack.slice(0, -1),
+      redoStack: [...state.redoStack, current],
+    }))
   },
-  setTrimEnd: (trimEnd) => {
-    get()._pushHistory()
-    set({ trimEnd })
-  },
-  setSubtitles: (subtitles) => {
-    get()._pushHistory()
-    set((state) => {
-      const textItems = segmentsToTrackItems(subtitles, state.duration)
-      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
-      return { subtitles, tracks }
-    })
+  redo: () => {
+    const { undoStack, redoStack } = get()
+    if (!redoStack.length) return
+    const next = redoStack[redoStack.length - 1]
+    const current = {
+      transcript: get().transcript,
+      subtitleStyle: get().subtitleStyle,
+      trimStart: get().trimStart,
+      trimEnd: get().trimEnd,
+      cropX: get().cropX,
+      cropY: get().cropY,
+    }
+    set((state) => ({
+      ...next,
+      redoStack: state.redoStack.slice(0, -1),
+      undoStack: [...state.undoStack, current],
+    }))
   },
 
+  setSubtitleText: (text) => {
+    if (text && get().transcript.length === 0) {
+      set({ transcript: [{ id: 'sub-1', word: text, startTime: 0, endTime: get().duration || 5, deleted: false }] })
+    }
+  },
+  setSubtitles: (subs) => {
+    set({ transcript: subs.length > 0 ? subs.map((s, i) => ({
+      id: s.id || `sub-${i}`,
+      word: s.text || '',
+      startTime: s.start || 0,
+      endTime: s.end || (get().duration || 5),
+      deleted: false,
+    })) : [] })
+  },
   loadSubtitlesFromSRT: (srtContent) => {
-    const subtitles = parseSRT(srtContent)
-    set((state) => {
-      const textItems = segmentsToTrackItems(subtitles, state.duration)
-      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
-      return { subtitles, tracks, selectedSubtitleId: subtitles[0]?.id || null }
-    })
+    if (!srtContent) return
+    try {
+      const { parseSRT } = require('../../../lib/subtitles')
+      const subs = parseSRT(srtContent)
+      set({ transcript: subs.map((s, i) => ({
+        id: `sub-${i}`,
+        word: s.text || '',
+        startTime: s.start || 0,
+        endTime: s.end || (get().duration || 5),
+        deleted: false,
+      })) })
+    } catch (e) {
+      console.warn('Failed to parse SRT:', e)
+    }
+  },
+  setMusic: (mood) => {
+    set({ musicTrack: mood || 'none' })
   },
 
-  updateSubtitle: (id, updates) => {
-    get()._pushHistory()
-    set((state) => {
-      const subtitles = state.subtitles.map(s => s.id === id ? { ...s, ...updates } : s)
-      const textItems = segmentsToTrackItems(subtitles, state.duration)
-      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
-      return { subtitles, tracks }
-    })
+  setKeyboardHint: (msg) => {
+    set({ keyboardHint: msg })
+    if (msg) setTimeout(() => set({ keyboardHint: '' }), 2000)
   },
-
-  addSubtitle: (start, end, text = '') => {
-    get()._pushHistory()
-    set((state) => {
-      const id = `sub-${Date.now()}`
-      const subtitles = [...state.subtitles, { id, start, end, text, style: {} }]
-        .sort((a, b) => a.start - b.start)
-      const textItems = segmentsToTrackItems(subtitles, state.duration)
-      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
-      return { subtitles, tracks, selectedSubtitleId: id }
-    })
-  },
-
-  deleteSubtitle: (id) => {
-    get()._pushHistory()
-    set((state) => {
-      const subtitles = state.subtitles.filter(s => s.id !== id)
-      const textItems = segmentsToTrackItems(subtitles, state.duration)
-      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
-      return { subtitles, tracks, selectedSubtitleId: state.selectedSubtitleId === id ? null : state.selectedSubtitleId }
-    })
-  },
-
-  setSelectedSubtitleId: (selectedSubtitleId) => set({ selectedSubtitleId }),
-
-  // Backwards-compatible: treat the global text input as the selected/active segment
-  setSubtitleText: (subtitleText) => {
-    get()._pushHistory()
-    set((state) => {
-      let subtitles = state.subtitles
-      let selectedId = state.selectedSubtitleId
-      if (!selectedId && subtitles.length === 0) {
-        const duration = state.duration || 0
-        const id = `sub-1`
-        subtitles = [{ id, start: 0, end: duration || 5, text: subtitleText, style: {} }]
-        selectedId = id
-      } else if (selectedId) {
-        subtitles = subtitles.map(s => s.id === selectedId ? { ...s, text: subtitleText } : s)
-      } else if (subtitles.length > 0) {
-        subtitles = [{ ...subtitles[0], text: subtitleText }, ...subtitles.slice(1)]
-      }
-      const textItems = segmentsToTrackItems(subtitles, state.duration)
-      const tracks = state.tracks.map(t => t.id === 'text' ? { ...t, items: textItems } : t)
-      return { subtitles, tracks, selectedSubtitleId: selectedId }
-    })
-  },
-  setSubtitleStyle: (subtitleStyle) => {
-    get()._pushHistory()
-    set({ subtitleStyle })
-  },
-  setSubtitlePosition: (subtitlePosition) => set({ subtitlePosition }),
-  setFontSize: (fontSize) => {
-    get()._pushHistory()
-    set({ fontSize })
-  },
-  setWatermark: (watermark) => set({ watermark }),
-  setWatermarkPosition: (watermarkPosition) => set({ watermarkPosition }),
-  setMusic: (music) => {
-    get()._pushHistory()
-    set((state) => {
-      const tracks = state.tracks.map(t => t.id === 'music' ? {
-        ...t, items: music !== 'none' ? [{ id: 'm1', start: 0, end: 100, label: music }] : []
-      } : t)
-      return { music, tracks }
-    })
-  },
-  setMusicVolume: (musicVolume) => {
-    get()._pushHistory()
-    set({ musicVolume })
-  },
-  setIncludeAudio: (includeAudio) => {
-    get()._pushHistory()
-    set((state) => {
-      const tracks = state.tracks.map(t => t.id === 'audio' ? {
-        ...t, items: includeAudio ? [{ id: 'a1', start: 0, end: 100, label: 'Original Audio' }] : []
-      } : t)
-      return { includeAudio, tracks }
-    })
-  },
-  setActiveFilter: (activeFilter) => {
-    get()._pushHistory()
-    set({ activeFilter })
-  },
-  setSelectedTransition: (selectedTransition) => {
-    get()._pushHistory()
-    set({ selectedTransition })
-  },
-  setActiveTool: (activeTool) => set({ activeTool }),
-  setActiveInspectorTab: (activeInspectorTab) => set({ activeInspectorTab }),
-
-  setTracks: (tracks) => set({ tracks }),
-  setSelectedTrackId: (selectedTrackId) => set({ selectedTrackId }),
-  setShowKeyframes: (showKeyframes) => set({ showKeyframes }),
-  setSaving: (saving) => set({ saving }),
-  setExportStatus: (exportStatus) => set({ exportStatus }),
-  setExportUrl: (exportUrl) => set({ exportUrl }),
-  setShowExportModal: (showExportModal) => set({ showExportModal }),
-  setShowAIPanel: (showAIPanel) => set({ showAIPanel }),
-  setFaceTracking: (faceTracking) => set({ faceTracking }),
-  setFaceData: (faceData) => set({ faceData }),
-  setSidebarExpanded: (sidebarExpanded) => set({ sidebarExpanded }),
-  setAspectRatio: (aspectRatio) => set({ aspectRatio }),
-  setKeyboardHint: (keyboardHint) => set({ keyboardHint }),
-
-  addTrackItem: (trackId, item) => set((state) => ({
-    tracks: state.tracks.map(t => t.id === trackId ? { ...t, items: [...t.items, item] } : t)
-  })),
-
-  removeTrackItem: (trackId, itemId) => set((state) => ({
-    tracks: state.tracks.map(t => t.id === trackId ? { ...t, items: t.items.filter(i => i.id !== itemId) } : t)
-  })),
-
-  updateTrackItem: (trackId, itemId, updates) => set((state) => ({
-    tracks: state.tracks.map(t => t.id === trackId ? {
-      ...t, items: t.items.map(i => i.id === itemId ? { ...i, ...updates } : i)
-    } : t)
-  })),
-
   showHint: (msg) => {
     set({ keyboardHint: msg })
-    setTimeout(() => set({ keyboardHint: '' }), 2000)
+    if (msg) setTimeout(() => set({ keyboardHint: '' }), 2000)
   },
+  setLoading: (v) => set({ loading: v }),
 
   resetEditor: () => set({
     clip: null, clipId: null, isPlaying: false, playheadPos: 0,
     currentTime: 0, duration: 0, videoError: null, videoLoading: true, videoLoaded: false,
-    trimStart: 0, trimEnd: 100,
-    subtitles: [], selectedSubtitleId: null, subtitleStyle: 'white-outline',
-    subtitlePosition: 'bottom', fontSize: 20, watermark: '',
-    watermarkPosition: 'top-right', music: 'none', musicVolume: 30, includeAudio: false,
-    activeFilter: 'none', selectedTransition: 'fade', activeTool: 'cursor',
-    tracks: [
-      { id: 'video', label: 'Video', type: 'video', items: [{ id: 'v1', start: 0, end: 100, label: 'Main Clip' }] },
-      { id: 'audio', label: 'Audio', type: 'audio', items: [] },
-      { id: 'text', label: 'Text', type: 'text', items: [] },
-      { id: 'music', label: 'Music', type: 'music', items: [] },
-    ],
-    selectedTrackId: 'video', showKeyframes: false,
-    saving: false, exportStatus: '', exportUrl: '',
-    showExportModal: false, showAIPanel: true,
-    faceTracking: false, faceData: null,
-    sidebarExpanded: false, aspectRatio: '9:16', keyboardHint: '',
+    trimStart: 0, trimEnd: 100, aspectRatio: '9:16',
+    transcript: [], subtitleStyle: { ...defaultSubtitleStyle },
+    selectedSubtitlePreset: null, subtitleEnabled: true,
+    textOverlays: [], selectedTextId: null,
+    audioLayers: [], musicTrack: 'none', musicVolume: 30,
+    audioCleanEnabled: false, originalVolume: 100,
+    activeTool: 'ai', toolsPanelOpen: false,
+    selectedTransition: 'none', transitionDuration: 0.3, activeFilter: 'none',
+    faceTrackingEnabled: false, faceTrackingSmoothness: 50,
+    faceTrackingZoom: 100, showFaceBox: true, modelsLoaded: false,
+    cropX: 0, cropY: 0,
+    brandSettings: { primaryColor: '#c4ff3d', secondaryColor: '#f5f5f0', logoUrl: null, logoPosition: 'bottom-right', logoSize: 50, applyToAll: false },
+    exportRes: '1080p', exportFmt: 'MP4', includeSubs: true,
+    showExportModal: false, saving: false, exportStatus: '', exportUrl: '',
+    trackTimelineZoom: 1, timelineHidden: false, playheadDragging: false,
+    volume: 100, playbackSpeed: 1, timelineZoom: 1,
+    undoStack: [], redoStack: [], keyboardHint: '', loading: true,
   }),
 }))
 

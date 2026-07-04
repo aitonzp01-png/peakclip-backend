@@ -1,5 +1,5 @@
 'use client'
-import { brand, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
+import { brand, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/editor-tokens'
 import { subtitleStyles, musicTracks } from '../../../lib/utils'
 import icons from '../../../lib/icons'
 import useEditorStore from '../store/editorStore'
@@ -128,7 +128,7 @@ function TextPanel() {
         {subtitles.map((s, idx) => (
           <div key={s.id} onClick={() => setSelectedSubtitleId(s.id)}
             style={{
-              background: selectedSubtitleId === s.id ? 'rgba(217,180,74,0.12)' : bgSecondary,
+              background: selectedSubtitleId === s.id ? brandDim : bgSecondary,
               border: `1px solid ${selectedSubtitleId === s.id ? brand : borderSoft}`,
               borderRadius: '6px', padding: '6px 8px', cursor: 'pointer',
             }}>

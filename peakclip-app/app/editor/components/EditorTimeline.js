@@ -1,6 +1,6 @@
 'use client'
 import { useRef, useCallback, useMemo, useState } from 'react'
-import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
+import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, hoverBg, fonts } from '../../../lib/editor-tokens'
 import { trackItemsToSegments } from '../../../lib/subtitles'
 import useEditorStore from '../store/editorStore'
 
@@ -120,7 +120,7 @@ export default function EditorTimeline({ videoRef }) {
 
   return (
     <div className="editor-timeline" style={{
-      height: '220px', background: 'rgba(8,8,8,0.98)', borderTop: `1px solid ${borderSoft}`,
+      height: '220px', background: bgSecondary, borderTop: `1px solid ${borderSoft}`,
       display: 'flex', flexDirection: 'column', flexShrink: 0,
       borderTopLeftRadius: '12px', borderTopRightRadius: '12px',
     }}>
@@ -208,7 +208,7 @@ export default function EditorTimeline({ videoRef }) {
             style={{
               display: 'flex', alignItems: 'center', gap: '8px',
               height: '32px',
-              background: selectedTrackId === track.id ? 'rgba(217,180,74,0.03)' : 'transparent',
+              background: selectedTrackId === track.id ? brandDim : 'transparent',
               borderRadius: '6px',
               border: `1px solid ${selectedTrackId === track.id ? brandBorder : 'transparent'}`,
               transition: 'all 0.15s', cursor: 'pointer',
@@ -263,8 +263,8 @@ export default function EditorTimeline({ videoRef }) {
                       overflow: 'hidden', transition: isDragging ? 'none' : 'all 0.15s',
                       background: track.type === 'video' ? 'rgba(59,130,246,0.15)' :
                                  track.type === 'audio' ? 'rgba(34,197,94,0.15)' :
-                                 track.type === 'music' ? 'rgba(217,180,74,0.15)' :
-                                 'rgba(217,180,74,0.12)',
+                                 track.type === 'music' ? brandDim :
+                                 brandDim,
                       border: `1px solid ${
                         track.type === 'video' ? 'rgba(59,130,246,0.3)' :
                         track.type === 'audio' ? 'rgba(34,197,94,0.3)' :

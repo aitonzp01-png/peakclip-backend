@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { brand, brandGrad, brandDim, brandBorder, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, fonts } from '../../../lib/tokens'
+import { brand, brandGrad, brandDim, brandBorder, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, fonts } from '../../../lib/editor-tokens'
 import useEditorStore from '../store/editorStore'
 import { getSupabaseClient } from '../../../lib/supabase'
 import { generateSRT } from '../../../lib/subtitles'
@@ -88,13 +88,13 @@ export default function ExportModal() {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1000,
-      background: 'rgba(0,0,0,0.7)',
+      background: 'rgba(0,0,0,0.3)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       backdropFilter: 'blur(8px)',
       animation: 'fadeIn 0.2s ease',
     }} onClick={() => { if (!saving) setShowExportModal(false) }}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: surface, border: `1px solid ${borderSoft}`,
+        background: '#ffffff', border: `1px solid ${borderSoft}`,
         borderRadius: '20px', width: '420px', maxWidth: '90vw',
         overflow: 'hidden', animation: 'scaleIn 0.25s cubic-bezier(0.16,1,0.3,1)',
       }}>

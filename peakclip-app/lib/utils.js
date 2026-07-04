@@ -1,8 +1,9 @@
 export function formatTime(seconds) {
-  if (!seconds || isNaN(seconds)) return '0:00'
+  if (!seconds || isNaN(seconds)) return '0:00.00'
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
+  const cs = Math.floor((seconds % 1) * 100)
+  return `${m}:${s.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`
 }
 
 export function clipUrl(url) {
@@ -15,23 +16,88 @@ export function generateId() {
   return Math.random().toString(36).substring(2, 9)
 }
 
-export function getGreeting() {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 18) return 'Good afternoon'
-  return 'Good evening'
+export function lerp(a, b, t) {
+  return a + (b - a) * t
 }
 
-export const subtitleStyles = [
-  { id: 'white-outline', label: 'White Outline', preview: { color: '#fff', fontWeight: '500', textShadow: '0 1px 3px rgba(0,0,0,0.8), 0 2px 8px rgba(0,0,0,0.5)' } },
-  { id: 'bold-yellow', label: 'Bold Yellow', preview: { color: '#FFD700', fontWeight: 'bold', textShadow: '0 1px 3px rgba(0,0,0,0.8)' } },
-  { id: 'neon-green', label: 'Neon', preview: { color: '#00ff88', fontWeight: '500', textShadow: '0 1px 3px rgba(0,0,0,0.8)' } },
-  { id: 'minimal-white', label: 'Minimal', preview: { color: '#fff', fontWeight: '400', textShadow: '0 1px 3px rgba(0,0,0,0.8)' } },
-  { id: 'tiktok-style', label: 'TikTok', preview: { color: '#fff', fontWeight: '900', textShadow: '0 0 6px rgba(0,0,0,0.8)' } },
+export function hexToRgba(hex, opacity) {
+  let h = hex.replace('#', '')
+  if (h.length === 3) h = h.split('').map(c => c + c).join('')
+  const r = parseInt(h.substring(0, 2), 16)
+  const g = parseInt(h.substring(2, 4), 16)
+  const b = parseInt(h.substring(4, 6), 16)
+  return `rgba(${r},${g},${b},${opacity})`
+}
+
+export function groupWordsIntoLines(words, maxWidth, canvasWidth) {
+  if (!words.length) return []
+  const lines = []
+  let current = []
+  let currentWidth = 0
+  const charWidth = 10
+  words.forEach(w => {
+    const wordWidth = w.word.length * charWidth
+    if (currentWidth + wordWidth > maxWidth * canvasWidth / 100 && current.length > 0) {
+      lines.push(current)
+      current = [w]
+      currentWidth = wordWidth
+    } else {
+      current.push(w)
+      currentWidth += wordWidth + charWidth
+    }
+  })
+  if (current.length) lines.push(current)
+  return lines
+}
+
+export const subtitlePresets = [
+  { id: 'none', label: 'Sin subtítulos' },
+  { id: 'karaoke', label: 'Karaoke', fontFamily: 'Inter', fontSize: 36, fontWeight: '800', color: '#ffffff', backgroundColor: 'transparent', backgroundOpacity: 0, textAlign: 'center', karaokeHighlight: true, highlightColor: '#c4ff3d' },
+  { id: 'beasty', label: 'Beasty', fontFamily: 'Inter', fontSize: 38, fontWeight: '900', color: '#000000', backgroundColor: '#ffffff', backgroundOpacity: 100, textAlign: 'center' },
+  { id: 'deep-diver', label: 'Deep Diver', fontFamily: 'Inter', fontSize: 32, fontWeight: '700', color: '#ffffff', backgroundColor: '#000000', backgroundOpacity: 60, textAlign: 'center', positionY: 80 },
+  { id: 'youshaei', label: 'Youshaei', fontFamily: 'Inter', fontSize: 40, fontWeight: '800', fontStyle: 'italic', color: '#f97316', textAlign: 'center' },
+  { id: 'pod-p', label: 'Pod P', fontFamily: 'Inter', fontSize: 28, fontWeight: '600', color: '#f5f5f0', textAlign: 'center', lineHeight: 1.5 },
+  { id: 'mozi', label: 'Mozi', fontFamily: 'Inter', fontSize: 34, fontWeight: '900', color: '#c4ff3d', stroke: true, strokeColor: '#000000', strokeWidth: 3, textAlign: 'center' },
+  { id: 'popline', label: 'Popline', fontFamily: 'Inter', fontSize: 30, fontWeight: '800', color: '#0f0f0f', backgroundColor: '#c4ff3d', backgroundOpacity: 100, textAlign: 'center' },
+]
+
+export const defaultSubtitleStyle = {
+  fontFamily: 'Inter',
+  fontSize: 32,
+  fontWeight: '800',
+  color: '#ffffff',
+  backgroundColor: 'transparent',
+  backgroundOpacity: 0,
+  textAlign: 'center',
+  textTransform: 'none',
+  letterSpacing: 0,
+  lineHeight: 1.2,
+  positionY: 75,
+  maxWidth: 90,
+  stroke: false,
+  strokeColor: '#000000',
+  strokeWidth: 2,
+  karaokeHighlight: false,
+  highlightColor: '#c4ff3d',
+  fontStyle: 'normal',
+  shadow: false,
+  shadowColor: '#000000',
+  shadowOffsetX: 2,
+  shadowOffsetY: 2,
+  shadowBlur: 4,
+  entryAnimation: 'none',
+  entryDuration: 0.3,
+  backgroundBorderRadius: 4,
+  backgroundPadding: 8,
+}
+
+export const fontOptions = [
+  'Inter', 'Montserrat', 'Oswald', 'Bebas Neue', 'Anton',
+  'Roboto Condensed', 'Poppins', 'Arial Black', 'Impact', 'Playfair Display',
 ]
 
 export const musicTracks = [
-  { id: 'none', label: 'No music' },
+  { id: 'none', label: 'Sin m\u00fasica' },
   { id: 'epic', label: 'Epic Cinematic' },
   { id: 'hype', label: 'Hype Beat' },
   { id: 'chill', label: 'Chill Lofi' },
@@ -48,15 +114,21 @@ export const filters = [
   { id: 'cool', label: 'Cool', style: { filter: 'hue-rotate(30deg) saturate(0.9) brightness(1.1)' } },
 ]
 
-export const transitions = [
+export const transitionOptions = [
+  { id: 'none', label: 'Sin transici\u00f3n' },
   { id: 'fade', label: 'Fade' },
-  { id: 'slide', label: 'Slide' },
-  { id: 'zoom', label: 'Zoom' },
+  { id: 'slide-left', label: 'Slide izquierda' },
+  { id: 'slide-right', label: 'Slide derecha' },
+  { id: 'zoom-in', label: 'Zoom in' },
+  { id: 'zoom-out', label: 'Zoom out' },
   { id: 'wipe', label: 'Wipe' },
 ]
 
 export const aspectRatios = [
   { id: '9:16', label: '9:16', icon: 'mobile', desc: 'TikTok / Reels / Shorts' },
+  { id: '16:9', label: '16:9', icon: 'monitor', desc: 'YouTube / Desktop' },
+  { id: '1:1', label: '1:1', icon: 'camera', desc: 'Instagram Square' },
+  { id: '4:5', label: '4:5', icon: 'camera', desc: 'IG Feed Portrait' },
 ]
 
 export const resolutions = [
