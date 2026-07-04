@@ -1,153 +1,365 @@
 'use client'
 
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect, useRef } from 'react'
 
 const plans = [
   {
     name: 'Free',
-    desc: 'Get started with basic features',
-    monthly: 0,
-    features: ['3 clips per month', '9:16 format', 'Basic subtitles', '720p export'],
-  },
-  {
-    name: 'Creator',
-    desc: 'For serious content creators',
-    monthly: 27,
-    popular: true,
-    features: ['200 clips per month', 'Animated subtitles', 'HD export', 'Gameplay overlay'],
+    price: 0,
+    monthlyPrice: 0,
+    features: [
+      '3 clips/mo',
+      'Auto captions',
+      'TikTok & Reels formats',
+      '1080p',
+      'Web access',
+    ],
+    cta: 'Get started free',
+    href: '/register',
+    outline: true,
   },
   {
     name: 'Pro',
-    desc: 'For teams & agencies',
-    monthly: 70,
-    features: ['Unlimited clips', 'Advanced editor', 'Viral Score AI', 'Auto-publish', 'Priority support'],
+    monthlyPrice: 29,
+    popular: true,
+    features: [
+      '60 clips/mo',
+      'Custom captions',
+      'Auto reframe',
+      'AI viral detection',
+      'Scheduled publishing (3 platforms)',
+      'Basic analytics',
+      'Priority support',
+    ],
+    cta: 'Start now',
+    href: '/register?plan=pro',
+  },
+  {
+    name: 'Agency',
+    monthlyPrice: 89,
+    features: [
+      'Unlimited clips',
+      'Everything in Pro',
+      '5 channels',
+      'Unlimited platforms',
+      'API access',
+      'Advanced analytics',
+      'Account manager',
+    ],
+    cta: 'Contact sales',
+    href: '/contact',
+    outline: true,
   },
 ]
 
-function calcYearly(monthly) {
-  return Math.round((monthly * 12) * 0.8)
+function CheckIcon({ color }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
 }
 
 export default function Pricing() {
   const [yearly, setYearly] = useState(false)
-  const [animatingPrice, setAnimatingPrice] = useState(null)
+  const [animating, setAnimating] = useState(false)
+  const sectionRef = useRef(null)
 
-  const toggleBilling = (val) => {
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el) return
+    const title = el.querySelector('.pricing-title-wrap')
+    if (!title) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          title.classList.add('visible')
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.15 }
+    )
+    observer.observe(title)
+    return () => observer.disconnect()
+  }, [])
+
+  const handleToggle = (val) => {
     if (val === yearly) return
-    setAnimatingPrice(true)
+    setAnimating(true)
     setTimeout(() => {
       setYearly(val)
-      setAnimatingPrice(false)
-    }, 200)
+      setTimeout(() => setAnimating(false), 50)
+    }, 150)
   }
 
+  const getYearlyPerMonth = (monthly) => Math.round(monthly * 0.8)
+  const getYearlyTotal = (monthly) => monthly * 12 * 0.8
+
   return (
-    <section className="pricing-section" id="pricing" data-yearly={yearly ? 'true' : 'false'}>
-      <motion.div
-        className="section-heading"
-        initial={{ opacity: 0, y: 40 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div className="section-label">Pricing</div>
-        <h2 className="section-title">Choose Your Plan</h2>
-        <p className="section-desc">
-          Start free, upgrade when you need more. All plans include a 7-day trial.
-        </p>
-      </motion.div>
-
-      <div className="pricing-toggle-wrap">
-        <div className="pricing-toggle" onClick={() => toggleBilling(!yearly)}>
-          <div
-            className={`pricing-toggle-indicator ${yearly ? 'right' : 'left'}`}
-          />
-          <button
-            className={`pricing-toggle-option ${!yearly ? 'active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); toggleBilling(false) }}
-          >
-            Monthly
-          </button>
-          <button
-            className={`pricing-toggle-option ${yearly ? 'active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); toggleBilling(true) }}
-          >
-            Yearly
-            <span className="pricing-save-badge">SAVE 20%</span>
-          </button>
+    <section id="precios" ref={sectionRef} style={{
+      background: '#f5f5f0', padding: '100px 24px',
+      position: 'relative',
+    }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        {/* Title */}
+        <div className="pricing-title-wrap" style={{
+          textAlign: 'center', marginBottom: 48,
+          opacity: 0, transform: 'translateY(18px)',
+          transition: 'opacity 0.6s ease, transform 0.6s ease',
+        }}>
+          <span style={{
+            fontSize: 12, fontWeight: 600, letterSpacing: 3,
+            color: '#6b6b72', textTransform: 'uppercase',
+            display: 'block', marginBottom: 16,
+          }}>
+            PRICING
+          </span>
+          <h2 style={{
+            fontSize: 'clamp(36px,5vw,64px)', fontWeight: 900,
+            letterSpacing: -2, lineHeight: 0.97, color: '#0f0f0f',
+            marginBottom: 16,
+          }}>
+            Simple,<br />
+            <span style={{
+              fontStyle: 'italic', color: '#0f0f0f',
+              background: '#c4ff3d', padding: '0 8px',
+              borderRadius: 8,
+            }}>
+              no surprises.
+            </span>
+          </h2>
+          <p style={{ fontSize: 16, color: '#6b6b72', maxWidth: 420, margin: '0 auto' }}>
+            Start free. Scale when you're ready.
+          </p>
         </div>
-      </div>
 
-      <div className="pricing-cards">
-        {plans.map((plan, i) => {
-          const price = yearly ? calcYearly(plan.monthly) : plan.monthly
-          const original = yearly ? plan.monthly * 12 : null
-          const saved = yearly ? Math.round((plan.monthly * 12) * 0.2) : null
-
-          return (
-            <motion.div
-              key={plan.name}
-              className={`pricing-card ${plan.popular ? 'popular' : ''}`}
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.7, delay: i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+        {/* Toggle */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 48 }}>
+          <div className="pricing-toggle" style={{
+            display: 'inline-flex', background: '#ffffff', borderRadius: 100,
+            border: '1px solid #e8e8e2', padding: 4, position: 'relative',
+          }}>
+            <div className="pricing-toggle-slider" style={{
+              position: 'absolute', top: 4, bottom: 4,
+              width: 'calc(50% - 4px)',
+              background: '#0f0f0f', borderRadius: 100,
+              transition: 'left 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
+              left: yearly ? 'calc(50% + 0px)' : '4px',
+              zIndex: 0,
+            }} />
+            <button
+              onClick={() => handleToggle(false)}
+              style={{
+                padding: '10px 32px', borderRadius: 100, border: 'none',
+                fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                background: 'transparent',
+                color: yearly ? '#6b6b72' : '#f5f5f0',
+                transition: 'color 0.3s ease',
+                position: 'relative', zIndex: 1,
+              }}
             >
-              {plan.popular && (
-                <div className="pricing-card-popular-badge">MOST POPULAR</div>
-              )}
+              Monthly
+            </button>
+            <button
+              onClick={() => handleToggle(true)}
+              style={{
+                padding: '10px 32px', borderRadius: 100, border: 'none',
+                fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                background: 'transparent',
+                color: yearly ? '#f5f5f0' : '#6b6b72',
+                transition: 'color 0.3s ease',
+                position: 'relative', zIndex: 1,
+              }}
+            >
+              Yearly
+              <span style={{
+                marginLeft: 6, fontSize: 10, fontWeight: 700,
+                color: yearly ? '#c4ff3d' : '#6b6b72',
+                transition: 'color 0.3s ease',
+              }}>
+                -20%
+              </span>
+            </button>
+          </div>
+        </div>
 
-              <div className="pricing-card-name">{plan.name}</div>
-              <div className="pricing-card-desc">{plan.desc}</div>
+        {/* Cards */}
+        <div className="pricing-cards-wrap" style={{
+          display: 'flex', gap: 20, justifyContent: 'center',
+          flexWrap: 'wrap', alignItems: 'stretch',
+          marginBottom: 32,
+        }}>
+          {plans.map((plan, i) => {
+            const monthly = plan.monthlyPrice || plan.price
+            const yearlyPerMonth = plan.name !== 'Free' ? getYearlyPerMonth(monthly) : 0
+            const yearlyTotal = plan.name !== 'Free' ? getYearlyTotal(monthly) : 0
+            const displayPrice = plan.name === 'Free' ? 0 : yearly ? yearlyPerMonth : monthly
+            const suffix = plan.name === 'Free' ? '/mes' : yearly ? '/mes' : '/mes'
+            const showOriginal = plan.name !== 'Free' && yearly
 
-              <div className="pricing-card-price">
-                <AnimatePresence mode="wait">
-                  <motion.span
-                    key={yearly ? 'yearly' : 'monthly'}
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: animatingPrice ? 0 : 1, y: animatingPrice ? 10 : 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    ${price}
-                  </motion.span>
-                </AnimatePresence>
-                <span className="pricing-card-price-period">
-                  {yearly ? '/year' : '/mo'}
-                </span>
-              </div>
+            return (
+              <div key={plan.name} className="pricing-card-item" style={{
+                flex: '1 1 280px', maxWidth: 340, minWidth: 260,
+                display: 'flex', flexDirection: 'column',
+                background: plan.popular ? '#0f0f0f' : '#ffffff',
+                borderRadius: 20,
+                border: plan.popular ? 'none' : '1px solid #e8e8e2',
+                padding: 32,
+                transform: plan.popular ? 'translateY(-12px)' : 'none',
+                boxShadow: plan.popular ? '0 24px 60px rgba(0,0,0,0.18)' : '0 2px 12px rgba(0,0,0,0.04)',
+                position: 'relative',
+                transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+              }}>
+                {plan.popular && (
+                  <span style={{
+                    position: 'absolute', top: 16, right: 16,
+                    background: '#c4ff3d', color: '#0f0f0f',
+                    fontSize: 10, fontWeight: 800, letterSpacing: 1,
+                    padding: '4px 12px', borderRadius: 100,
+                  }}>
+                    MOST POPULAR
+                  </span>
+                )}
 
-              {yearly && (
-                <div className="pricing-card-original">${original}/year</div>
-              )}
-              {yearly && (
-                <div className="pricing-card-save">Save ${saved}</div>
-              )}
-              {!yearly && <div className="pricing-card-original" />}
-              {!yearly && <div className="pricing-card-save" />}
+                {/* Plan name */}
+                <div style={{
+                  fontSize: 18, fontWeight: 800,
+                  color: plan.popular ? '#f5f5f0' : '#0f0f0f',
+                  marginBottom: 8, letterSpacing: '-0.3px',
+                }}>
+                  {plan.name}
+                </div>
 
-              <div className="pricing-card-features">
-                {plan.features.map((feat) => (
-                  <div key={feat} className="pricing-card-feature">
-                    <span className="pricing-card-feature-check">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    </span>
-                    {feat}
+                {/* Price */}
+                <div className="pricing-price-block" style={{
+                  marginBottom: 24, position: 'relative',
+                  opacity: animating ? 0 : 1,
+                  transform: animating ? 'translateY(6px)' : 'translateY(0)',
+                  transition: 'opacity 0.15s ease, transform 0.15s ease',
+                }}>
+                  <div style={{
+                    fontSize: 42, fontWeight: 900,
+                    color: plan.popular ? '#f5f5f0' : '#0f0f0f',
+                    letterSpacing: -2, lineHeight: 1,
+                  }}>
+                    {plan.name === 'Free' ? '$0' : `$${displayPrice}`}
+                    <span style={{ fontSize: 16, fontWeight: 500, color: '#6b6b72', letterSpacing: 0 }}>{suffix}</span>
                   </div>
-                ))}
-              </div>
+                  {showOriginal && (
+                    <>
+                      <div style={{
+                        fontSize: 13, color: '#6b6b72', marginTop: 4,
+                        textDecoration: 'line-through',
+                      }}>
+                        ${monthly}/mes
+                      </div>
+                      <div style={{
+                        fontSize: 11, color: '#6b6b72', marginTop: 2,
+                      }}>
+                        (${Math.round(yearlyTotal)}/año)
+                      </div>
+                    </>
+                  )}
+                </div>
 
-              <a
-                href={`/login?plan=${plan.name.toLowerCase()}&billing=${yearly ? 'yearly' : 'monthly'}`}
-                className="pricing-card-cta"
-              >
-                {plan.popular ? 'Start Free Trial' : 'Get Started'}
-              </a>
-            </motion.div>
-          )
-        })}
+                {/* CTA */}
+                <a
+                  href={plan.href}
+                  className={`pricing-cta-btn ${plan.popular ? 'popular' : ''} ${plan.outline ? 'outline' : ''}`}
+                  style={{
+                    display: 'block', textAlign: 'center',
+                    padding: '14px 0', borderRadius: 12,
+                    fontWeight: 700, fontSize: 14,
+                    textDecoration: 'none', marginBottom: 28,
+                    transition: 'all 0.25s',
+                    ...(plan.popular
+                      ? { background: '#c4ff3d', color: '#0f0f0f', border: 'none' }
+                      : plan.outline
+                        ? { background: 'transparent', color: '#0f0f0f', border: '1.5px solid #0f0f0f' }
+                        : { background: '#0f0f0f', color: '#f5f5f0', border: 'none' }
+                    ),
+                  }}
+                >
+                  {plan.cta}
+                </a>
+
+                {/* Features */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+                  {plan.features.map((feat) => (
+                    <div key={feat} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      fontSize: 13,
+                      color: plan.popular ? '#d0d0d8' : '#4a4a4a',
+                    }}>
+                      <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                        {plan.popular ? (
+                          <CheckIcon color="#c4ff3d" />
+                        ) : (
+                          <CheckIcon color="#22c55e" />
+                        )}
+                      </span>
+                      {feat}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Trial note */}
+        <p style={{
+          textAlign: 'center', fontSize: 13, color: '#6b6b72', maxWidth: 480,
+          margin: '0 auto',
+        }}>
+          All plans include a 14-day free trial. No credit card required.
+        </p>
       </div>
+
+      <style>{`
+        .pricing-title-wrap.visible {
+          opacity: 1 !important;
+          transform: translateY(0) !important;
+        }
+        .pricing-card-item:hover {
+          transform: translateY(-4px) !important;
+          box-shadow: 0 12px 40px rgba(0,0,0,0.1) !important;
+        }
+        .pricing-card-item[style*="translateY(-12px)"]:hover {
+          transform: translateY(-16px) !important;
+          box-shadow: 0 32px 72px rgba(0,0,0,0.25) !important;
+        }
+        .pricing-cta-btn.outline:hover {
+          background: #0f0f0f !important;
+          color: #f5f5f0 !important;
+        }
+        .pricing-cta-btn.popular:hover {
+          background: #d4ff5a !important;
+          transform: scale(1.02);
+        }
+        .pricing-toggle button:focus-visible {
+          outline: 2px solid #c4ff3d;
+          outline-offset: 2px;
+        }
+        @media (max-width: 768px) {
+          section#precios { padding: 60px 16px !important; }
+          .pricing-card-item[style*="translateY(-12px)"] {
+            transform: none !important;
+          }
+          .pricing-cards-wrap {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          .pricing-card-item {
+            max-width: 100% !important;
+            flex: none !important;
+          }
+          .pricing-toggle button {
+            padding: 10px 20px !important;
+            font-size: 13px !important;
+          }
+        }
+      `}</style>
     </section>
   )
 }

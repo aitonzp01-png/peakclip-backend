@@ -50,7 +50,7 @@ export default function Hero() {
           background: '#22c55e',
           animation: 'pulse-dot 1.8s ease-in-out infinite',
         }} />
-        +2,400 clips creados esta semana
+        +2,400 clips created this week
       </div>
 
       {/* H1 */}
@@ -62,7 +62,7 @@ export default function Hero() {
         lineHeight: 0.97, maxWidth: 860,
         color: '#0f0f0f', margin: 0,
       }}>
-        Convierte tus videos en{' '}
+        Turn your videos into{' '}
         <span style={{
           fontStyle: 'italic',
           background: '#c4ff3d',
@@ -71,7 +71,7 @@ export default function Hero() {
           borderRadius: 8,
           display: 'inline-block',
         }}>
-          clips virales
+          viral clips
         </span>
       </h1>
 
@@ -83,7 +83,7 @@ export default function Hero() {
         color: '#6b6b72', maxWidth: 440,
         lineHeight: 1.5, margin: '20px 0 0',
       }}>
-        Sube tu contenido largo — nosotros lo convertimos en clips listos para TikTok, Reels y Shorts.
+        Upload your long content — we turn it into clips ready for TikTok, Reels and Shorts.
       </p>
 
       {/* Buttons */}
@@ -93,7 +93,7 @@ export default function Hero() {
         display: 'flex', gap: 12, marginTop: 32,
         justifyContent: 'center', flexWrap: 'wrap',
       }}>
-        <a href="/login?signup=true"
+        <a href="/register"
           className="hero-primary-btn"
           style={{
             background: '#0f0f0f', color: '#f5f5f0',
@@ -103,9 +103,9 @@ export default function Hero() {
             textDecoration: 'none',
             transition: 'transform 0.2s, box-shadow 0.2s',
           }}>
-          Crear mi primer clip
+          Create my first clip
         </a>
-        <a href="#showcase"
+        <a href="#como-funciona"
           className="hero-secondary-btn"
           style={{
             background: 'transparent', color: '#0f0f0f',
@@ -115,7 +115,7 @@ export default function Hero() {
             textDecoration: 'none',
             transition: 'border-color 0.2s',
           }}>
-          Ver ejemplos
+          See how it works
         </a>
       </div>
 
@@ -215,7 +215,7 @@ export default function Hero() {
         marginTop: 36, fontSize: 13, color: '#6b6b72',
         textAlign: 'center',
       }}>
-        Usado por creadores en YouTube, Twitch e Instagram
+        Used by creators on YouTube, Twitch and Instagram
       </p>
 
       <style>{`

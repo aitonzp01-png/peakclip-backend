@@ -1,0 +1,409 @@
+/* editor.css – Cream palette styling for the video editor */
+
+/* Inject palette variables */
+@layer editor {
+  :root {
+    /* Core colors */
+    --cream-bg: #f5f5f0;
+    --cream-panel: #ffffff;
+    --cream-panel-border: #e8e8e2;
+    --cream-surface: #f8f8f4;
+    --cream-surface-border: #e0e0da;
+    --cream-hover: #f0f0ea;
+    /* Text */
+    --cream-text-primary: #0f0f0f;
+    --cream-text-secondary: #6b6b72;
+    --cream-placeholder: #9a9aa3;
+    /* Accent */
+    --cream-accent: #c4ff3d;
+    --cream-primary-btn-bg: #0f0f0f;
+    --cream-primary-btn-color: #f5f5f0;
+    --cream-accent-btn-bg: #c4ff3d;
+    --cream-accent-btn-color: #0f0f0f;
+    --cream-focus-border: #0f0f0f;
+    --cream-focus-detail: #c4ff3d;
+    /* Status */
+    --cream-success: #22c55e;
+    --cream-error: #ef4444;
+    /* Timeline */
+    --cream-tl-bg: #eeeee8;
+    --cream-tl-border: #e8e8e2;
+    --cream-waveform: rgba(196,255,61,0.7);
+    --cream-playhead: #c4ff3d;
+    /* Face tracking */
+    --cream-bbox: #c4ff3d;
+  }
+}
+
+/* Global editor layout */
+.editor-layout {
+  height: 100vh;
+  background: var(--cream-bg);
+  color: var(--cream-text-primary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Topbar – 56px high */
+.editor-topbar {
+  height: 56px;
+  background: var(--cream-panel);
+  border-bottom: 1px solid var(--cream-panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+.editor-topbar-left { display: flex; align-items: center; gap: 8px; }
+.editor-topbar-right { display: flex; align-items: center; gap: 8px; }
+
+/* Buttons – shared styles */
+.editor-btn {
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 10px;
+  padding: 8px 18px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.editor-btn-primary {
+  background: var(--cream-primary-btn-bg);
+  color: var(--cream-primary-btn-color);
+  border: 1px solid var(--cream-panel-border);
+}
+.editor-btn-primary:hover {
+  border-color: var(--cream-focus-border);
+}
+.editor-btn-accent {
+  background: var(--cream-accent-btn-bg);
+  color: var(--cream-accent-btn-color);
+  font-weight: 800;
+  border: none;
+}
+.editor-btn-accent:hover {
+  filter: brightness(0.95);
+}
+
+/* Back button (icon) */
+.editor-back-btn {
+  background: transparent;
+  border: none;
+  color: var(--cream-text-secondary);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+}
+.editor-back-btn:hover {
+  color: var(--cream-focus-border);
+}
+
+/* Title input */
+.editor-title-input {
+  background: transparent;
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--cream-text-primary);
+  outline: none;
+}
+.editor-title-input:focus {
+  background: var(--cream-hover);
+}
+
+/* Credits badge */
+.editor-credits-badge {
+  background: rgba(196,255,61,0.15);
+  color: var(--cream-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 100px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Main body – flex */
+.editor-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Left panel – transcript */
+.editor-left-panel {
+  width: 300px;
+  background: var(--cream-panel);
+  border-right: 1px solid var(--cream-panel-border);
+  overflow-y: auto;
+  padding: 14px;
+}
+.editor-left-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.editor-left-btn-extend {
+  background: var(--cream-hover);
+  border: 1px solid var(--cream-surface-border);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--cream-text-primary);
+  cursor: pointer;
+}
+.editor-left-btn-extend:hover { background: var(--cream-surface); }
+.editor-toggle-clean {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(196,255,61,0.15);
+  border: 1px solid rgba(196,255,61,0.3);
+  color: var(--cream-text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.editor-toggle-clean.active { background: var(--cream-accent); color: var(--cream-text-primary); }
+
+/* Transcript words */
+.editor-word {
+  font-size: 14px;
+  color: var(--cream-text-primary);
+  line-height: 1.8;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 1px 3px;
+  transition: background 0.1s;
+}
+.editor-word:hover { background: var(--cream-hover); }
+.editor-word.active {
+  background: var(--cream-accent);
+  color: var(--cream-text-primary);
+  font-weight: 700;
+}
+.editor-word.deleted {
+  text-decoration: line-through;
+  color: var(--cream-placeholder);
+}
+
+/* Context menu */
+.editor-context-menu {
+  position: absolute;
+  background: var(--cream-panel);
+  border: 1px solid var(--cream-panel-border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  padding: 4px;
+  z-index: 1000;
+}
+.editor-context-item {
+  font-size: 13px;
+  color: var(--cream-text-primary);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.editor-context-item:hover { background: var(--cream-hover); }
+
+/* Central preview area */
+.editor-preview {
+  flex: 1;
+  background: var(--cream-hover);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.editor-video { width: 100%; height: 100%; object-fit: contain; }
+.editor-canvas-subtitles, .editor-canvas-face {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Crop handles */
+.editor-crop-handle {
+  width: 12px; height: 12px;
+  background: var(--cream-accent);
+  border-radius: 2px;
+  position: absolute;
+  cursor: pointer;
+}
+.editor-crop-handle.nw { top: -6px; left: -6px; cursor: nw-resize; }
+.editor-crop-handle.ne { top: -6px; right: -6px; cursor: ne-resize; }
+.editor-crop-handle.sw { bottom: -6px; left: -6px; cursor: sw-resize; }
+.editor-crop-handle.se { bottom: -6px; right: -6px; cursor: se-resize; }
+
+/* Right icon bar */
+.editor-right-bar {
+  width: 64px;
+  background: var(--cream-panel);
+  border-left: 1px solid var(--cream-panel-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 8px;
+}
+.editor-right-icon {
+  width: 56px; height: 56px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px;
+  color: var(--cream-text-secondary);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.editor-right-icon:hover {
+  background: var(--cream-hover);
+  color: var(--cream-text-primary);
+}
+.editor-right-icon.active {
+  background: var(--cream-bg);
+  border-left: 2px solid var(--cream-accent);
+  color: var(--cream-text-primary);
+}
+.editor-right-label { font-size: 10px; }
+
+/* Sliding panels (right content) */
+.editor-right-panel {
+  position: absolute;
+  top: 0;
+  right: -216px; /* hidden */
+  width: 216px;
+  height: 100%;
+  background: var(--cream-panel);
+  border-left: 1px solid var(--cream-panel-border);
+  overflow-y: auto;
+  padding: 16px;
+  transition: transform 0.25s ease;
+  transform: translateX(0);
+}
+.editor-right-panel.open {
+  transform: translateX(-216px);
+}
+
+/* Timeline */
+.editor-timeline {
+  height: 180px;
+  background: var(--cream-tl-bg);
+  border-top: 1px solid var(--cream-tl-border);
+  display: flex;
+  flex-direction: column;
+}
+.editor-timeline-controls {
+  height: 36px;
+  background: var(--cream-panel);
+  border-bottom: 1px solid var(--cream-panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+}
+.editor-timeline-content {
+  flex: 1;
+  overflow-x: auto;
+  position: relative;
+  padding: 8px;
+}
+.editor-track {
+  position: relative;
+  height: 48px;
+  margin-bottom: 8px;
+}
+.editor-track-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 50px;
+  font-size: 11px;
+  color: var(--cream-text-secondary);
+}
+.editor-track-item {
+  position: absolute;
+  height: 100%;
+  border-radius: 6px;
+  background: var(--cream-surface);
+  border: 1px solid var(--cream-surface-border);
+  cursor: pointer;
+}
+.editor-track-item:hover { opacity: 0.9; }
+.editor-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--cream-playhead);
+  cursor: ew-resize;
+}
+.editor-playhead::after {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: -3px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid var(--cream-playhead);
+}
+
+/* Export modal */
+.editor-export-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.editor-export-card {
+  background: var(--cream-panel);
+  border: 1px solid var(--cream-panel-border);
+  border-radius: 20px;
+  max-width: 440px;
+  width: 90vw;
+  padding: 32px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.10);
+}
+.editor-export-title { font-weight: 900; font-size: 20px; color: var(--cream-text-primary); margin-bottom: 4px; }
+.editor-export-subtitle { font-size: 14px; color: var(--cream-text-secondary); margin-bottom: 24px; }
+.editor-export-section { margin-bottom: 16px; }
+.editor-export-btn { padding: 14px; border-radius: 12px; font-weight: 600; cursor: pointer; border: none; width: 100%; }
+.editor-export-btn-cancel { background: var(--cream-hover); color: var(--cream-text-secondary); }
+.editor-export-btn-confirm { background: var(--cream-accent-btn-bg); color: var(--cream-accent-btn-color); font-weight: 900; }
+
+/* Toast */
+.editor-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: var(--cream-success);
+  color: var(--cream-bg);
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  animation: fadeIn 0.3s ease forwards;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Responsive */
+@media (max-width: 1023px) {
+  .editor-left-panel { width: 200px; }
+  .editor-right-bar { width: 56px; }
+}
+@media (max-width: 767px) {
+  .editor-layout { display: none; }
+  .editor-mobile-message {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: var(--cream-bg);
+  }
+  .editor-mobile-btn {
+    background: var(--cream-primary-btn-bg); color: var(--cream-primary-btn-color); border: none; border-radius: 100px; padding: 12px 24px; font-weight: 700; cursor: pointer; margin-top: 20px;
+  }
+}

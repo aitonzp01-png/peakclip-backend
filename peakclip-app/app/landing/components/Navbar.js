@@ -3,9 +3,9 @@
 import { useEffect, useRef } from 'react'
 
 const links = [
-  { label: 'Cómo funciona', href: '#how-it-works' },
-  { label: 'Resultados', href: '#showcase' },
-  { label: 'Precios', href: '#pricing' },
+  { label: 'How it works', href: '#como-funciona' },
+  { label: 'Results', href: '#resultados' },
+  { label: 'Pricing', href: '#precios' },
 ]
 
 export default function Navbar() {
@@ -85,7 +85,7 @@ export default function Navbar() {
       </div>
 
       {/* CTA Button */}
-      <a href="/login?signup=true"
+      <a href="/register"
         className="navbar-cta-btn"
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
@@ -103,7 +103,7 @@ export default function Navbar() {
           transition: 'transform 0.32s ease', zIndex: 0,
         }} />
         <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-          Empezar gratis
+          Start free
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12h14M12 5l7 7-7 7" />
           </svg>

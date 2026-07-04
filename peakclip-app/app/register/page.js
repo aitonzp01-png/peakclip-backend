@@ -6,7 +6,7 @@ import AuthLayout from '../auth/AuthLayout';
 import { getSupabaseClient } from '../../lib/supabase';
 import '../auth/auth.css';
 
-export default function Login() {
+export default function Register() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const router = useRouter();
@@ -23,15 +23,15 @@ export default function Login() {
   };
 
   return (
-    <AuthLayout>
+    <AuthLayout skipRedirect={true}>
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
         className="auth-card"
       >
-        <h2 className="auth-title">Bienvenido de nuevo a PeakClip</h2>
-        <p className="auth-subtitle">Inicia sesión para acceder a tus clips.</p>
+        <h2 className="auth-title">Completa el registro para obtener tus clips gratis</h2>
+        <p className="auth-subtitle">Plan gratis disponible. No se requiere tarjeta de crédito.</p>
 
         <button onClick={handleGoogleLogin} disabled={loading} className="google-btn">
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -65,7 +65,7 @@ export default function Login() {
         </p>
 
         <p className="auth-switch">
-          ¿No tienes cuenta? <a href="/register">Regístrate gratis</a>
+          ¿Ya tienes una cuenta? <a href="/login">Inicia sesión →</a>
         </p>
 
         {message.text && (

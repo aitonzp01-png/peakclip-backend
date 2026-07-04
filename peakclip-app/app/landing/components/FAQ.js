@@ -1,98 +1,214 @@
 'use client'
 
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect, useRef } from 'react'
 
 const faqs = [
   {
-    q: 'How does PeakClip work?',
-    a: 'PeakClip uses AI to analyze your video — including audio transcription, visual scene detection, and engagement pattern recognition. It identifies the most viral-worthy moments, auto-generates animated captions, and exports vertical 9:16 clips ready for TikTok, Reels, and Shorts.',
+    q: 'Do I need video editing skills?',
+    a: 'No — PeakClip automates everything. Just paste a URL and get clips in minutes.',
   },
   {
-    q: 'What platforms do you support?',
-    a: 'You can paste links from YouTube, Twitch, TikTok, and most major video platforms. We also support direct file upload so you can work with local videos, raw footage, or downloads from any source.',
+    q: 'What platforms can I import from?',
+    a: 'YouTube, Twitch VODs, direct MP4. Coming soon: Spotify and Kick.',
   },
   {
-    q: 'Can I customize subtitles?',
-    a: 'Absolutely. PeakClip offers 6 animated subtitle styles with full customization — choose fonts, colors, positions, animation effects, and even edit the transcribed text manually. You have complete control over the final look.',
+    q: 'How fast are clips ready?',
+    a: '3-10 minutes. One hour of video generates 8-15 clips.',
   },
   {
-    q: 'What export formats are available?',
-    a: 'Export in MP4 format with options for 9:16 vertical (TikTok/Reels/Shorts), 1:1 square (Instagram), and 16:9 landscape (YouTube). Resolutions up to 4K are supported depending on your plan.',
+    q: 'Can I publish directly?',
+    a: 'Yes — with Pro and Agency you can schedule to TikTok, Instagram and YouTube.',
   },
   {
-    q: 'Is there a free trial?',
-    a: 'Yes! Start with a 7-day free trial — no credit card required. You\'ll get full access to all features so you can see exactly how PeakClip transforms your workflow before committing.',
+    q: 'Are subtitles accurate?',
+    a: 'Yes — over 95% accuracy including multiple language variants.',
+  },
+  {
+    q: 'What if I\'m not satisfied?',
+    a: '14-day money-back guarantee, no questions asked.',
+  },
+  {
+    q: 'Can I cancel anytime?',
+    a: 'Yes — no commitment or penalties.',
   },
 ]
 
 export default function FAQ() {
   const [openIndex, setOpenIndex] = useState(null)
+  const sectionRef = useRef(null)
+
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el) return
+    const title = el.querySelector('.faq-title-wrap')
+    if (!title) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          title.classList.add('visible')
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.15 }
+    )
+    observer.observe(title)
+    return () => observer.disconnect()
+  }, [])
 
   const toggle = (i) => {
     setOpenIndex(openIndex === i ? null : i)
   }
 
   return (
-    <section className="faq-section" id="faq">
-      <motion.div
-        className="section-heading"
-        initial={{ opacity: 0, y: 40 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div className="section-label">GOT QUESTIONS?</div>
-        <h2 className="section-title">Frequently Asked Questions</h2>
-        <p className="section-desc">
-          Everything you need to know about PeakClip. Still have questions?
-          We&apos;re here to help.
-        </p>
-      </motion.div>
-
-      <div className="faq-list" role="list">
-        {faqs.map((faq, i) => {
-          const isOpen = openIndex === i
-          return (
-            <div
-              key={i}
-              className={`faq-item ${isOpen ? 'open' : ''}`}
-              role="listitem"
-            >
-              <button
-                className="faq-question"
-                onClick={() => toggle(i)}
-                aria-expanded={isOpen}
-                aria-controls={`faq-answer-${i}`}
-              >
-                <span>{faq.q}</span>
-                <span className="faq-toggle" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+    <section id="faq" ref={sectionRef} style={{
+      background: '#f5f5f0', padding: '100px 80px',
+      position: 'relative',
+    }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div className="faq-title-wrap" style={{
+          opacity: 0, transform: 'translateY(18px)',
+          transition: 'opacity 0.6s ease, transform 0.6s ease',
+          marginBottom: 48,
+        }}>
+          <div className="faq-layout">
+            {/* Left column - title */}
+            <div style={{ flex: '0 0 280px' }}>
+              <span style={{
+                fontSize: 12, fontWeight: 600, letterSpacing: 3,
+                color: '#6b6b72', textTransform: 'uppercase',
+                display: 'block', marginBottom: 16,
+              }}>
+                FAQ
+              </span>
+              <h2 style={{
+                fontSize: 'clamp(32px,4vw,56px)', fontWeight: 900,
+                letterSpacing: -2, lineHeight: 0.97, color: '#0f0f0f',
+                marginBottom: 16,
+              }}>
+                Got<br />
+                <span style={{
+                  fontStyle: 'italic', color: '#0f0f0f',
+                  background: '#c4ff3d', padding: '0 8px',
+                  borderRadius: 8,
+                }}>
+                  questions?
                 </span>
-              </button>
-              <div className="faq-answer-wrap" id={`faq-answer-${i}`} role="region">
-                <div className="faq-answer">
-                  <AnimatePresence initial={false}>
-                    {isOpen && (
-                      <motion.div
-                        className="faq-answer-inner"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        {faq.a}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+              </h2>
+              <p style={{ fontSize: 14, color: '#6b6b72', maxWidth: 250, lineHeight: 1.6, marginBottom: 24 }}>
+                Quick answers to the most common questions about PeakClip.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: 13, color: '#6b6b72', marginBottom: 6 }}>
+                    Can't find your answer?
+                  </p>
+                  <a href="/contact" className="faq-contact-link" style={{
+                    fontSize: 14, fontWeight: 700, color: '#0f0f0f',
+                    textDecoration: 'none', transition: 'opacity 0.2s',
+                  }}>
+                    Contact us →
+                  </a>
                 </div>
               </div>
             </div>
-          )
-        })}
+
+            {/* Right column - accordion */}
+            <div style={{ flex: 1, maxWidth: 680 }}>
+              {faqs.map((faq, i) => {
+                const isOpen = openIndex === i
+                return (
+                    <div key={i} style={{
+                      borderBottom: '1px solid rgba(0,0,0,0.06)',
+                    }}>
+                      <button
+                        onClick={() => toggle(i)}
+                        style={{
+                          width: '100%', background: 'none', border: 'none',
+                          padding: '20px 0', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center',
+                          justifyContent: 'space-between', gap: 16,
+                          textAlign: 'left', fontFamily: 'inherit',
+                          fontSize: 15, fontWeight: 700, color: '#0f0f0f',
+                          transition: 'color 0.2s',
+                        }}
+                        className="faq-question-btn"
+                      >
+                      <span>{faq.q}</span>
+                      <span style={{
+                        flexShrink: 0, transition: 'transform 0.35s ease',
+                        transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)',
+                        display: 'flex', alignItems: 'center',
+                      }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <path d="M12 5v14M5 12h14" />
+                        </svg>
+                      </span>
+                    </button>
+                    <div style={{
+                      overflow: 'hidden',
+                      transition: 'max-height 0.35s ease',
+                      maxHeight: isOpen ? '200px' : '0',
+                    }}>
+                      <p style={{
+                        fontSize: 14, color: '#6b6b72', lineHeight: 1.7,
+                        paddingBottom: 20, margin: 0,
+                      }}>
+                        {faq.a}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+
+            </div>
+          </div>
+        </div>
       </div>
+
+      <style>{`
+        .faq-title-wrap.visible {
+          opacity: 1 !important;
+          transform: translateY(0) !important;
+        }
+        .faq-question-btn:hover {
+          color: #0f0f0f !important;
+          opacity: 0.6;
+        }
+        .faq-contact-link:hover {
+          opacity: 0.6;
+        }
+        .faq-layout {
+          display: flex;
+          gap: 60px;
+          align-items: flex-start;
+          text-align: left;
+        }
+        @media (max-width: 768px) {
+          section#faq { padding: 60px 20px !important; }
+          .faq-layout {
+            flex-direction: column !important;
+            gap: 40px !important;
+            align-items: center !important;
+            text-align: center !important;
+          }
+          .faq-layout > div:first-child {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+          }
+          .faq-title-wrap > div {
+            flex-direction: column !important;
+            gap: 40px !important;
+          }
+          .faq-title-wrap > div > div:first-child {
+            flex: none !important;
+            text-align: center !important;
+          }
+          .faq-title-wrap > div > div:first-child p {
+            max-width: 100% !important;
+          }
+        }
+      `}</style>
     </section>
   )
 }

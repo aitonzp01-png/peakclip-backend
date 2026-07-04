@@ -1,0 +1,1179 @@
+/* Dashboard Design System Styles */
+:root {
+  --db-bg: #f5f5f0;
+  --db-surface: #ffffff;
+  --db-border: #e8e8e2;
+  --db-input-bg: #f8f8f4;
+  --db-input-border: #e0e0da;
+  --db-hover: #f0f0ea;
+  --db-text-primary: #0f0f0f;
+  --db-text-secondary: #6b6b72;
+  --db-placeholder: #9a9aa3;
+  --db-accent: #c4ff3d;
+  --db-btn-primary-bg: #0f0f0f;
+  --db-btn-primary-color: #f5f5f0;
+  --db-success: #22c55e;
+  --db-error: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--db-bg);
+  color: var(--db-text-primary);
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Layout Containers */
+.db-layout {
+  min-height: 100vh;
+  position: relative;
+  background-color: var(--db-bg);
+}
+
+/* Sidebar Styling */
+.db-sidebar {
+  width: 220px;
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  background-color: var(--db-surface);
+  border-right: 1px solid var(--db-border);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 16px;
+  overflow-y: auto;
+  transition: transform 0.3s ease;
+}
+
+/* Sidebar logo underlay animation */
+.db-logo {
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: -0.5px;
+  color: var(--db-text-primary);
+  text-transform: uppercase;
+  text-decoration: none;
+  margin-bottom: 20px;
+  display: inline-block;
+  position: relative;
+}
+
+.db-logo span {
+  position: relative;
+}
+
+.db-logo span::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background-color: var(--db-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.6s ease;
+  transition-delay: 0.4s;
+}
+
+.db-logo:hover span::after {
+  transform: scaleX(1);
+}
+
+/* Plan Badge / Pill */
+.db-plan-badge {
+  background-color: var(--db-hover);
+  color: var(--db-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 100px;
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 24px;
+  align-self: flex-start;
+}
+
+.db-plan-upgrade {
+  color: var(--db-text-primary);
+  font-weight: 700;
+  font-size: 11px;
+  margin-left: 6px;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.db-plan-upgrade:hover {
+  text-decoration: underline;
+}
+
+/* Sidebar Section Labels */
+.db-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--db-placeholder);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  margin-top: 20px;
+  padding-left: 12px;
+}
+
+.db-section-label:first-of-type {
+  margin-top: 4px;
+}
+
+/* Navigation Items */
+.db-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+  color: var(--db-text-secondary);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.db-nav-item:hover {
+  background-color: var(--db-hover);
+  color: var(--db-text-primary);
+}
+
+.db-nav-item.active {
+  background-color: var(--db-btn-primary-bg);
+  color: var(--db-btn-primary-color);
+}
+
+.db-nav-item svg {
+  color: currentColor;
+  flex-shrink: 0;
+}
+
+.db-nav-badge {
+  background-color: var(--db-hover);
+  color: var(--db-placeholder);
+  font-size: 9px;
+  font-weight: 800;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: auto;
+}
+
+/* Sidebar Footer */
+.db-sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.db-divider {
+  height: 1px;
+  background-color: var(--db-border);
+  margin-bottom: 16px;
+}
+
+.db-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.db-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--db-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--db-text-secondary);
+  text-transform: uppercase;
+}
+
+.db-user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.db-user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--db-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.db-user-email {
+  font-size: 11px;
+  color: var(--db-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.db-footer-link {
+  font-size: 12px;
+  color: var(--db-text-secondary);
+  display: block;
+  margin-bottom: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.2s;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+
+.db-footer-link:hover {
+  color: var(--db-text-primary);
+}
+
+.db-footer-link.logout:hover {
+  color: var(--db-error);
+}
+
+/* Topbar Styling */
+.db-topbar {
+  height: 56px;
+  position: fixed;
+  top: 0;
+  left: 220px;
+  right: 0;
+  background-color: var(--db-surface);
+  border-bottom: 1px solid var(--db-border);
+  z-index: 30;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.db-topbar-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--db-text-primary);
+}
+
+.db-topbar-mobile-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.db-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Credits Badge */
+.db-credits-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--db-bg);
+  border: 1px solid var(--db-border);
+  border-radius: 100px;
+  padding: 6px 12px;
+}
+
+.db-credits-text {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--db-text-primary);
+}
+
+/* Button Accento / Add Credits */
+.db-btn-accent {
+  background-color: var(--db-accent);
+  color: var(--db-text-primary);
+  font-weight: 800;
+  border-radius: 100px;
+  padding: 8px 16px;
+  font-size: 13px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: filter 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.db-btn-accent:hover {
+  filter: brightness(0.95);
+}
+
+/* Notifications Bell */
+.db-notification-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--db-text-secondary);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  transition: color 0.2s;
+}
+
+.db-notification-btn:hover {
+  color: var(--db-text-primary);
+}
+
+.db-notification-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: var(--db-error);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Main Content Area */
+.db-content {
+  margin-left: 220px;
+  padding: 88px 32px 40px;
+  background-color: var(--db-bg);
+  min-height: 100vh;
+}
+
+/* Primary Input Card */
+.db-input-card {
+  background-color: var(--db-surface);
+  border: 1px solid var(--db-border);
+  border-radius: 20px;
+  padding: 36px;
+  max-width: 680px;
+  margin: 0 auto 40px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.db-input-card-title {
+  font-size: clamp(20px, 3vw, 28px);
+  font-weight: 900;
+  letter-spacing: -1px;
+  color: var(--db-text-primary);
+  margin-bottom: 6px;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.db-input-card-subtitle {
+  font-size: 14px;
+  color: var(--db-text-secondary);
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.db-url-container {
+  background-color: var(--db-input-bg);
+  border: 1px solid var(--db-input-border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: border-color 0.2s;
+}
+
+.db-url-container.focus {
+  border-color: var(--db-text-primary);
+}
+
+.db-url-container.shake {
+  animation: shake-anim 0.4s ease-in-out;
+  border-color: var(--db-error);
+}
+
+@keyframes shake-anim {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+.db-url-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 15px;
+  color: var(--db-text-primary);
+  flex: 1;
+}
+
+.db-url-input::placeholder {
+  color: var(--db-placeholder);
+}
+
+/* Secondary Buttons Row */
+.db-secondary-row {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.db-secondary-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 100px;
+  background-color: var(--db-hover);
+  border: 1px solid var(--db-input-border);
+  color: var(--db-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.db-secondary-btn:hover {
+  border-color: var(--db-text-primary);
+  color: var(--db-text-primary);
+}
+
+/* Primary Action Button */
+.db-primary-btn {
+  width: 100%;
+  margin-top: 16px;
+  background-color: var(--db-btn-primary-bg);
+  color: var(--db-btn-primary-color);
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.db-primary-btn:hover {
+  background-color: #1a1a1a;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.db-primary-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.db-spinner {
+  animation: spin-anim 1s linear infinite;
+}
+
+@keyframes spin-anim {
+  to { transform: rotate(360deg); }
+}
+
+/* Processing View */
+.db-processing-view {
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.db-processing-spinner-container {
+  width: 96px;
+  height: 96px;
+  position: relative;
+  margin: 0 auto;
+}
+
+.db-spinner-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 4px solid var(--db-border);
+}
+
+.db-spinner-fg {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 4px solid transparent;
+  border-top-color: var(--db-accent);
+  animation: spin-anim 1s linear infinite;
+}
+
+.db-spinner-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--db-text-primary);
+}
+
+.db-step-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--db-text-primary);
+  text-align: center;
+  margin-top: 24px;
+}
+
+.db-step-subtitle {
+  font-size: 14px;
+  color: var(--db-text-secondary);
+  text-align: center;
+  margin-top: 6px;
+}
+
+/* Progress Bar */
+.db-progress-container {
+  width: 100%;
+  max-width: 360px;
+  margin: 20px auto 0;
+}
+
+.db-progress-text-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.db-progress-step {
+  color: var(--db-text-secondary);
+}
+
+.db-progress-percent {
+  color: var(--db-text-primary);
+  font-weight: 700;
+}
+
+.db-progress-track {
+  height: 6px;
+  background-color: var(--db-border);
+  border-radius: 100px;
+  overflow: hidden;
+}
+
+.db-progress-fill {
+  background-color: var(--db-accent);
+  height: 100%;
+  border-radius: 100px;
+  transition: width 0.5s ease-out;
+}
+
+/* Steps List */
+.db-steps-list {
+  width: 100%;
+  max-width: 320px;
+  margin: 24px auto 0;
+}
+
+.db-step-item {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.db-step-item.completed {
+  color: var(--db-success);
+}
+
+.db-step-item.current {
+  color: var(--db-text-primary);
+  font-weight: 600;
+}
+
+.db-step-item.pending {
+  color: var(--db-placeholder);
+}
+
+/* Quick Tools Section */
+.db-tools-section {
+  margin: 40px auto;
+  max-width: 760px;
+  width: 100%;
+}
+
+.db-tools-grid {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 20px 24px;
+  padding: 12px 4px 20px;
+}
+
+.db-tool-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.db-tool-icon-box {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background-color: var(--db-surface);
+  border: 1px solid var(--db-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: background-color 0.2s, border-color 0.2s;
+  color: var(--db-text-primary);
+}
+
+.db-tool-wrapper:hover .db-tool-icon-box {
+  background-color: var(--db-btn-primary-bg);
+  border-color: var(--db-btn-primary-bg);
+  color: var(--db-accent);
+}
+
+.db-tool-label {
+  font-size: 11px;
+  color: var(--db-text-secondary);
+  text-align: center;
+  max-width: 70px;
+  line-height: 1.3;
+  transition: color 0.2s;
+}
+
+.db-tool-wrapper:hover .db-tool-label {
+  color: var(--db-text-primary);
+}
+
+.db-tool-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background-color: var(--db-accent);
+  color: var(--db-text-primary);
+  font-size: 8px;
+  font-weight: 800;
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+/* Tool Modal Styling */
+.db-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.db-modal {
+  background-color: var(--db-surface);
+  border: 1px solid var(--db-border);
+  border-radius: 20px;
+  max-width: 480px;
+  width: 90vw;
+  padding: 32px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.db-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--db-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.db-modal-close:hover {
+  color: var(--db-text-primary);
+}
+
+.db-modal-title {
+  font-weight: 900;
+  font-size: 20px;
+  color: var(--db-text-primary);
+  margin-bottom: 6px;
+}
+
+.db-modal-desc {
+  font-size: 14px;
+  color: var(--db-text-secondary);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+/* Modal specific inputs */
+.db-modal-input {
+  width: 100%;
+  background-color: var(--db-input-bg);
+  border: 1px solid var(--db-input-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 14px;
+  color: var(--db-text-primary);
+  outline: none;
+  transition: border-color 0.2s;
+  margin-bottom: 12px;
+}
+
+.db-modal-input:focus {
+  border-color: var(--db-text-primary);
+}
+
+.db-modal-links-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.db-modal-link-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--db-text-secondary);
+  font-size: 13px;
+  transition: color 0.2s;
+  padding: 4px 0;
+}
+
+.db-modal-link-btn:hover {
+  color: var(--db-text-primary);
+}
+
+.db-modal-action-btn {
+  width: 100%;
+  background-color: var(--db-btn-primary-bg);
+  color: var(--db-btn-primary-color);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.db-modal-action-btn:hover {
+  background-color: #1a1a1a;
+}
+
+/* Captions AI Grid Styles */
+.db-caption-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.db-caption-style-card {
+  background-color: var(--db-input-bg);
+  border: 2px solid var(--db-input-border);
+  border-radius: 8px;
+  aspect-ratio: 9/16;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.db-caption-style-card.active, .db-caption-style-card:hover {
+  border-color: var(--db-text-primary);
+}
+
+.db-caption-style-text {
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background-color: var(--db-text-primary);
+  color: var(--db-accent);
+}
+
+/* Projects Section */
+.db-projects-section {
+  margin-top: 40px;
+}
+
+.db-projects-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--db-border);
+  padding-bottom: 12px;
+}
+
+.db-tabs-container {
+  display: flex;
+  gap: 16px;
+}
+
+.db-tab-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding-bottom: 4px;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+
+.db-tab-btn.active {
+  color: var(--db-text-primary);
+  font-weight: 700;
+  border-bottom: 2px solid var(--db-accent);
+}
+
+.db-tab-btn.inactive {
+  color: var(--db-text-secondary);
+}
+
+.db-tab-btn.inactive:hover {
+  color: var(--db-text-primary);
+}
+
+.db-storage-info {
+  font-size: 12px;
+  color: var(--db-placeholder);
+}
+
+/* Empty State */
+.db-empty-state {
+  border: 2px dashed var(--db-input-border);
+  border-radius: 16px;
+  padding: 60px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.db-empty-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--db-text-primary);
+  margin-top: 16px;
+}
+
+.db-empty-subtitle {
+  font-size: 14px;
+  color: var(--db-text-secondary);
+  margin-top: 6px;
+  max-width: 320px;
+}
+
+.db-empty-action-btn {
+  background-color: var(--db-btn-primary-bg);
+  color: var(--db-btn-primary-color);
+  border-radius: 100px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  margin-top: 20px;
+  transition: background-color 0.2s;
+}
+
+.db-empty-action-btn:hover {
+  background-color: #1a1a1a;
+}
+
+/* Grid of Clip Cards */
+.db-clips-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.db-clip-card {
+  background-color: var(--db-surface);
+  border: 1px solid var(--db-border);
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.25s, transform 0.25s;
+}
+
+.db-clip-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.db-clip-thumbnail {
+  height: 160px;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--db-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.db-clip-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.db-clip-thumb-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--db-placeholder);
+}
+
+.db-clip-new-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background-color: var(--db-accent);
+  color: var(--db-text-primary);
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.db-clip-info {
+  padding: 12px;
+}
+
+.db-clip-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--db-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.db-clip-platform {
+  font-size: 11px;
+  color: var(--db-text-secondary);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.db-clip-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.db-clip-date {
+  font-size: 11px;
+  color: var(--db-placeholder);
+}
+
+.db-clip-menu-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--db-placeholder);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.db-clip-menu-btn:hover {
+  color: var(--db-text-primary);
+}
+
+/* Dropdown menu */
+.db-dropdown {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  background-color: var(--db-surface);
+  border: 1px solid var(--db-border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 4px;
+  z-index: 10;
+  min-width: 120px;
+}
+
+.db-dropdown-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--db-text-primary);
+  display: block;
+}
+
+.db-dropdown-item:hover {
+  background-color: var(--db-hover);
+}
+
+.db-dropdown-item.delete {
+  color: var(--db-error);
+}
+
+.db-dropdown-item.delete:hover {
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+/* Mobile Overlay Drawer */
+.db-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 190;
+}
+
+/* Toast container for notices */
+.db-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background-color: var(--db-btn-primary-bg);
+  color: var(--db-btn-primary-color);
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  z-index: 200;
+  animation: slide-in-toast 0.2s ease-out;
+}
+
+.db-toast.error {
+  border-left: 4px solid var(--db-error);
+}
+
+.db-toast.success {
+  border-left: 4px solid var(--db-success);
+}
+
+@keyframes slide-in-toast {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 768px) {
+  .db-sidebar {
+    position: fixed;
+    transform: translateX(-100%);
+    z-index: 200;
+  }
+  
+  .db-sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .db-topbar {
+    left: 0;
+    width: 100%;
+    padding: 0 16px;
+  }
+  
+  .db-topbar-mobile-btn {
+    display: block;
+  }
+  
+  .db-content {
+    margin-left: 0;
+    padding: 80px 16px 32px;
+  }
+  
+  .db-clips-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .db-input-card {
+    padding: 24px;
+  }
+  
+  .db-secondary-row {
+    justify-content: center;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .db-sidebar {
+    width: 180px;
+  }
+  
+  .db-topbar {
+    left: 180px;
+  }
+  
+  .db-content {
+    margin-left: 180px;
+    padding: 80px 24px 32px;
+  }
+  
+  .db-clips-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

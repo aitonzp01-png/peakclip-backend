@@ -1,100 +1,308 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { useEffect, useRef } from 'react'
 
 const testimonials = [
   {
-    name: 'Mary Chen',
-    initials: 'MC',
-    role: '@marychen',
-    quote: 'PeakClip cut my editing time from 2 hours to 5 minutes. The AI actually understands what makes a clip worth watching.',
-    stars: 5,
+    name: 'Carlos M.',
+    initial: 'C',
+    role: 'Content Creator · YouTube',
+    quote: 'In two weeks my clips reached 2 million people. PeakClip found moments I never even considered viral.',
+    badge: '+2.1M views',
   },
   {
-    name: 'Jake Torres',
-    initials: 'JT',
-    role: '@jaketorres',
-    quote: 'The AI actually picks good moments. I don\'t have to watch the whole video to find the highlights anymore.',
-    stars: 5,
+    name: 'Laura G.',
+    initial: 'L',
+    role: 'Podcaster · Spotify & YouTube',
+    quote: 'I uploaded a 1-hour episode and PeakClip gave me 8 clips ready to publish. My channel grew 340% in 3 months.',
+    badge: '340% growth',
   },
   {
-    name: 'Sarah Kim',
-    initials: 'SK',
-    role: '@sarahkim',
-    quote: 'I grew my channel by 14K subs in a month using PeakClip clips. It\'s become an essential part of my workflow.',
-    stars: 5,
+    name: 'Andrés R.',
+    initial: 'A',
+    role: 'Streamer · Twitch',
+    quote: 'My streams run 4 hours. I used to spend days editing. Now PeakClip does it while I\'m still live.',
+    badge: '×4 faster',
   },
   {
-    name: 'David Park',
-    initials: 'DP',
-    role: '@davidpark',
-    quote: 'Finally, a tool that understands short-form content. The auto-captions and vertical export save me hours every day.',
-    stars: 5,
+    name: 'Sofía P.',
+    initial: 'S',
+    role: 'Business Coach · Instagram',
+    quote: 'My reels went from 3,000 to 800,000 views in the first month. The AI knows exactly what moments hook people.',
+    badge: '+800k views',
+  },
+  {
+    name: 'Miguel T.',
+    initial: 'M',
+    role: 'Tech Creator · TikTok',
+    quote: 'What surprises me most is that captions come out perfect and reframing is automatic. It feels like magic.',
+    badge: '3× reach',
+  },
+  {
+    name: 'Elena V.',
+    initial: 'E',
+    role: 'Fitness Creator · Reels',
+    quote: 'I publish daily with zero effort. PeakClip schedules the clips and I just focus on recording the original content.',
+    badge: '7 clips/day',
+  },
+  {
+    name: 'Diego H.',
+    initial: 'D',
+    role: 'Musician · TikTok',
+    quote: 'My songs now go viral within a week. PeakClip helps me reach new audiences all the time.',
+    badge: '+500k plays',
+  },
+  {
+    name: 'Valeria N.',
+    initial: 'V',
+    role: 'Food Creator · Reels',
+    quote: 'I upload a 20-minute recipe and get 5 clips ready. My followers grew from 5k to 45k in two months.',
+    badge: '9× followers',
+  },
+  {
+    name: 'Pablo G.',
+    initial: 'P',
+    role: 'Educator · YouTube',
+    quote: 'My recorded lectures turned into clips that my students share. Organic reach multiplied by 6.',
+    badge: '6× reach',
+  },
+  {
+    name: 'Camila R.',
+    initial: 'C',
+    role: 'Traveler · Instagram',
+    quote: 'Editing 20 minutes of video used to take me 3 hours. PeakClip does it in seconds — and better than I can.',
+    badge: '95% faster',
+  },
+  {
+    name: 'Jorge L.',
+    initial: 'J',
+    role: 'Comedian · YouTube Shorts',
+    quote: 'My long sketches now generate shorts that go viral. I went from 2k to 62k subscribers in 45 days.',
+    badge: '62k subs',
+  },
+  {
+    name: 'Ana F.',
+    initial: 'A',
+    role: 'Fashion Creator · TikTok',
+    quote: 'The AI picks the best outfits and moments. My videos went from 500 views to 50k on average.',
+    badge: '×100 views',
   },
 ]
 
-const container = {
-  hidden: {},
-  show: {
-    transition: { staggerChildren: 0.1 },
-  },
-}
-
-const item = {
-  hidden: { opacity: 0, y: 30 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
-}
-
-function Stars() {
-  const starSvg = <svg width="14" height="14" viewBox="0 0 24 24" fill="#D9B44A" stroke="#D9B44A" strokeWidth="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-  return (
-    <div className="testimonial-stars" aria-label="5 out of 5 stars">
-      {starSvg}{starSvg}{starSvg}{starSvg}{starSvg}
-    </div>
-  )
-}
-
 export default function Testimonials() {
-  return (
-    <section className="testimonials-section" id="showcase">
-      <motion.div
-        className="section-heading"
-        initial={{ opacity: 0, y: 40 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div className="section-label">CREATOR LOVE</div>
-        <h2 className="section-title">Trusted by Growing Creators</h2>
-        <p className="section-desc">
-          See why thousands of creators use PeakClip to turn long-form content
-          into viral shorts.
-        </p>
-      </motion.div>
+  const sectionRef = useRef(null)
 
-      <motion.div
-        className="testimonials-grid"
-        variants={container}
-        initial="hidden"
-        whileInView="show"
-        viewport={{ once: true }}
-      >
-        {testimonials.map((t) => (
-          <motion.div key={t.name} className="testimonial-card" variants={item}>
-            <div className="testimonial-header">
-              <div className="testimonial-avatar" aria-hidden="true">
-                {t.initials}
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el) return
+    const title = el.querySelector('.ts-title')
+    if (!title) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          title.classList.add('visible')
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.15 }
+    )
+    observer.observe(title)
+    return () => observer.disconnect()
+  }, [])
+
+  const doubled = [...testimonials, ...testimonials]
+
+  return (
+    <section id="testimonios" ref={sectionRef} style={{
+      background: '#f5f5f0', padding: '100px 0',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      {/* Title */}
+      <div className="ts-title" style={{
+        textAlign: 'center', padding: '0 24px', marginBottom: 48,
+        opacity: 0, transform: 'translateY(18px)',
+        transition: 'opacity 0.6s ease, transform 0.6s ease',
+      }}>
+        <span style={{
+          fontSize: 12, fontWeight: 600, letterSpacing: 3,
+          color: '#6b6b72', textTransform: 'uppercase',
+          display: 'block', marginBottom: 16,
+        }}>
+          REAL TESTIMONIALS
+        </span>
+        <h2 style={{
+          fontSize: 'clamp(36px,5vw,64px)', fontWeight: 900,
+          letterSpacing: -2, lineHeight: 0.97, color: '#0f0f0f',
+          marginBottom: 16,
+        }}>
+          What{' '}
+          <span style={{
+            fontStyle: 'italic', color: '#0f0f0f',
+            background: '#c4ff3d', padding: '0 8px',
+            borderRadius: 8,
+          }}>
+            creators
+          </span>{' '}
+          say
+        </h2>
+        <p style={{
+          fontSize: 16, color: '#6b6b72', maxWidth: 420,
+          margin: '0 auto',
+        }}>
+          Over 2,400 creators trust PeakClip to grow their audience.
+        </p>
+      </div>
+
+      {/* Stats bar */}
+      <div style={{
+        display: 'flex', justifyContent: 'center', gap: 0,
+        maxWidth: 600, margin: '0 auto 48px',
+      }}>
+        <div style={{ padding: '0 40px', textAlign: 'center', paddingLeft: 0 }}>
+          <span style={{ fontSize: 32, fontWeight: 900, color: '#0f0f0f', display: 'block' }}>
+            2,400+
+          </span>
+          <span style={{ fontSize: 13, color: '#6b6b72', display: 'block', marginTop: 4 }}>
+            active creators
+          </span>
+        </div>
+        <div style={{ width: 1, background: '#e0e0da' }} />
+        <div style={{ padding: '0 40px', textAlign: 'center' }}>
+          <span style={{ fontSize: 32, fontWeight: 900, color: '#0f0f0f', display: 'block' }}>
+            48M+
+          </span>
+          <span style={{ fontSize: 13, color: '#6b6b72', display: 'block', marginTop: 4 }}>
+            views generated
+          </span>
+        </div>
+        <div style={{ width: 1, background: '#e0e0da' }} />
+        <div style={{ padding: '0 40px', textAlign: 'center', paddingRight: 0 }}>
+          <span style={{ fontSize: 32, fontWeight: 900, color: '#c4ff3d', display: 'block' }}>
+            4.9★
+          </span>
+          <span style={{ fontSize: 13, color: '#6b6b72', display: 'block', marginTop: 4 }}>
+            average rating
+          </span>
+        </div>
+      </div>
+
+      {/* Carousel */}
+      <div style={{ width: '100%', overflow: 'hidden' }}>
+        <div className="ts-track" style={{
+          display: 'flex', gap: 20, width: 'max-content',
+          animation: 'ts-scroll 50s linear infinite',
+          padding: '0 40px',
+        }}>
+          {doubled.map((t, i) => (
+            <div key={`${t.name}-${i}`} className="ts-card" style={{
+              width: 'calc((100vw - 80px - 40px) / 3)',
+              maxWidth: 380, minWidth: 280,
+              flexShrink: 0,
+              background: '#ffffff', borderRadius: 20,
+              border: '1px solid #e8e8e2',
+              boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+              overflow: 'hidden',
+              transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+            }}>
+              {/* Top bar with avatar */}
+              <div style={{
+                padding: '20px 24px 0',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <div style={{
+                  width: 48, height: 48, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #e8e8e2, #d4d4cc)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                  fontSize: 18, fontWeight: 800, color: '#0f0f0f',
+                }}>
+                  {t.initial}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#0f0f0f' }}>
+                    {t.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b6b72', marginTop: 2 }}>
+                    {t.role}
+                  </div>
+                </div>
+                <span style={{
+                  background: 'rgba(196,255,61,0.15)',
+                  border: '1px solid rgba(196,255,61,0.35)',
+                  color: '#0f0f0f',
+                  borderRadius: 100, padding: '4px 10px',
+                  fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+                }}>
+                  {t.badge}
+                </span>
               </div>
-              <div className="testimonial-author-info">
-                <div className="testimonial-author">{t.name}</div>
-                <div className="testimonial-role">{t.role}</div>
+
+              {/* Quote */}
+              <div style={{ padding: '16px 24px 24px', position: 'relative' }}>
+                <span style={{
+                  fontSize: 40, color: '#c4ff3d',
+                  lineHeight: 0.6, fontFamily: 'Georgia, serif',
+                  display: 'block', marginBottom: 4, opacity: 0.6,
+                }}>
+                  "
+                </span>
+                <p style={{
+                  fontSize: 14, color: '#4a4a4a', lineHeight: 1.6,
+                  fontWeight: 400, margin: 0,
+                }}>
+                  {t.quote}
+                </p>
               </div>
             </div>
-            <Stars />
-            <p className="testimonial-text">{t.quote}</p>
-          </motion.div>
-        ))}
-      </motion.div>
+          ))}
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes ts-scroll {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        .ts-track:hover {
+          animation-play-state: paused;
+        }
+        .ts-card:hover {
+          transform: translateY(-4px) !important;
+          box-shadow: 0 12px 32px rgba(0,0,0,0.1) !important;
+        }
+        .ts-title.visible {
+          opacity: 1 !important;
+          transform: translateY(0) !important;
+        }
+        @media (max-width: 1024px) {
+          .ts-card {
+            width: calc((100vw - 80px - 20px) / 2) !important;
+            min-width: 240px !important;
+          }
+        }
+        @media (max-width: 768px) {
+          .ts-card {
+            width: calc(100vw - 80px) !important;
+            min-width: 200px !important;
+          }
+          section#testimonios {
+            padding: 60px 0 !important;
+          }
+          div[style*="padding: 0 40px;"] {
+            flex-direction: column !important;
+            gap: 16px !important;
+            max-width: 300px !important;
+          }
+          div[style*="padding: 0 40px;"] > div {
+            padding: 0 !important;
+            padding-bottom: 16px !important;
+          }
+          div[style*="padding: 0 40px;"] > div[style*="width: 1px"] {
+            width: 100% !important;
+            height: 1px !important;
+          }
+        }
+      `}</style>
     </section>
   )
 }
