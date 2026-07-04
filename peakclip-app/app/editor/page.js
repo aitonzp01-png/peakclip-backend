@@ -4,92 +4,58 @@ import { getSupabaseClient } from '../../lib/supabase'
 import { createClip } from '../../lib/api'
 import useEditorStore from './store/editorStore'
 import EditorTopBar from './components/EditorTopBar'
-import EditorSidebar from './components/EditorSidebar'
-import EditorPreview from './components/EditorPreview'
-import EditorTimeline from './components/EditorTimeline'
-import EditorInspector from './components/EditorInspector'
-import EditorMobilePanel from './components/EditorMobilePanel'
-import ExportModal from './components/ExportModal'
-import { surface, borderSoft, brand, brandDim, brandGlow, textDim, textPrimary, fonts } from '../../lib/tokens'
-import icons from '../../lib/icons'
-import ErrorBoundary from '../../lib/error-boundary'
+import EditorPreviewCanvas from './components/EditorPreviewCanvas'
+import EditorTranscript from './components/EditorTranscript'
+import EditorTimelineNew from './components/EditorTimelineNew'
+import EditorSubtitlesPanel from './components/EditorSubtitlesPanel'
+import EditorTextPanel from './components/EditorTextPanel'
+import EditorAudioPanel from './components/EditorAudioPanel'
+import EditorTransitionsPanel from './components/EditorTransitionsPanel'
+import EditorAIEnhancePanel from './components/EditorAIEnhancePanel'
+import EditorBRollPanel from './components/EditorBRollPanel'
+import EditorBrandPanel from './components/EditorBrandPanel'
+import EditorMultimediaPanel from './components/EditorMultimediaPanel'
+import EditorToolsBar from './components/EditorToolsBar'
+import EditorExportModal from './components/EditorExportModal'
+import { bgPrimary, bgSecondary, surface, brand, brandDim, brandGlow, borderSoft, borderStrong, textPrimary, textSecondary, textDim } from '../../lib/editor-tokens'
+
+const rightTabs = [
+  { id: 'subtitles', label: 'Subt&iacute;tulos', comp: EditorSubtitlesPanel },
+  { id: 'text', label: 'Texto', comp: EditorTextPanel },
+  { id: 'audio', label: 'Audio', comp: EditorAudioPanel },
+  { id: 'transitions', label: 'Transiciones', comp: EditorTransitionsPanel },
+  { id: 'ai', label: 'IA', comp: EditorAIEnhancePanel },
+  { id: 'broll', label: 'B-Roll', comp: EditorBRollPanel },
+  { id: 'brand', label: 'Marca', comp: EditorBrandPanel },
+  { id: 'multimedia', label: 'Multimedia', comp: EditorMultimediaPanel },
+]
 
 export default function EditorPage() {
   const videoRef = useRef(null)
+  const timeoutsRef = useRef([])
+
   const {
     clip, setClip, clipId, setClipId, user, setUser,
     isPlaying, setIsPlaying, setPlayheadPos,
-    keyboardHint, setActiveTool, activeTool,
+    keyboardHint, setActiveTool, activeTool, toolsPanelOpen, setToolsPanelOpen,
+    loading, setLoading, setKeyboardHint,
+    timelineHidden,
   } = useEditorStore()
 
-  const [loading, setLoading] = useState(true)
-  const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
-  const timeoutsRef = useRef([])
+  const [leftPanelOpen, setLeftPanelOpen] = useState(true)
+  const [rightTab, setRightTab] = useState('subtitles')
+  const [activeToolLoc, setActiveToolLoc] = useState(null)
+  const [windowWidth, setWindowWidth] = useState(0)
 
   useEffect(() => {
-    const init = async () => {
-      const { data: { user } } = await getSupabaseClient().auth.getUser()
-      if (!user) { window.location.href = '/login'; return }
-      setUser(user)
-
-      const params = new URLSearchParams(window.location.search)
-      const id = params.get('id')
-      const urlParam = params.get('url')
-
-      if (id) {
-        setClipId(id)
-        await loadClipData(id, user)
-      } else if (!urlParam) {
-        // Create a clip record in Supabase so it shows in dashboard
-        const saved = await createClip(user.id, { title: 'New Project', duration: 0, status: 'draft' })
-        if (saved?.id) {
-          window.history.replaceState(null, '', `/editor?id=${saved.id}`)
-          setClipId(saved.id)
-          setClip({ id: saved.id, title: 'New Project', video_url: null, duration: 0 })
-        } else {
-          const demoId = 'demo_' + Date.now()
-          setClipId(demoId)
-          const store = useEditorStore.getState()
-          store.setSubtitleText('Drop a video or paste a URL to start')
-          store.setSubtitleStyle('bold-yellow')
-        }
-      } else {
-        const demoId = 'demo_' + Date.now()
-        setClipId(demoId)
-        const store = useEditorStore.getState()
-        store.setSubtitleText('Drop a video or paste a URL to start')
-        store.setSubtitleStyle('bold-yellow')
-        if (urlParam) {
-          const title = urlParam.split('/').pop()?.slice(0, 40) || 'Video Clip'
-          const saved = await createClip(user.id, { title, video_url: urlParam, duration: 60 })
-          if (saved?.id) {
-            window.history.replaceState(null, '', `/editor?id=${saved.id}&url=${encodeURIComponent(urlParam)}`)
-            setClipId(saved.id)
-            setClip({ id: saved.id, title, video_url: urlParam, duration: 60, url: urlParam })
-          }
-        }
-      }
-
-      setLoading(false)
-    }
-
-    init()
-
-    // Safety timeout — force stop loading after 10s
-    const safetyTimer = setTimeout(() => setLoading(false), 10000)
-    timeoutsRef.current.push(safetyTimer)
-
-    return () => {
-      timeoutsRef.current.forEach(clearTimeout)
-      timeoutsRef.current = []
-    }
+    const onResize = () => setWindowWidth(window.innerWidth)
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const loadUser = async () => {
-    const { data: { user } } = await getSupabaseClient().auth.getUser()
-    if (!user) { window.location.href = '/login'; return }
-    setUser(user)
-  }
+  const isMobile = windowWidth > 0 && windowWidth < 768
+  const isTablet = windowWidth >= 768 && windowWidth <= 1024
 
   const loadClipData = async (id, currentUser) => {
     const u = currentUser || (await getSupabaseClient().auth.getUser())?.data?.user
@@ -110,13 +76,9 @@ export default function EditorPage() {
           }
           setClip({ id: realId, title, video_url: urlParam, duration: 60, url: urlParam })
           setClipId(realId)
-          store.setSubtitleText(title)
         } else {
-          store.setSubtitleText('Demo clip loaded')
+          store.setSubtitleText('')
         }
-        store.setSubtitleStyle('bold-yellow')
-        store.setMusic('chill')
-        store.setMusicVolume(30)
         setLoading(false)
         return
       }
@@ -126,41 +88,29 @@ export default function EditorPage() {
 
       if (data) {
         setClip(data)
-        const title = data.title || 'Clip'
-        store.setSubtitleText(title)
+        if (data.subtitles_srt) {
+          store.loadSubtitlesFromSRT(data.subtitles_srt)
+        } else {
+          store.setSubtitles([])
+        }
       } else if (urlParam) {
         const title = urlParam.split('/').pop()?.slice(0, 40) || 'Video Clip'
         setClip({ id, title, video_url: urlParam, duration: 60, url: urlParam })
-        store.setSubtitleText(title)
+        store.setSubtitleText('')
       }
 
-      // Auto-generate AI subtitles after clip loads
-      const t1 = setTimeout(() => {
-        store.setSubtitleText('AI subtitles generated automatically')
-        store.setSubtitleStyle('bold-yellow')
-        store.showHint('Auto-captions generated')
-      }, 1200)
+      // Apply trim from clip data: for processed clips, use full 0-100%
+      store.setTrimStart(0)
+      store.setTrimEnd(100)
 
-      // Auto-set background music
-      const t2 = setTimeout(() => {
-        store.setMusic('chill')
+      // Set music based on clip mood if available
+      if (data?.mood) {
+        store.setMusic(data.mood)
         store.setMusicVolume(30)
-      }, 2000)
-
-      // Auto-set trim handles to viral moment boundaries
-      const t3 = setTimeout(() => {
-        if (data?.start_time != null && data?.end_time != null && data?.duration) {
-          const dur = Number(data.duration)
-          if (dur > 0) {
-            store.setTrimStart((Number(data.start_time) / dur) * 100)
-            store.setTrimEnd((Number(data.end_time) / dur) * 100)
-          }
-        } else {
-          store.setTrimStart(0)
-          store.setTrimEnd(100)
-        }
-      }, 2800)
-      timeoutsRef.current.push(t1, t2, t3)
+      } else {
+        store.setMusic('none')
+        store.setMusicVolume(30)
+      }
 
     } catch (err) {
       console.error('Failed to load clip:', err)
@@ -176,9 +126,9 @@ export default function EditorPage() {
           setClipId(realId)
         }
         setClip({ id: realId, title, video_url: urlParam, duration: 60, url: urlParam })
-        store.setSubtitleText(title)
+        store.setSubtitleText('')
       } else {
-        store.setSubtitleText('Demo clip loaded')
+        store.setSubtitleText('')
         store.setSubtitleStyle('bold-yellow')
       }
       store.setMusic('chill')
@@ -187,19 +137,82 @@ export default function EditorPage() {
     setLoading(false)
   }
 
+  useEffect(() => {
+    const init = async () => {
+      try {
+      const { data: { user } } = await getSupabaseClient().auth.getUser()
+      if (!user) { window.location.href = '/login'; return }
+      setUser(user)
+
+      const params = new URLSearchParams(window.location.search)
+      const id = params.get('id')
+      const urlParam = params.get('url')
+
+      if (id) {
+        setClipId(id)
+        await loadClipData(id, user)
+      } else if (!urlParam) {
+        const saved = await createClip(user.id, { title: 'New Project', duration: 0, status: 'draft' })
+        if (saved?.id) {
+          window.history.replaceState(null, '', `/editor?id=${saved.id}`)
+          setClipId(saved.id)
+          setClip({ id: saved.id, title: 'New Project', video_url: null, duration: 0 })
+        } else {
+          const demoId = 'demo_' + Date.now()
+          setClipId(demoId)
+        }
+      } else {
+        const demoId = 'demo_' + Date.now()
+        setClipId(demoId)
+        if (urlParam) {
+          const title = urlParam.split('/').pop()?.slice(0, 40) || 'Video Clip'
+          const saved = await createClip(user.id, { title, video_url: urlParam, duration: 60 })
+          if (saved?.id) {
+            window.history.replaceState(null, '', `/editor?id=${saved.id}&url=${encodeURIComponent(urlParam)}`)
+            setClipId(saved.id)
+            setClip({ id: saved.id, title, video_url: urlParam, duration: 60, url: urlParam })
+          }
+        }
+      }
+
+      setLoading(false)
+      } catch (err) {
+        console.error('Editor init error:', err)
+        setLoading(false)
+      }
+    }
+
+    init()
+
+    const safetyTimer = setTimeout(() => setLoading(false), 10000)
+    timeoutsRef.current.push(safetyTimer)
+
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout)
+      timeoutsRef.current = []
+    }
+  }, [])
+
   const handleKeyDown = useCallback((e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
     const store = useEditorStore.getState()
 
     switch (e.key) {
+      case 'z':
+      case 'Z':
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault()
+          const store = useEditorStore.getState()
+          if (e.shiftKey) store.redo()
+          else store.undo()
+          return
+        }
+        break
       case ' ':
         e.preventDefault()
         if (videoRef.current) {
-          if (store.isPlaying) {
-            videoRef.current.pause()
-          } else {
-            videoRef.current.play().catch(() => {})
-          }
+          if (store.isPlaying) videoRef.current.pause()
+          else videoRef.current.play().catch(() => {})
         }
         break
       case 'ArrowLeft':
@@ -218,29 +231,9 @@ export default function EditorPage() {
           setPlayheadPos(pct)
         }
         break
-      case 's':
-      case 'S':
-        if (videoRef.current) {
-          const pct = videoRef.current.duration ? (videoRef.current.currentTime / videoRef.current.duration) * 100 : 0
-          store.setTrimStart(Math.max(0, pct))
-          store.showHint(`In point set to ${Math.round(pct)}%`)
-        }
-        break
-      case 'e':
-      case 'E':
-        if (videoRef.current) {
-          const pct = videoRef.current.duration ? (videoRef.current.currentTime / videoRef.current.duration) * 100 : 0
-          store.setTrimEnd(Math.min(100, pct))
-          store.showHint(`Out point set to ${Math.round(pct)}%`)
-        }
-        break
       case 'Escape':
         e.preventDefault()
-        setMobilePanelOpen(false)
-        setActiveTool('ai')
-        break
-      case 'Delete':
-      case 'Backspace':
+        setToolsPanelOpen(false)
         break
     }
   }, [])
@@ -253,279 +246,199 @@ export default function EditorPage() {
   if (loading) {
     return (
       <div style={{
-        height: '100vh', background: '#050505',
+        height: '100vh', background: bgPrimary,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexDirection: 'column', gap: '16px',
+        flexDirection: 'column', gap: 16,
       }}>
-        <div className="editor-loading-spinner" />
-        <div style={{ color: textDim, fontSize: '13px', fontFamily: fonts.body }}>
-          Loading editor...
+        <div style={{ width: 32, height: 32, borderRadius: '50%', border: `3px solid ${brandDim}`, borderTopColor: brand, animation: 'spin 0.6s linear infinite' }} />
+        <div style={{ color: textDim, fontSize: 13, fontWeight: 500 }}>Cargando editor...</div>
+      </div>
+    )
+  }
+
+  if (isMobile) {
+    return (
+      <div style={{
+        height: '100vh', background: bgPrimary, color: textPrimary,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 40, textAlign: 'center',
+      }}>
+        <div>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={brand} strokeWidth="1.5" style={{ marginBottom: 16 }}>
+            <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+          </svg>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px' }}>Peakclip Editor</h2>
+          <p style={{ color: textDim, fontSize: 13, lineHeight: 1.5 }}>
+            El editor est&aacute; optimizado para desktop.<br />
+            Abre esta p&aacute;gina en un ordenador para editarlo.
+          </p>
         </div>
       </div>
     )
   }
 
+  const RightPanel = rightTabs.find(t => t.id === rightTab)?.comp || EditorSubtitlesPanel
+  const rightPanelWidth = toolsPanelOpen ? (isTablet ? 240 : 280) : 0
+
   return (
-    <ErrorBoundary>
     <div style={{
-      height: '100vh', background: '#050505', color: textPrimary,
+      height: '100vh', background: bgPrimary, color: textPrimary,
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      fontFamily: fonts.body, position: 'relative',
+      position: 'relative',
     }}>
-      {/* Keyboard hint toast */}
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+        * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.08) transparent; }
+        *::-webkit-scrollbar { width: 4px; }
+        *::-webkit-scrollbar-track { background: transparent; }
+        *::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.08); border-radius: 2px; }
+        input[type="range"] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: rgba(0,0,0,0.08); outline: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: ${brand}; cursor: pointer; box-shadow: 0 0 8px ${brandGlow}; }
+        input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: ${brand}; cursor: pointer; border: none; }
+        input[type="color"] { -webkit-appearance: none; border: none; border-radius: 4px; cursor: pointer; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+        select { -webkit-appearance: none; appearance: none; }
+      `}</style>
+
+      {/* Keyboard hint */}
       {keyboardHint && (
         <div style={{
-          position: 'fixed', top: '82px', left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(217,180,74,0.12)', border: '1px solid rgba(217,180,74,0.25)',
-          borderRadius: '10px', padding: '8px 20px', fontSize: '12px',
-          color: brand, zIndex: 1000, fontFamily: fonts.mono,
-          backdropFilter: 'blur(12px)',
+          position: 'fixed', top: 66, left: '50%', transform: 'translateX(-50%)',
+          background: bgSecondary, border: `1px solid ${borderSoft}`,
+          borderRadius: 10, padding: '8px 20px', fontSize: 12,
+          color: brand, zIndex: 1000,
+          backdropFilter: 'blur(12px)', pointerEvents: 'none',
           animation: 'slideDown 0.2s ease',
         }}>
           {keyboardHint}
         </div>
       )}
 
-      {/* Top Bar */}
-      <EditorTopBar videoRef={videoRef} />
+      {/* Top Bar - 56px */}
+      <div style={{ height: 56, flexShrink: 0 }}>
+        <EditorTopBar videoRef={videoRef} />
+      </div>
 
-      {/* Main Editor Area */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left Sidebar */}
-        <EditorSidebar />
+      {/* Main Area */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+
+        {/* Left Panel - Transcript (320px) */}
+        {leftPanelOpen && (
+          <div style={{
+            width: isTablet ? 260 : 320, flexShrink: 0,
+            background: bgSecondary, borderRight: `1px solid ${borderSoft}`,
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 12px', borderBottom: `1px solid ${borderSoft}`,
+            }}>
+              <span style={{ color: textDim, fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>TRANSCRIPCI&Oacute;N</span>
+              <button onClick={() => setLeftPanelOpen(false)}
+                style={{ background: 'none', border: 'none', color: textDim, cursor: 'pointer', padding: 4, display: 'flex' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <EditorTranscript />
+            </div>
+          </div>
+        )}
+
+        {/* Left toggle button when closed */}
+        {!leftPanelOpen && (
+          <button onClick={() => setLeftPanelOpen(true)}
+            style={{
+              width: 24, flexShrink: 0, cursor: 'pointer',
+              background: bgSecondary, border: 'none', color: textDim,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRight: `1px solid ${borderSoft}`,
+            }}
+            title="Abrir transcripci&oacute;n"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+        )}
 
         {/* Center: Preview */}
-        <EditorPreview videoRef={videoRef} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+          <EditorPreviewCanvas videoRef={videoRef} />
+        </div>
 
-        {/* Right: Inspector Panel */}
-        <EditorInspector videoRef={videoRef} />
+        {/* Right Panel (280px) - Tabs */}
+        <div style={{
+          width: rightPanelWidth, flexShrink: 0, overflow: 'hidden',
+          transition: 'width 0.2s', background: bgSecondary,
+          borderLeft: rightPanelWidth > 0 ? `1px solid ${borderSoft}` : 'none',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          {/* Tab bar */}
+          {(rightPanelWidth > 0 || toolsPanelOpen) && (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 0,
+              padding: '6px 6px 0', borderBottom: `1px solid ${borderSoft}`,
+            }}>
+              {rightTabs.map(t => (
+                <button key={t.id} onClick={() => setRightTab(t.id)}
+                  style={{
+                    padding: '6px 8px', borderRadius: '6px 6px 0 0', fontSize: 10, fontWeight: 600,
+                    background: rightTab === t.id ? bgPrimary : 'transparent',
+                    color: rightTab === t.id ? brand : textDim,
+                    border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                    borderBottom: rightTab === t.id ? `2px solid ${brand}` : '2px solid transparent',
+                  }}
+                  dangerouslySetInnerHTML={{ __html: t.label }}
+                />
+              ))}
+              <button onClick={() => { setToolsPanelOpen(false); setActiveTool(null) }}
+                style={{
+                  marginLeft: 'auto', background: 'none', border: 'none',
+                  color: textDim, cursor: 'pointer', padding: '4px 6px', display: 'flex',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          )}
+
+          {/* Panel content */}
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <RightPanel />
+          </div>
+        </div>
+
+        {/* Right open button when closed */}
+        {!toolsPanelOpen && (
+          <button onClick={() => setToolsPanelOpen(true)}
+            style={{
+              width: 24, flexShrink: 0, cursor: 'pointer',
+              background: bgSecondary, border: 'none', color: textDim,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderLeft: `1px solid ${borderSoft}`,
+            }}
+            title="Abrir herramientas"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        )}
       </div>
 
       {/* Timeline */}
-      <div className={`mobile-timeline-wrap ${mobilePanelOpen ? 'editing' : ''}`}>
-        <EditorTimeline videoRef={videoRef} />
-      </div>
-
-      {/* Mobile bottom: toolbar or edit panel (like CapCut) */}
-      {mobilePanelOpen ? (
-        <EditorMobilePanel videoRef={videoRef} activeTool={activeTool} onDone={() => setMobilePanelOpen(false)} />
-      ) : (
-        <div className="editor-mobile-tools">
-          {['cursor', 'text', 'subtitles', 'music', 'ai'].map(t => {
-            const iconsMap = { cursor: 'cursor', text: 'text', subtitles: 'captions', music: 'audio', ai: 'ai' }
-            return (
-              <button key={t} onClick={() => { setActiveTool(t); setMobilePanelOpen(true) }}
-                style={{
-                  flex: 1, padding: '10px 4px', border: 'none',
-                  background: activeTool === t ? brandDim : 'transparent',
-                  color: activeTool === t ? brand : textDim,
-                  cursor: 'pointer', borderRadius: '8px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px',
-                  fontSize: '10px', whiteSpace: 'nowrap', minHeight: '44px',
-                  touchAction: 'manipulation',
-                }}>
-                <span style={{ display: 'flex', width: '18px', height: '18px', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {icons[iconsMap[t]]}
-                </span>
-                <span style={{ fontSize: '9px', lineHeight: '1' }}>
-                  {t === 'cursor' ? 'Trim' : t === 'text' ? 'Text' : t === 'subtitles' ? 'Captions' : t === 'music' ? 'Audio' : 'AI'}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      )}
+      <EditorTimelineNew videoRef={videoRef} />
 
       {/* Export Modal */}
-      <ExportModal />
+      <EditorExportModal />
 
-      {/* Inline styles for animations */}
-      <style>{`
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
-          to { opacity: 1; transform: translateX(-50%) translateY(0); }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        @keyframes glowPulse {
-          0%, 100% { box-shadow: 0 0 8px rgba(217,180,74,0.2); }
-          50% { box-shadow: 0 0 20px rgba(217,180,74,0.5); }
-        }
-        @keyframes stepSlideIn {
-          from { opacity: 0; transform: translateX(-12px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        button:hover svg, a:hover svg { color: #D9B44A !important; transition: color 0.2s ease; }
-        .editor-loading-spinner {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          border: 3px solid rgba(217,180,74,0.15);
-          border-top-color: #D9B44A;
-          animation: spin 0.6s linear infinite;
-        }
-        .editor-slider {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 100%;
-          height: 4px;
-          border-radius: 2px;
-          background: rgba(255,255,255,0.1);
-          outline: none;
-        }
-        .editor-slider::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          width: 14px;
-          height: 14px;
-          border-radius: 50%;
-          background: #D9B44A;
-          cursor: pointer;
-          box-shadow: 0 0 8px rgba(217,180,74,0.35);
-        }
-        .editor-slider::-moz-range-thumb {
-          width: 14px;
-          height: 14px;
-          border-radius: 50%;
-          background: #D9B44A;
-          cursor: pointer;
-          border: none;
-        }
-        .editor-input {
-          width: 100%;
-          padding: 10px 12px;
-          border-radius: 8px;
-          border: 1px solid rgba(255,255,255,0.06);
-          background: #0B0B0B;
-          color: #FFFFFF;
-          font-size: 13px;
-          outline: none;
-          font-family: inherit;
-          transition: border-color 0.2s;
-          box-sizing: border-box;
-        }
-        .editor-input:focus {
-          border-color: #D9B44A;
-        }
-        .editor-option {
-          font-family: inherit;
-          font-size: inherit;
-          color: inherit;
-          cursor: pointer;
-        }
-        .editor-option.active {
-          border-color: #D9B44A !important;
-          background: rgba(217,180,74,0.08) !important;
-        }
-        .editor-option.active div:last-child {
-          color: #D9B44A !important;
-        }
-        .editor-music-item {
-          font-family: inherit;
-          font-size: inherit;
-          color: inherit;
-          cursor: pointer;
-        }
-        .editor-duration-box {
-          background: #0B0B0B;
-          border-radius: 8px;
-          padding: 12px;
-          font-size: 12px;
-          color: rgba(255,255,255,0.4);
-          text-align: center;
-        }
-        .editor-duration-value {
-          color: #D9B44A;
-          font-weight: 700;
-        }
-        .editor-speed-display {
-          font-size: 28px;
-          font-weight: 700;
-          color: #D9B44A;
-          font-family: 'Bebas Neue', sans-serif;
-          letter-spacing: 1px;
-          text-align: center;
-          padding: 12px;
-          background: #0B0B0B;
-          border-radius: 8px;
-          margin-bottom: 8px;
-        }
-        .ai-spinner, .spin {
-          animation: spin 0.6s linear infinite;
-        }
-        * {
-          scrollbar-width: thin;
-          scrollbar-color: rgba(255,255,255,0.1) transparent;
-        }
-        *::-webkit-scrollbar {
-          width: 4px;
-        }
-        *::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        *::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.1);
-          border-radius: 2px;
-        }
-
-        /* Mobile Responsive */
-        .editor-mobile-edit-panel {
-          display: flex;
-          flex-direction: column;
-          background: #111111;
-          border-top: 1px solid rgba(255,255,255,0.06);
-          flexShrink: 0;
-          overflow: hidden;
-        }
-        .editor-mobile-edit-panel {
-          max-height: 200px;
-        }
-        .editor-mobile-edit-panel button, .editor-mobile-edit-panel input { touch-action: manipulation; }
-        .mobile-timeline-wrap { flexShrink: 0; }
-        @media (max-width: 768px) {
-          .editor-sidebar { display: none !important; }
-          .editor-inspector { display: none !important; }
-          .editor-preview { flex: 1 1 100% !important; width: 100% !important; }
-          .mobile-timeline-wrap { height: 220px; display: flex; flex-direction: column; }
-          .mobile-timeline-wrap.editing { height: 140px; }
-          .mobile-timeline-wrap .editor-timeline { height: 100% !important; }
-          .editor-timeline-toolbar { flex-wrap: wrap; gap: 4px !important; }
-          .editor-topbar-project { display: none !important; }
-          .editor-mobile-tools {
-            display: flex !important;
-            align-items: center;
-            height: 52px;
-            background: #0B0B0B;
-            border-top: 1px solid rgba(255,255,255,0.06);
-            padding: 0 4px;
-            gap: 2px;
-            flexShrink: 0;
-          }
-          .editor-export-btn span { display: none !important; }
-          [class*="dash-container"] { padding: 12px !important; }
-          [class*="dash-header"] { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
-          [class*="dash-grid"] { grid-template-columns: 1fr !important; }
-          [class*="dash-stats"] { flex-direction: column !important; }
-          .editor-time-ruler { display: none !important; }
-        }
-        @media (min-width: 769px) {
-          .editor-mobile-tools { display: none !important; }
-        }
-      `}</style>
+      {/* Floating tools bar */}
+      <div style={{
+        position: 'absolute', left: leftPanelOpen ? (isTablet ? 268 : 328) : 32,
+        bottom: timelineHidden ? 44 : 188,
+        zIndex: 50,
+      }}>
+        <EditorToolsBar activeTool={activeToolLoc} setActiveTool={setActiveToolLoc} />
+      </div>
     </div>
-    </ErrorBoundary>
   )
 }

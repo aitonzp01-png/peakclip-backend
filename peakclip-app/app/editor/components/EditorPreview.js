@@ -1,7 +1,8 @@
 'use client'
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { brand, brandDim, brandBorder, surface, textPrimary, textSecondary, textDim, borderSoft, fonts } from '../../../lib/tokens'
+import { brand, brandDim, brandBorder, brandGlow, bgSecondary, surface, previewBg, textPrimary, textSecondary, textDim, borderSoft, error, fonts } from '../../../lib/editor-tokens'
 import { subtitleStyles, filters } from '../../../lib/utils'
+import { getActiveSegment } from '../../../lib/subtitles'
 import useEditorStore from '../store/editorStore'
 
 const ASPECT_RATIOS = {
@@ -13,7 +14,7 @@ const ASPECT_RATIOS = {
 export default function EditorPreview({ videoRef }) {
   const {
     clip, isPlaying, playheadPos, aspectRatio,
-    subtitleText, subtitleStyle, subtitlePosition, fontSize,
+    subtitles, currentTime, subtitleStyle, subtitlePosition, fontSize,
     watermark, watermarkPosition, activeFilter,
     videoError, videoLoading, videoLoaded,
   } = useEditorStore()
@@ -86,7 +87,7 @@ export default function EditorPreview({ videoRef }) {
     <div className="editor-preview" style={{
       flex: 1, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      background: '#0a0a0a', padding: '20px', gap: '20px',
+      background: previewBg, padding: '20px', gap: '20px',
       minWidth: 0, position: 'relative',
     }}>
       {/* Preview canvas */}
@@ -96,13 +97,9 @@ export default function EditorPreview({ videoRef }) {
         height: `${previewHeight}px`,
         background: '#000',
         borderRadius: aspectRatio === '9:16' ? '24px' : '12px',
-        border: aspectRatio === '9:16'
-          ? `2px solid rgba(255,255,255,0.08)`
-          : `1px solid ${borderSoft}`,
+        border: `1px solid ${borderSoft}`,
         overflow: 'hidden',
-        boxShadow: aspectRatio === '9:16'
-          ? `0 0 0 1px rgba(255,255,255,0.04), 0 20px 60px rgba(0,0,0,0.8)`
-          : `0 0 0 1px ${borderSoft}, 0 16px 48px rgba(0,0,0,0.4)`,
+        boxShadow: '0 16px 48px rgba(0,0,0,0.08)',
         transition: 'all 0.3s cubic-bezier(0.16,1,0.3,1)',
       }}>
         {/* Device notch for phone */}
@@ -113,8 +110,8 @@ export default function EditorPreview({ videoRef }) {
             borderRadius: '0 0 16px 16px', zIndex: 10,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
           }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#1a1a1a' }} />
-            <div style={{ width: '40px', height: '5px', borderRadius: '3px', background: '#1a1a1a' }} />
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: borderSoft }} />
+            <div style={{ width: '40px', height: '5px', borderRadius: '3px', background: borderSoft }} />
           </div>
         )}
 
@@ -124,16 +121,16 @@ export default function EditorPreview({ videoRef }) {
             width: '100%', height: '100%',
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
-            background: '#0B0B0B', gap: '12px', padding: '24px',
+            background: bgSecondary, gap: '12px', padding: '24px',
           }}>
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,80,80,0.5)" strokeWidth="1.5">
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '13px', color: 'rgba(255,80,80,0.7)', fontFamily: fonts.body, marginBottom: '4px' }}>
+              <div style={{ fontSize: '13px', color: error, fontFamily: fonts.body, marginBottom: '4px' }}>
                 Video failed to load
               </div>
-              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)', fontFamily: fonts.mono, wordBreak: 'break-all' }}>
+              <div style={{ fontSize: '11px', color: textDim, fontFamily: fonts.mono, wordBreak: 'break-all' }}>
                 {videoError}
               </div>
             </div>
@@ -161,15 +158,15 @@ export default function EditorPreview({ videoRef }) {
             width: '100%', height: '100%',
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
-            background: '#0B0B0B', gap: '16px',
+            background: bgSecondary, gap: '16px',
           }}>
             <div style={{
               width: '28px', height: '28px', borderRadius: '50%',
-              border: '2px solid rgba(217,180,74,0.15)',
-              borderTopColor: '#D9B44A',
+              border: `2px solid ${brandDim}`,
+              borderTopColor: brand,
               animation: 'spin 0.6s linear infinite',
             }} />
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.25)', fontFamily: fonts.body }}>
+            <div style={{ fontSize: '12px', color: textDim, fontFamily: fonts.body }}>
               Loading video...
             </div>
           </div>
@@ -178,20 +175,20 @@ export default function EditorPreview({ videoRef }) {
             width: '100%', height: '100%',
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
-            background: '#0B0B0B',
+            background: bgSecondary,
             gap: '16px',
           }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={borderSoft} strokeWidth="1">
               <rect x="2" y="2" width="20" height="20" rx="2"/>
               <circle cx="8" cy="8" r="2"/>
               <path d="M2 16l5-5c.78-.78 2.05-.78 2.83 0L15 16"/>
               <path d="M15 13l1.5-1.5c.78-.78 2.05-.78 2.83 0L22 15"/>
             </svg>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.3)', fontFamily: fonts.body, marginBottom: '4px' }}>
+              <div style={{ fontSize: '13px', color: textDim, fontFamily: fonts.body, marginBottom: '4px' }}>
                 Drop video here
               </div>
-              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.15)', fontFamily: fonts.body }}>
+              <div style={{ fontSize: '11px', color: textDim, fontFamily: fonts.body }}>
                 or browse files
               </div>
             </div>
@@ -199,20 +196,15 @@ export default function EditorPreview({ videoRef }) {
         )}
 
         {/* Subtitles */}
-        {videoLoaded && subtitleText && (
-          <div style={{
-            position: 'absolute', left: '50%', transform: 'translateX(-50%)',
-            width: '90%', textAlign: 'center', pointerEvents: 'none', zIndex: 5,
-            ...(subtitlePosition === 'bottom' ? { bottom: '24px' } :
-               subtitlePosition === 'middle' ? { top: '50%', transform: 'translateX(-50%) translateY(-50%)' } :
-               { top: '24px', transform: 'translateX(-50%)' }),
-            ...selectedSubStyle,
-            fontSize: `${Math.round(fontSize * (scale || 1))}px`,
-            lineHeight: '1.3',
-            textShadow: '0 2px 8px rgba(0,0,0,0.5)',
-          }}>
-            {subtitleText}
-          </div>
+        {videoLoaded && (
+          <SubtitleOverlay
+            subtitles={subtitles}
+            currentTime={currentTime}
+            subtitlePosition={subtitlePosition}
+            selectedSubStyle={selectedSubStyle}
+            fontSize={fontSize}
+            scale={scale}
+          />
         )}
 
         {/* Watermark */}
@@ -223,7 +215,7 @@ export default function EditorPreview({ videoRef }) {
                watermarkPosition === 'top-left' ? { top: '12px', left: '12px' } :
                watermarkPosition === 'bottom-right' ? { bottom: '20px', right: '12px' } :
                { bottom: '20px', left: '12px' }),
-            fontSize: '11px', color: 'rgba(255,255,255,0.8)',
+            fontSize: '11px', color: textPrimary,
             background: 'rgba(0,0,0,0.5)',
             padding: '4px 10px', borderRadius: '6px',
             pointerEvents: 'none', fontFamily: fonts.body,
@@ -241,18 +233,18 @@ export default function EditorPreview({ videoRef }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', opacity: showPlayOverlay ? 1 : 0,
               transition: 'opacity 0.2s',
-              background: 'rgba(0,0,0,0.08)',
+              background: 'rgba(0,0,0,0.03)',
             }}
             onMouseEnter={e => e.currentTarget.style.opacity = '1'}
             onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
             <div style={{
               width: '48px', height: '48px', borderRadius: '50%',
-              background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center',
+              background: brand, display: 'flex', alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+              boxShadow: `0 4px 24px ${brandGlow}`,
               transition: 'transform 0.15s, box-shadow 0.15s',
             }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#000"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#0f0f0f"><polygon points="6 3 20 12 6 21 6 3"/></svg>
             </div>
           </div>
         )}
@@ -270,11 +262,11 @@ export default function EditorPreview({ videoRef }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button onClick={playVideo} style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              color: textPrimary, display: 'flex', padding: '4px',
+              color: textDim, display: 'flex', padding: '4px',
               borderRadius: '4px', transition: 'color 0.15s',
             }}
               onMouseEnter={e => e.currentTarget.style.color = brand}
-              onMouseLeave={e => e.currentTarget.style.color = textPrimary}>
+              onMouseLeave={e => e.currentTarget.style.color = textDim}>
               {isPlaying
                 ? <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
                 : <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
@@ -288,7 +280,7 @@ export default function EditorPreview({ videoRef }) {
             </span>
           </div>
           <div style={{
-            fontFamily: fonts.mono, fontSize: '10px', color: 'rgba(255,255,255,0.15)',
+            fontFamily: fonts.mono, fontSize: '10px', color: textDim,
           }}>
             {aspectRatio}
           </div>
@@ -298,7 +290,7 @@ export default function EditorPreview({ videoRef }) {
         <div onClick={handleTimelineClick}
           style={{
             position: 'relative', height: '3px', cursor: 'pointer',
-            borderRadius: '2px', background: 'rgba(255,255,255,0.06)',
+            borderRadius: '2px', background: borderSoft,
             transition: 'height 0.15s',
           }}
           onMouseEnter={e => e.currentTarget.style.height = '5px'}
@@ -306,18 +298,48 @@ export default function EditorPreview({ videoRef }) {
           <div style={{
             height: '100%', borderRadius: '2px',
             width: `${playheadPos}%`,
-            background: '#fff',
+            background: brand,
             transition: 'width 0.05s linear',
           }} />
           <div style={{
             position: 'absolute', top: '50%', left: `${playheadPos}%`,
             width: '10px', height: '10px', borderRadius: '50%',
-            background: '#fff', transform: 'translate(-50%, -50%)',
-            boxShadow: '0 0 6px rgba(255,255,255,0.3)',
+            background: brand, transform: 'translate(-50%, -50%)',
+            boxShadow: `0 0 6px ${brandGlow}`,
             transition: 'left 0.05s linear',
           }} />
         </div>
       </div>
+    </div>
+  )
+}
+
+function SubtitleOverlay({ subtitles, currentTime, subtitlePosition, selectedSubStyle, fontSize, scale }) {
+  const active = getActiveSegment(subtitles, currentTime)
+  if (!active || !active.text) return null
+  return (
+    <div style={{
+      position: 'absolute', left: '50%',
+      width: '90%', textAlign: 'center', pointerEvents: 'none', zIndex: 5,
+      ...(subtitlePosition === 'bottom'
+        ? { bottom: '8%', transform: 'translateX(-50%)' }
+        : subtitlePosition === 'middle'
+          ? { top: '50%', transform: 'translateX(-50%) translateY(-50%)' }
+          : { top: '8%', transform: 'translateX(-50%)' }),
+      fontSize: `${Math.round((active.style?.fontSize || fontSize) * (scale || 1))}px`,
+      fontWeight: '500',
+      fontFamily: '"Helvetica Neue", Arial, sans-serif',
+      letterSpacing: '0.2px',
+      lineHeight: 1.35,
+      maxWidth: '85%',
+      whiteSpace: 'pre-wrap',
+      ...selectedSubStyle,
+      color: active.style?.color || selectedSubStyle.color,
+      backgroundColor: 'transparent',
+      background: 'none',
+      textShadow: '0 1px 3px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)',
+    }}>
+      {active.text}
     </div>
   )
 }

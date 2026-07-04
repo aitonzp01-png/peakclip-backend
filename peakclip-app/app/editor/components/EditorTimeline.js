@@ -1,24 +1,86 @@
 'use client'
-import { useRef, useCallback, useMemo } from 'react'
-import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
+import { useRef, useCallback, useMemo, useState } from 'react'
+import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, hoverBg, fonts } from '../../../lib/editor-tokens'
+import { trackItemsToSegments } from '../../../lib/subtitles'
 import useEditorStore from '../store/editorStore'
 
 export default function EditorTimeline({ videoRef }) {
   const timelineRef = useRef(null)
+  const trackContentRef = useRef(null)
+  const [drag, setDrag] = useState(null)
+  const [liveItem, setLiveItem] = useState(null)
   const {
     tracks, selectedTrackId, playheadPos, trimStart, trimEnd,
-    timelineZoom, isPlaying, setPlayheadPos, setSelectedTrackId,
-    setTimelineZoom, setIsPlaying,
+    timelineZoom, isPlaying, duration, setPlayheadPos, setSelectedTrackId,
+    setTimelineZoom, setIsPlaying, updateSubtitle, setSelectedSubtitleId,
   } = useEditorStore()
 
   const handleTimelineClick = (e) => {
-    if (!timelineRef.current || !videoRef?.current) return
+    if (!timelineRef.current || !videoRef?.current || drag) return
     const rect = timelineRef.current.getBoundingClientRect()
     const pct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
     setPlayheadPos(pct)
     if (videoRef.current.duration) {
       videoRef.current.currentTime = (pct / 100) * videoRef.current.duration
     }
+  }
+
+  const pctToTime = (pct) => {
+    const dur = duration || videoRef?.current?.duration || 0
+    return Math.max(0, Math.min(dur, (pct / 100) * dur))
+  }
+
+  const handleItemMouseDown = (e, track, item, mode = 'move') => {
+    e.stopPropagation()
+    if (!trackContentRef.current) return
+    const rect = trackContentRef.current.getBoundingClientRect()
+    const startX = e.clientX
+    const startPct = item.start
+    const endPct = item.end
+    setSelectedTrackId(track.id)
+    if (item.segment?.id) setSelectedSubtitleId(item.segment.id)
+    setDrag({ trackId: track.id, itemId: item.id, mode, startX, rectWidth: rect.width, startPct, endPct })
+    setLiveItem({ ...item })
+
+    const handleMouseMove = (ev) => {
+      const dx = ev.clientX - startX
+      const dpct = (dx / rect.width) * 100 * timelineZoom
+      setDrag(prev => prev && ({ ...prev, dxPct: dpct }))
+
+      setLiveItem(prev => {
+        if (!prev) return null
+        if (mode === 'move') {
+          const width = endPct - startPct
+          let newStart = Math.max(0, Math.min(100 - width, startPct + dpct))
+          return { ...prev, start: newStart, end: newStart + width }
+        } else if (mode === 'resize-left') {
+          let newStart = Math.max(0, Math.min(endPct - 2, startPct + dpct))
+          return { ...prev, start: newStart }
+        } else if (mode === 'resize-right') {
+          let newEnd = Math.max(startPct + 2, Math.min(100, endPct + dpct))
+          return { ...prev, end: newEnd }
+        }
+        return prev
+      })
+    }
+
+    const handleMouseUp = () => {
+      setLiveItem(prev => {
+        if (prev && prev.segment?.id) {
+          updateSubtitle(prev.segment.id, {
+            start: pctToTime(prev.start),
+            end: pctToTime(prev.end),
+          })
+        }
+        return null
+      })
+      setDrag(null)
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
   }
 
   const skipBack = useCallback(() => {
@@ -44,15 +106,21 @@ export default function EditorTimeline({ videoRef }) {
 
   const timeMarkers = useMemo(() => {
     const markers = []
-    for (let i = 0; i <= 20; i++) {
-      markers.push({ pos: i * 5, label: `0:${(i * 3).toString().padStart(2, '0')}` })
+    const totalSecs = duration || 60
+    const steps = Math.min(20, Math.ceil(totalSecs / 3))
+    const stepSec = totalSecs / steps
+    for (let i = 0; i <= steps; i++) {
+      const secs = Math.round(i * stepSec)
+      const min = Math.floor(secs / 60)
+      const sec = secs % 60
+      markers.push({ pos: (i / steps) * 100, label: `${min}:${sec.toString().padStart(2, '0')}` })
     }
     return markers
-  }, [])
+  }, [duration])
 
   return (
     <div className="editor-timeline" style={{
-      height: '220px', background: 'rgba(8,8,8,0.98)', borderTop: `1px solid ${borderSoft}`,
+      height: '220px', background: bgSecondary, borderTop: `1px solid ${borderSoft}`,
       display: 'flex', flexDirection: 'column', flexShrink: 0,
       borderTopLeftRadius: '12px', borderTopRightRadius: '12px',
     }}>
@@ -140,7 +208,7 @@ export default function EditorTimeline({ videoRef }) {
             style={{
               display: 'flex', alignItems: 'center', gap: '8px',
               height: '32px',
-              background: selectedTrackId === track.id ? 'rgba(217,180,74,0.03)' : 'transparent',
+              background: selectedTrackId === track.id ? brandDim : 'transparent',
               borderRadius: '6px',
               border: `1px solid ${selectedTrackId === track.id ? brandBorder : 'transparent'}`,
               transition: 'all 0.15s', cursor: 'pointer',
@@ -156,7 +224,7 @@ export default function EditorTimeline({ videoRef }) {
             </div>
 
             {/* Track content */}
-            <div ref={timelineRef} onClick={handleTimelineClick}
+            <div ref={el => { timelineRef.current = el; trackContentRef.current = el }} onClick={handleTimelineClick}
               style={{
                 flex: 1, position: 'relative', height: '100%', minWidth: 0,
               }}>
@@ -179,38 +247,59 @@ export default function EditorTimeline({ videoRef }) {
               )}
 
               {/* Track items */}
-              {track.items.map(item => (
-                <div key={item.id}
-                  style={{
-                    position: 'absolute', top: '3px', bottom: '3px',
-                    left: `${item.start * timelineZoom}%`,
-                    width: `${(item.end - item.start) * timelineZoom}%`,
-                    borderRadius: '4px', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', padding: '0 8px',
-                    overflow: 'hidden', transition: 'all 0.15s',
-                    background: track.type === 'video' ? 'rgba(59,130,246,0.15)' :
-                               track.type === 'audio' ? 'rgba(34,197,94,0.15)' :
-                               track.type === 'music' ? 'rgba(217,180,74,0.15)' :
-                               'rgba(217,180,74,0.12)',
-                    border: `1px solid ${
-                      track.type === 'video' ? 'rgba(59,130,246,0.3)' :
-                      track.type === 'audio' ? 'rgba(34,197,94,0.3)' :
-                      track.type === 'music' ? brandBorder :
-                      brandBorder
-                    }`,
-                  }}>
-                  <span style={{
-                    fontFamily: fonts.mono, fontSize: '8px',
-                    color: track.type === 'video' ? '#60a5fa' :
-                          track.type === 'audio' ? '#4ade80' :
-                          track.type === 'music' ? brand : brand,
-                    whiteSpace: 'nowrap', overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}>
-                    {item.label}
-                  </span>
-                </div>
-              ))}
+              {track.items.map(item => {
+                const isDragging = drag?.trackId === track.id && drag?.itemId === item.id
+                const displayItem = isDragging && liveItem ? liveItem : item
+                const canEdit = track.type === 'text'
+                return (
+                  <div key={item.id}
+                    onMouseDown={e => canEdit && handleItemMouseDown(e, track, item, 'move')}
+                    style={{
+                      position: 'absolute', top: '3px', bottom: '3px',
+                      left: `${displayItem.start * timelineZoom}%`,
+                      width: `${(displayItem.end - displayItem.start) * timelineZoom}%`,
+                      borderRadius: '4px', cursor: canEdit ? 'move' : 'pointer',
+                      display: 'flex', alignItems: 'center', padding: '0 8px',
+                      overflow: 'hidden', transition: isDragging ? 'none' : 'all 0.15s',
+                      background: track.type === 'video' ? 'rgba(59,130,246,0.15)' :
+                                 track.type === 'audio' ? 'rgba(34,197,94,0.15)' :
+                                 track.type === 'music' ? brandDim :
+                                 brandDim,
+                      border: `1px solid ${
+                        track.type === 'video' ? 'rgba(59,130,246,0.3)' :
+                        track.type === 'audio' ? 'rgba(34,197,94,0.3)' :
+                        track.type === 'music' ? brandBorder :
+                        brandBorder
+                      }`,
+                      zIndex: isDragging ? 10 : 1,
+                    }}>
+                    {canEdit && (
+                      <>
+                        <div onMouseDown={e => handleItemMouseDown(e, track, item, 'resize-left')}
+                          style={{
+                            position: 'absolute', left: 0, top: 0, bottom: 0, width: '6px',
+                            cursor: 'w-resize', zIndex: 2,
+                          }} />
+                        <div onMouseDown={e => handleItemMouseDown(e, track, item, 'resize-right')}
+                          style={{
+                            position: 'absolute', right: 0, top: 0, bottom: 0, width: '6px',
+                            cursor: 'e-resize', zIndex: 2,
+                          }} />
+                      </>
+                    )}
+                    <span style={{
+                      fontFamily: fonts.mono, fontSize: '8px',
+                      color: track.type === 'video' ? '#60a5fa' :
+                            track.type === 'audio' ? '#4ade80' :
+                            track.type === 'music' ? brand : brand,
+                      whiteSpace: 'nowrap', overflow: 'hidden',
+                      textOverflow: 'ellipsis', userSelect: 'none',
+                    }}>
+                      {displayItem.label}
+                    </span>
+                  </div>
+                )
+              })}
 
               {/* Selection region */}
               <div style={{

@@ -1,7 +1,9 @@
 'use client'
 import { useState } from 'react'
-import { brand, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
+import { brand, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, hoverBg, fonts } from '../../../lib/editor-tokens'
 import { subtitleStyles, musicTracks, filters, transitions } from '../../../lib/utils'
+import { generateSRT } from '../../../lib/subtitles'
+import { saveSubtitles } from '../../../lib/api'
 import icons from '../../../lib/icons'
 import useEditorStore from '../store/editorStore'
 import AIPanel from './AIPanel'
@@ -17,13 +19,21 @@ export default function EditorInspector({ videoRef }) {
   const {
     activeTool, activeInspectorTab, setActiveInspectorTab,
     trimStart, trimEnd, setTrimStart, setTrimEnd,
-    subtitleText, setSubtitleText, subtitleStyle, setSubtitleStyle,
+    clip, subtitles, selectedSubtitleId, setSelectedSubtitleId,
+    updateSubtitle, addSubtitle, deleteSubtitle, setSubtitleText,
+    subtitleStyle, setSubtitleStyle,
     subtitlePosition, setSubtitlePosition, fontSize, setFontSize,
     watermark, setWatermark, watermarkPosition, setWatermarkPosition,
     music, setMusic, musicVolume, setMusicVolume,
+    includeAudio, setIncludeAudio,
     activeFilter, setActiveFilter, selectedTransition, setSelectedTransition,
-    playbackSpeed, setPlaybackSpeed, tracks,
+    playbackSpeed, setPlaybackSpeed, tracks, duration,
   } = useEditorStore()
+
+  const clipDurationSecs = () => {
+    const dur = duration || 60
+    return Math.round(((trimEnd - trimStart) / 100) * dur)
+  }
 
   const renderEditPanel = () => {
     switch (activeTool) {
@@ -57,7 +67,7 @@ export default function EditorInspector({ videoRef }) {
           background: bgSecondary, borderRadius: '8px', padding: '10px',
           fontSize: '11px', color: textDim, textAlign: 'center',
         }}>
-          Duration: <span style={{ color: brand, fontWeight: '700' }}>{Math.round((trimEnd - trimStart) * 0.45)}s</span>
+          Duration: <span style={{ color: brand, fontWeight: '700' }}>{clipDurationSecs()}s</span>
         </div>
       </Section>
       <Section label="Quick Presets">
@@ -102,14 +112,90 @@ export default function EditorInspector({ videoRef }) {
     </>
   )
 
+  const [saveState, setSaveState] = useState('idle')
+
+  const selectedSub = subtitles.find(s => s.id === selectedSubtitleId) || subtitles[0] || null
+  const subText = selectedSub?.text || ''
+
+  const handleSaveSubtitles = async () => {
+    if (!clip?.id) return
+    setSaveState('saving')
+    try {
+      const srt = generateSRT(subtitles)
+      const res = await saveSubtitles(clip.id, srt)
+      if (!res.ok) throw new Error('Save failed')
+      const data = await res.json()
+      useEditorStore.setState(state => ({ clip: { ...state.clip, ...data } }))
+      setSaveState('saved')
+      setTimeout(() => setSaveState('idle'), 2000)
+    } catch (e) {
+      console.error(e)
+      setSaveState('error')
+      setTimeout(() => setSaveState('idle'), 2000)
+    }
+  }
+
   const renderTextPanel = () => (
     <>
-      <Section label="Text">
-        <input type="text" placeholder="Enter text..."
-          value={subtitleText}
-          onChange={e => setSubtitleText(e.target.value)}
-          className="editor-input" />
+      <Section label="Selected Caption">
+        <textarea placeholder="Enter caption text..."
+          value={subText}
+          onChange={e => selectedSub && setSubtitleText(e.target.value)}
+          disabled={!selectedSub}
+          className="editor-input"
+          style={{ minHeight: '60px', resize: 'vertical' }} />
       </Section>
+
+      <Section label="Captions">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflow: 'auto' }}>
+          {subtitles.length === 0 && (
+            <div style={{ fontSize: '11px', color: textDim, textAlign: 'center', padding: '12px' }}>
+              No captions yet
+            </div>
+          )}
+          {subtitles.map((s, idx) => (
+            <div key={s.id}
+              onClick={() => setSelectedSubtitleId(s.id)}
+              style={{
+                background: selectedSubtitleId === s.id ? brandDim : bgSecondary,
+                border: `1px solid ${selectedSubtitleId === s.id ? brand : borderSoft}`,
+                borderRadius: '8px', padding: '8px 10px', cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <span style={{ fontSize: '10px', color: selectedSubtitleId === s.id ? brand : textDim, fontFamily: fonts.mono }}>
+                  #{idx + 1}
+                </span>
+                <button onClick={(e) => { e.stopPropagation(); deleteSubtitle(s.id) }}
+                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '10px' }}>
+                  ✕
+                </button>
+              </div>
+              <div style={{ fontSize: '12px', color: textPrimary, lineHeight: '1.3' }}>
+                {s.text || <span style={{ color: textDim, fontStyle: 'italic' }}>Empty caption</span>}
+              </div>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                <TimeInput value={s.start} onChange={v => updateSubtitle(s.id, { start: v })} />
+                <TimeInput value={s.end} onChange={v => updateSubtitle(s.id, { end: v })} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => {
+          const dur = duration || 5
+          const start = subtitles.length ? subtitles[subtitles.length - 1].end : 0
+          const end = Math.min(dur, start + 3)
+          addSubtitle(start, end)
+        }}
+          style={{
+            width: '100%', marginTop: '10px', padding: '8px',
+            background: bgSecondary, border: `1px dashed ${borderSoft}`,
+            borderRadius: '6px', color: textDim, cursor: 'pointer', fontSize: '11px',
+          }}>
+          + Add Caption
+        </button>
+      </Section>
+
       <Section label="Style">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
           {subtitleStyles.map(s => (
@@ -157,6 +243,17 @@ export default function EditorInspector({ videoRef }) {
         <input type="range" min="10" max="32" value={fontSize}
           onChange={e => setFontSize(Number(e.target.value))}
           className="editor-slider" />
+      </Section>
+
+      <Section label="Actions">
+        <button onClick={handleSaveSubtitles} disabled={saveState === 'saving'}
+          style={{
+            width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
+            background: brand, color: '#000', fontWeight: '700', cursor: saveState === 'saving' ? 'wait' : 'pointer',
+            fontSize: '12px',
+          }}>
+          {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved!' : saveState === 'error' ? 'Error' : 'Save Captions'}
+        </button>
       </Section>
     </>
   )
@@ -239,37 +336,55 @@ export default function EditorInspector({ videoRef }) {
   )
 
   const renderAudioPanel = () => (
-    <Section label="Music">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {musicTracks.map(t => (
-          <button key={t.id} onClick={() => setMusic(t.id)}
-            className={`editor-music-item${music === t.id ? ' active' : ''}`}
+    <>
+      <Section label="Original Audio">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0' }}>
+          <span style={{ fontSize: '12px', color: textSecondary }}>Include in export</span>
+          <button onClick={() => setIncludeAudio(!includeAudio)}
             style={{
-              background: bgSecondary, border: `1px solid ${music === t.id ? brand : borderSoft}`,
-              borderRadius: '8px', padding: '10px 14px', cursor: 'pointer',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              color: music === t.id ? brand : textSecondary, fontSize: '12px',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => { if (music !== t.id) e.currentTarget.style.borderColor = brandDim }}
-            onMouseLeave={e => { if (music !== t.id) e.currentTarget.style.borderColor = borderSoft }}>
-            <span>{t.label}</span>
-            {music === t.id && <span style={{ color: brand, display: 'flex' }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
-            </span>}
+              width: '36px', height: '20px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+              background: includeAudio ? brand : borderSoft, position: 'relative', transition: 'all 0.2s',
+            }}>
+            <span style={{
+              position: 'absolute', top: '2px', width: '16px', height: '16px', borderRadius: '50%',
+              background: '#fff', transition: 'all 0.2s',
+              left: includeAudio ? '18px' : '2px',
+            }} />
           </button>
-        ))}
-      </div>
-      {music !== 'none' && (
-        <div style={{ marginTop: '14px' }}>
-          <SliderRow label="Volume" value={`${musicVolume}%`}>
-            <input type="range" min="0" max="100" value={musicVolume}
-              onChange={e => setMusicVolume(Number(e.target.value))}
-              className="editor-slider" />
-          </SliderRow>
         </div>
-      )}
-    </Section>
+      </Section>
+      <Section label="Music">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {musicTracks.map(t => (
+            <button key={t.id} onClick={() => setMusic(t.id)}
+              className={`editor-music-item${music === t.id ? ' active' : ''}`}
+              style={{
+                background: bgSecondary, border: `1px solid ${music === t.id ? brand : borderSoft}`,
+                borderRadius: '8px', padding: '10px 14px', cursor: 'pointer',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                color: music === t.id ? brand : textSecondary, fontSize: '12px',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { if (music !== t.id) e.currentTarget.style.borderColor = brandDim }}
+              onMouseLeave={e => { if (music !== t.id) e.currentTarget.style.borderColor = borderSoft }}>
+              <span>{t.label}</span>
+              {music === t.id && <span style={{ color: brand, display: 'flex' }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
+              </span>}
+            </button>
+          ))}
+        </div>
+        {music !== 'none' && (
+          <div style={{ marginTop: '14px' }}>
+            <SliderRow label="Volume" value={`${musicVolume}%`}>
+              <input type="range" min="0" max="100" value={musicVolume}
+                onChange={e => setMusicVolume(Number(e.target.value))}
+                className="editor-slider" />
+            </SliderRow>
+          </div>
+        )}
+      </Section>
+    </>
   )
 
   const renderOverlayPanel = () => (
@@ -355,6 +470,30 @@ export default function EditorInspector({ videoRef }) {
         {activeInspectorTab === 'ai' && <AIPanel videoRef={videoRef} />}
       </div>
     </div>
+  )
+}
+
+function TimeInput({ value, onChange }) {
+  const fmt = (v) => {
+    const m = Math.floor(v / 60)
+    const s = Math.floor(v % 60)
+    const ms = Math.round((v - Math.floor(v)) * 1000)
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`
+  }
+  return (
+    <input type="text" value={fmt(value)}
+      onChange={(e) => {
+        const parts = e.target.value.split(/[:.]/)
+        const m = parseFloat(parts[0]) || 0
+        const s = parseFloat(parts[1]) || 0
+        const ms = parseFloat(parts[2]) || 0
+        onChange(m * 60 + s + ms / 1000)
+      }}
+      style={{
+        flex: 1, background: bgSecondary, border: `1px solid ${borderSoft}`,
+        borderRadius: '4px', color: textDim, fontSize: '10px', padding: '4px 6px',
+        fontFamily: fonts.mono,
+      }} />
   )
 }
 
