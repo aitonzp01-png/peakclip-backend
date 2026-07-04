@@ -1,8 +1,11 @@
 'use client'
 import { useState } from 'react'
-import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/tokens'
+import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, fonts } from '../../../lib/editor-tokens'
 import useEditorStore from '../store/editorStore'
+import { getSupabaseClient } from '../../../lib/supabase'
 import icons from '../../../lib/icons'
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
 const aiTools = [
   {
@@ -35,7 +38,7 @@ const aiTools = [
   },
   {
     id: 'generate-shorts', title: 'Generate Shorts', desc: 'One-click viral short creation',
-    color: '#D9B44A', icon: icons.generateShorts,
+    color: '#c4ff3d', icon: icons.generateShorts,
   },
   {
     id: 'thumbnail-gen', title: 'Thumbnail Generator', desc: 'AI-generated clickable thumbnails',
@@ -50,59 +53,98 @@ const aiTools = [
 export default function AIPanel() {
   const [processing, setProcessing] = useState(null)
   const store = useEditorStore()
+  const clip = store.clip
 
   const handleAIAction = async (toolId) => {
     setProcessing(toolId)
-    setTimeout(() => {
-      const s = useEditorStore.getState()
-      switch (toolId) {
-        case 'auto-captions':
-          s.setSubtitleText('AI-generated subtitles for maximum engagement')
-          s.setSubtitleStyle('bold-yellow')
-          s.showHint('Auto-captions applied')
-          break
-        case 'hook-detection':
-          s.setTrimStart(2)
-          s.setTrimEnd(45)
-          s.showHint('Best hook detected at 0:02')
-          break
-        case 'remove-silence':
-          s.setTrimStart(5)
-          s.setTrimEnd(85)
-          s.showHint('Silence removed')
-          break
-        case 'auto-broll':
-          s.showHint('B-roll footage added')
-          break
-        case 'face-tracking':
-          s.showHint('Face tracking enabled')
-          break
-        case 'smart-crop':
-          s.showHint('Smart crop applied')
-          break
-        case 'color-enhance':
-          s.setActiveFilter('cinema')
-          s.showHint('Color enhanced')
-          break
-        case 'generate-shorts':
-          s.setTrimStart(0)
-          s.setTrimEnd(60)
-          s.showHint('Short generated')
-          break
-        case 'thumbnail-gen':
-          s.showHint('3 thumbnails generated')
-          break
-        case 'viral-score':
-          s.showHint('Viral Score: 87/100')
-          break
+    const s = useEditorStore.getState()
+    const dur = clip?.duration || videoDuration(s) || 60
+
+    const scoreFromClip = () => {
+      if (clip?.hook_score != null) return `${clip.hook_score}/10`
+      if (clip?.viral_score != null) return `${clip.viral_score}%`
+      return null
+    }
+
+    switch (toolId) {
+      case 'auto-captions': {
+        s.setSubtitleStyle('bold-yellow')
+        s.showHint('Auto captions: edit text in the Text panel')
+        break
       }
-      try {
-        fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/ai/${toolId}`, { method: 'POST' })
-          .catch(() => {})
-      } catch {}
-      setProcessing(null)
-    }, 2000)
+      case 'hook-detection': {
+        s.setTrimStart(0)
+        s.setTrimEnd(100)
+        s.showHint('Clip already trimmed to best moment')
+        break
+      }
+      case 'remove-silence':
+        s.setTrimStart(5)
+        s.setTrimEnd(85)
+        s.showHint('Silence removed')
+        break
+      case 'auto-broll':
+        s.showHint('B-roll footage added')
+        break
+      case 'face-tracking':
+      case 'smart-crop': {
+        s.showHint('Analyzing faces...')
+        try {
+          const { data: { session } } = await getSupabaseClient().auth.getSession()
+          const res = await fetch(`${BACKEND_URL}/analyze-faces`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token || ''}`,
+            },
+            body: JSON.stringify({ video_url: clip.video_url }),
+          })
+          if (res.ok) {
+            const data = await res.json()
+            s.setFaceTracking(true)
+            s.setFaceData(data.positions)
+            s.showHint(`Face tracking ready (${data.positions.length} frames sampled)`)
+          } else {
+            const err = await res.text()
+            s.showHint(`Face analysis failed: ${err.slice(0, 60)}`)
+          }
+        } catch (e) {
+          s.showHint('Face analysis: server unavailable')
+        }
+        break
+      }
+      case 'color-enhance':
+        s.setActiveFilter('cinema')
+        s.showHint('Color enhanced')
+        break
+      case 'generate-shorts': {
+        s.setTrimStart(0)
+        s.setTrimEnd(100)
+        if (clip?.mood) s.setMusic(clip.mood)
+        s.showHint('Short generated from best moment')
+        break
+      }
+      case 'thumbnail-gen':
+        s.showHint('Thumbnail generated')
+        break
+      case 'viral-score': {
+        const score = scoreFromClip()
+        if (score) {
+          s.showHint(`Viral Score: ${score} ${clip?.reason ? '— ' + clip.reason.slice(0, 60) : ''}`)
+        } else {
+          s.showHint('Viral Score: run full analysis first')
+        }
+        break
+      }
+    }
+    setProcessing(null)
   }
+
+  const score = (() => {
+    if (clip?.hook_score != null) return `${clip.hook_score}/10`
+    if (clip?.viral_score != null) return `${clip.viral_score}%`
+    return null
+  })()
 
   return (
     <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -114,9 +156,20 @@ export default function AIPanel() {
           <span style={{ color: brand, display: 'flex' }}>{icons.sparkles}</span>
           <span style={{ fontSize: '11px', fontWeight: '600', color: brand, fontFamily: fonts.body }}>AI STUDIO</span>
         </div>
-        <div style={{ fontSize: '11px', color: textDim, lineHeight: '1.4', fontFamily: fonts.body }}>
-          Select an AI tool to enhance your clip
-        </div>
+        {score ? (
+          <div style={{ fontSize: '13px', fontWeight: '700', color: brand, fontFamily: fonts.mono, marginTop: '4px' }}>
+            Viral Score: {score}
+          </div>
+        ) : (
+          <div style={{ fontSize: '11px', color: textDim, lineHeight: '1.4', fontFamily: fonts.body }}>
+            Select an AI tool to enhance your clip
+          </div>
+        )}
+        {clip?.mood && (
+          <div style={{ fontSize: '10px', color: textDim, marginTop: '2px', fontFamily: fonts.body }}>
+            Mood: {clip.mood} {clip?.reason ? `— ${clip.reason.slice(0, 80)}` : ''}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
@@ -136,7 +189,7 @@ export default function AIPanel() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ color: tool.color, display: 'flex', width: '24px', height: '24px', alignItems: 'center', justifyContent: 'center' }}>
                 {processing === tool.id ? (
-                  <span className="ai-spinner" style={{ display: 'inline-block', width: '16px', height: '16px', border: '2px solid rgba(217,180,74,0.2)', borderTopColor: brand, borderRadius: '50%' }} />
+                  <span className="ai-spinner" style={{ display: 'inline-block', width: '16px', height: '16px', border: `2px solid ${brandDim}`, borderTopColor: brand, borderRadius: '50%' }} />
                 ) : tool.icon}
               </span>
               <span style={{ fontSize: '12px', fontWeight: '600', color: textPrimary }}>{tool.title}</span>
@@ -150,4 +203,10 @@ export default function AIPanel() {
       </div>
     </div>
   )
+}
+
+function videoDuration(store) {
+  const video = document.querySelector('video')
+  if (video && video.duration && isFinite(video.duration)) return video.duration
+  return null
 }

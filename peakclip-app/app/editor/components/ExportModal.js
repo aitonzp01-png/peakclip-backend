@@ -1,8 +1,9 @@
 'use client'
 import { useState } from 'react'
-import { brand, brandGrad, brandDim, brandBorder, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, fonts } from '../../../lib/tokens'
+import { brand, brandGrad, brandDim, brandBorder, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, fonts } from '../../../lib/editor-tokens'
 import useEditorStore from '../store/editorStore'
 import { getSupabaseClient } from '../../../lib/supabase'
+import { generateSRT } from '../../../lib/subtitles'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
@@ -42,26 +43,31 @@ export default function ExportModal() {
     }
 
     try {
+      const srtContent = generateSRT(store.subtitles || [])
       const response = await fetch(`${BACKEND_URL}/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({
           clip_id: clip.id,
           video_url: clip.video_url || '',
+          srt_content: srtContent,
           trim_start: store.trimStart || 0,
           trim_end: store.trimEnd || 100,
-          subtitle_text: store.subtitleText || '',
+          subtitle_text: '',
           subtitle_style: store.subtitleStyle || 'bold-yellow',
           subtitle_position: store.subtitlePosition || 'bottom',
-          font_size: store.fontSize || 14,
+          font_size: store.fontSize || 20,
           watermark_text: store.watermark || '',
           watermark_position: store.watermarkPosition || 'top-right',
           music_track: store.music || 'none',
           music_volume: store.musicVolume || 30,
+          include_audio: store.includeAudio || false,
           filter_style: store.activeFilter || 'none',
           resolution: resolution,
           format: format,
           fps: fps,
+          face_tracking: store.faceTracking || false,
+          face_data: store.faceData || null,
         }),
       })
 
@@ -82,13 +88,13 @@ export default function ExportModal() {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1000,
-      background: 'rgba(0,0,0,0.7)',
+      background: 'rgba(0,0,0,0.3)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       backdropFilter: 'blur(8px)',
       animation: 'fadeIn 0.2s ease',
     }} onClick={() => { if (!saving) setShowExportModal(false) }}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: surface, border: `1px solid ${borderSoft}`,
+        background: '#ffffff', border: `1px solid ${borderSoft}`,
         borderRadius: '20px', width: '420px', maxWidth: '90vw',
         overflow: 'hidden', animation: 'scaleIn 0.25s cubic-bezier(0.16,1,0.3,1)',
       }}>

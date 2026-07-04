@@ -3,9 +3,10 @@
 import { useEffect, useRef } from 'react'
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
-import HowItWorks from './components/HowItWorks'
+import Showcase from './components/Testimonials'
 import Features from './components/Features'
-import Testimonials from './components/Testimonials'
+import HowItWorks from './components/HowItWorks'
+import SuccessStories from './components/SuccessStories'
 import Pricing from './components/Pricing'
 import FAQ from './components/FAQ'
 import CTA from './components/CTA'
@@ -46,6 +47,10 @@ export default function Landing() {
       </div>
 
       <div className="reveal">
+        <Showcase />
+      </div>
+
+      <div className="reveal">
         <HowItWorks />
       </div>
 
@@ -54,7 +59,7 @@ export default function Landing() {
       </div>
 
       <div className="reveal">
-        <Testimonials />
+        <SuccessStories />
       </div>
 
       <div className="reveal">

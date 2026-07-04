@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useState, useEffect } from 'react'
 import { getSupabaseClient } from '../../lib/supabase'
 import { motion } from 'framer-motion'
@@ -29,6 +29,7 @@ export default function Dashboard() {
   const [settingsStatus, setSettingsStatus] = useState('')
   const [saving, setSaving] = useState(false)
   const [showSidebarMenu, setShowSidebarMenu] = useState(false)
+  const [downloadingId, setDownloadingId] = useState(null)
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -83,11 +84,19 @@ export default function Dashboard() {
 
   const pollClipStatus = async (userId, since, jobId) => {
     let attempts = 0
+    let token = null
+    try {
+      const { data: { session } } = await getSupabaseClient().auth.getSession()
+      token = session?.access_token
+    } catch {}
     const poll = setInterval(async () => {
       attempts++
-      if (jobId) {
+      if (jobId && token) {
         try {
-          const r = await fetch(`${BACKEND_URL}/status/${jobId}`, { signal: AbortSignal.timeout(3000) })
+          const r = await fetch(`${BACKEND_URL}/status/${jobId}`, {
+            signal: AbortSignal.timeout(3000),
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
           if (r.ok) {
             const d = await r.json()
             if (d.status === 'error') { setStatus(`Error: ${d.message || 'Processing failed'}`); clearInterval(poll); return }
@@ -96,10 +105,11 @@ export default function Dashboard() {
         } catch {}
       }
       const { data } = await getSupabaseClient().from('clips').select('*').eq('user_id', userId).gte('created_at', new Date(since).toISOString()).order('created_at', { ascending: false }).limit(5)
-      if (data?.length > 0) {
+      const ready = data?.find(c => c.video_url && c.status === 'done')
+      if (ready) {
         clearInterval(poll)
         setStatus('Redirecting to editor...')
-        window.location.href = `/editor?id=${data[0].id}`
+        window.location.href = `/editor?id=${ready.id}`
       } else if (attempts > 720) {
         clearInterval(poll)
         loadClips(userId)
@@ -159,10 +169,12 @@ export default function Dashboard() {
         } else {
           setStatus('Redirecting to editor...')
           // Navigate to editor with the first generated clip
-          const { data: newClips } = await getSupabaseClient().from('clips').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
-          if (newClips?.length > 0) {
-            window.location.href = `/editor?id=${newClips[0].id}`
+          const { data: newClips } = await getSupabaseClient().from('clips').select('id, video_url, status').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1)
+          const first = newClips?.[0]
+          if (first?.video_url && first?.status === 'done') {
+            window.location.href = `/editor?id=${first.id}`
           } else {
+            setStatus(first?.status === 'error' ? 'Clip processing failed. Try again.' : 'Clip is still uploading. Check "My Clips".')
             setTimeout(() => { loadClips(user.id); setActiveTab('clips') }, 2000)
           }
         }
@@ -327,27 +339,54 @@ export default function Dashboard() {
   const closeSidebar = () => setSidebarOpen(false)
 
   const handleDownload = async (clip) => {
-    const filename = `${clip.title?.slice(0, 40) || 'clip'}.mp4`
+    setDownloadingId(clip.id)
     try {
-      const response = await fetch(`${clip.video_url}?download=${encodeURIComponent(filename)}`, { mode: 'cors' })
-      if (!response.ok) throw new Error('Download failed')
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 60000)
-    } catch {
-      const a = document.createElement('a')
-      a.href = `${clip.video_url}?download=${encodeURIComponent(filename)}`
-      a.target = '_blank'
-      a.rel = 'noopener noreferrer'
-      a.click()
+      const { data: { session } } = await getSupabaseClient().auth.getSession()
+      const token = session?.access_token
+      const response = await fetch(`${BACKEND_URL}/export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          clip_id: clip.id,
+          video_url: clip.video_url,
+          srt_content: clip.subtitles_srt || '',
+          trim_start: 0,
+          trim_end: 100,
+          subtitle_style: 'bold-yellow',
+          subtitle_position: 'bottom',
+          font_size: 18,
+          watermark_text: '',
+          music_track: 'none',
+          music_volume: 30,
+          include_audio: true,
+          filter_style: 'none',
+          resolution: '720p',
+          format: 'mp4',
+          fps: 30,
+        }),
+      })
+      const data = await response.json()
+      if (data.success && data.video_url) {
+        const filename = `${clip.title?.slice(0, 40) || 'clip'}.mp4`
+        const a = document.createElement('a')
+        a.href = data.video_url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      } else {
+        alert('Download failed: ' + (data.detail || 'Unknown error'))
+      }
+    } catch (err) {
+      alert('Download failed: ' + err.message)
+    } finally {
+      setDownloadingId(null)
     }
   }
+
 
   function renderClipCard(clip) {
     return (
@@ -403,8 +442,8 @@ export default function Dashboard() {
                     <a href={clip.video_url} target="_blank" rel="noopener noreferrer" className="dash-clip-action-btn secondary">
                       View
                     </a>
-                    <button onClick={() => handleDownload(clip)} className="dash-clip-action-btn secondary">
-                      Download
+                    <button onClick={() => handleDownload(clip)} disabled={downloadingId === clip.id} className="dash-clip-action-btn secondary">
+                      {downloadingId === clip.id ? 'Preparing...' : 'Download'}
                     </button>
                   </>
                 )}
@@ -511,7 +550,7 @@ export default function Dashboard() {
               <span className="dash-credits-icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               </span>
-              <span className="dash-credits-count">{plan === 'pro' ? '∞' : credits}</span>
+              <span className="dash-credits-count">{plan === 'pro' ? 'âˆž' : credits}</span>
               <span style={{ opacity: 0.6 }}>credits</span>
             </div>
             {activeTab === 'clips' && (
@@ -823,7 +862,7 @@ export default function Dashboard() {
                       border: `1px solid ${borderSoft}`, background: bgSecondary,
                       color: textDim, fontSize: '14px', fontFamily: fonts.body,
                     }}>
-                      {user?.email || '—'}
+                      {user?.email || 'â€”'}
                     </div>
                   </div>
                   <button
@@ -1076,3 +1115,4 @@ export default function Dashboard() {
     </ErrorBoundary>
   )
 }
+

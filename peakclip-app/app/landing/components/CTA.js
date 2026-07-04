@@ -12,13 +12,12 @@ export default function CTA() {
         viewport={{ once: true }}
         transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
       >
-        <h2 className="cta-title">Ready to Go Viral?</h2>
+        <h2 className="cta-title">Try it</h2>
         <p className="cta-desc">
-          Start your free trial and create your first clip in under 60 seconds.
-          No credit card required.
+          Paste a link. Get a clip. See what works.
         </p>
         <a href="/login?signup=true" className="cta-btn">
-          Start Clipping Free
+          Start for free
         </a>
       </motion.div>
     </section>
