@@ -41,9 +41,7 @@ export default function Landing() {
     <div className="landing-bg" style={{ position: 'relative', overflow: 'hidden' }}>
       <Navbar />
 
-      <div className="reveal">
-        <Hero />
-      </div>
+      <Hero />
 
       <div className="reveal">
         <HowItWorks />

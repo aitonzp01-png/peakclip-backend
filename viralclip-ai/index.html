@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ViralClip AI - Editor de Videos Viral</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ ViralClip AI</h1>
+            <p>Editor de videos con subtítulos virales - 100% gratis</p>
+        </header>
+
+        <main>
+            <!-- Step 1: Upload -->
+            <section id="upload-section" class="section active">
+                <h2>1. Sube tu video o pega un link</h2>
+                <div class="upload-area" id="drop-zone">
+                    <input type="file" id="video-input" accept="video/*" hidden>
+                    <div class="upload-content">
+                        <span class="icon">📹</span>
+                        <p>Arrastra un video o haz clic para seleccionar</p>
+                        <small>MP4, MOV, WEBM - Máx 100MB recomendado</small>
+                    </div>
+                </div>
+                <div class="or-divider">
+                    <span>O</span>
+                </div>
+                <div class="youtube-input">
+                    <input type="text" id="youtube-url" placeholder="Pega link de YouTube, TikTok o Instagram">
+                    <button id="load-youtube">Cargar</button>
+                </div>
+                <div class="url-progress" id="url-progress" hidden>
+                    <div class="progress-bar active">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <p id="url-status">Descargando video...</p>
+                </div>
+            </section>
+
+            <!-- Step 2: Transcription -->
+            <section id="transcription-section" class="section">
+                <h2>2. Transcripción automática</h2>
+                <div class="transcription-controls">
+                    <button id="start-transcription" class="btn-primary">🎤 Iniciar transcripción</button>
+                    <select id="language-select">
+                        <option value="es-ES">Español</option>
+                        <option value="en-US">English</option>
+                        <option value="pt-BR">Português</option>
+                    </select>
+                </div>
+                <div class="progress-bar" id="transcription-progress">
+                    <div class="progress-fill"></div>
+                </div>
+                <p id="transcription-status">Haz clic para transcribir el audio del video</p>
+                <div class="transcription-editor">
+                    <textarea id="transcript-text" placeholder="La transcripción aparecerá aquí..."></textarea>
+                </div>
+                <button id="continue-to-editor" class="btn-secondary" disabled>Continuar al editor</button>
+            </section>
+
+            <!-- Step 3: Editor -->
+            <section id="editor-section" class="section">
+                <h2>3. Editor de subtítulos</h2>
+                
+                <div class="editor-layout">
+                    <div class="preview-area">
+                        <div class="video-wrapper">
+                            <video id="preview-video" controls></video>
+                            <canvas id="subtitle-canvas"></canvas>
+                        </div>
+                        <div class="timeline">
+                            <input type="range" id="timeline" min="0" max="100" value="0">
+                        </div>
+                    </div>
+
+                    <div class="controls-panel">
+                        <div class="style-section">
+                            <h3>Estilo de subtítulos</h3>
+                            <div class="style-options">
+                                <button class="style-btn active" data-style="modern">Moderno</button>
+                                <button class="style-btn" data-style="bold">Bold</button>
+                                <button class="style-btn" data-style="minimal">Minimal</button>
+                                <button class="style-btn" data-style="gradient">Gradiente</button>
+                                <button class="style-btn" data-style="outline">Outline</button>
+                                <button class="style-btn" data-style="tiktok">TikTok</button>
+                            </div>
+                        </div>
+
+                        <div class="subtitle-config">
+                            <h3>Configuración</h3>
+                            <label>
+                                Tamaño de fuente
+                                <input type="range" id="font-size" min="20" max="80" value="42">
+                            </label>
+                            <label>
+                                Posición vertical
+                                <input type="range" id="subtitle-y" min="50" max="90" value="80">
+                            </label>
+                            <label>
+                                Líneas por subtítulo
+                                <input type="number" id="max-lines" min="1" max="3" value="2">
+                            </label>
+                            <label>
+                                Palabras por subtítulo
+                                <input type="number" id="words-per-sub" min="2" max="8" value="4">
+                            </label>
+                        </div>
+
+                        <button id="export-video" class="btn-primary btn-export">🎬 Exportar video</button>
+                    </div>
+                </div>
+
+                <div class="subtitle-list" id="subtitle-list">
+                    <!-- Subtitles will appear here -->
+                </div>
+            </section>
+
+            <!-- Step 4: Export -->
+            <section id="export-section" class="section">
+                <h2>4. Exportación</h2>
+                <div class="export-status">
+                    <div class="spinner" id="export-spinner"></div>
+                    <p id="export-text">Procesando tu video viral...</p>
+                </div>
+                <div class="progress-bar" id="export-progress">
+                    <div class="progress-fill"></div>
+                </div>
+                <div class="download-area" id="download-area" hidden>
+                    <p>¡Listo! Tu video con subtítulos virales está listo</p>
+                    <video id="final-video" controls></video>
+                    <a id="download-link" class="btn-primary" download="viralclip-video.mp4">⬇️ Descargar video</a>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>ViralClip AI - MVP gratuito creado con tecnologías del navegador</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
