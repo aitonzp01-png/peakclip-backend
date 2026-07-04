@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 /* ── PeakClip Design System ──
-   Gold/Dark Premium SaaS Identity.
-   --brand-primary (#D9B347) = signature gold, cinematic warmth.
+   Indigo/Dark Premium SaaS Identity.
+   --brand-primary (#6366F1) = signature indigo, modern & vibrant.
    --bg-primary (#050505) = absolute black backdrop.
    All surfaces, borders, and text derive from this 7-color system.
 */
 :root {
-  --brand-primary: #D9B347;
-  --brand-hover: #E8C760;
-  --brand-glow: rgba(217, 179, 71, 0.35);
-  --brand-dim: rgba(217, 179, 71, 0.08);
-  --brand-border: rgba(217, 179, 71, 0.2);
-  --brand-grad: linear-gradient(135deg, #D9B347, #E8C760);
+  --brand-primary: #6366F1;
+  --brand-hover: #818CF8;
+  --brand-glow: rgba(99, 102, 241, 0.35);
+  --brand-dim: rgba(99, 102, 241, 0.08);
+  --brand-border: rgba(99, 102, 241, 0.2);
+  --brand-grad: linear-gradient(135deg, #6366F1, #818CF8);
 
   --bg-primary: #050505;
   --bg-secondary: #0B0B0B;
@@ -1207,8 +1207,8 @@ body {
 .landing-bg {
   background: var(--bg-primary);
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(217, 179, 71, 0.05), transparent 70%),
-    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(217, 179, 71, 0.03), transparent 60%);
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99, 102, 241, 0.06), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(99, 102, 241, 0.03), transparent 60%);
 }
 
 .landing-bg::before {
@@ -1368,26 +1368,26 @@ body {
 .hero-badge {
   display: inline-flex;
   align-items: center;
-  height: 52px;
-  padding: 0 28px;
+  height: 36px;
+  padding: 0 20px;
   background: rgba(217, 179, 71, 0.06);
   border: 1px solid rgba(217, 179, 71, 0.2);
   border-radius: 999px;
   color: var(--brand-primary);
   font-family: 'Poppins', sans-serif;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 1px;
-  margin-top: 28px;
-  margin-bottom: 48px;
+  margin-top: 20px;
+  margin-bottom: 32px;
   position: relative;
   z-index: 2;
-  box-shadow: 0 0 40px rgba(212, 175, 55, 0.12);
+  box-shadow: 0 0 40px rgba(99, 102, 241, 0.12);
 }
 
 @keyframes breatheGlow {
-  0%, 100% { box-shadow: 0 0 0px rgba(217, 179, 71, 0); }
-  50% { box-shadow: 0 0 20px rgba(217, 179, 71, 0.2), 0 0 40px rgba(217, 179, 71, 0.1); }
+  0%, 100% { box-shadow: 0 0 0px rgba(99, 102, 241, 0); }
+  50% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.2), 0 0 40px rgba(99, 102, 241, 0.1); }
 }
 
 .hero-title {
@@ -1410,12 +1410,12 @@ body {
 .hero-sub {
   color: var(--text-secondary);
   font-family: 'Poppins', sans-serif;
-  font-size: 22px;
-  line-height: 1.5;
-  max-width: 720px;
+  font-size: 18px;
+  line-height: 1.6;
+  max-width: 560px;
   opacity: 0.78;
-  margin-top: 42px;
-  margin-bottom: 48px;
+  margin-top: 28px;
+  margin-bottom: 40px;
 }
 
 .hero-actions {
@@ -1467,185 +1467,6 @@ body {
 
 .hero-cta-secondary:hover {
   background: #171717;
-}
-
-/* ── Pipeline UI ── */
-.pipeline-container {
-  width: 100%;
-  max-width: 680px;
-  scale: 0.96;
-  margin: auto;
-  height: 540px;
-  background: rgba(8, 8, 8, 0.96);
-  border: 1px solid rgba(255, 220, 120, 0.08);
-  border-radius: 32px;
-  box-shadow: 0 0 120px rgba(212, 175, 55, 0.07);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-  padding: 28px;
-  display: flex;
-  flex-direction: column;
-}
-
-.pipeline-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 40px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.pipeline-dots {
-  display: flex;
-  gap: 8px;
-}
-
-.pipeline-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.pipeline-dot.primary { background: #FF5F56; }
-.pipeline-dot.warning { background: #FFBD2E; }
-.pipeline-dot.success { background: #27C93F; }
-
-.pipeline-version {
-  font-family: 'Poppins', sans-serif;
-  font-size: 12px;
-  color: #777;
-  letter-spacing: 0.5px;
-}
-
-.pipeline-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  flex: 1;
-}
-
-.pipeline-step {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 20px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 16px;
-  transition: all 300ms ease;
-}
-
-.pipeline-step.active {
-  background: rgba(217, 179, 71, 0.08);
-  border: 1px solid rgba(217, 179, 71, 0.2);
-}
-
-.pipeline-step:hover:not(.completed) {
-  transform: translateY(-6px);
-}
-
-.pipeline-step-number {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Poppins', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-muted);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.pipeline-step.active .pipeline-step-number {
-  background: rgba(217, 179, 71, 0.15);
-  color: var(--brand-primary);
-  border-color: rgba(217, 179, 71, 0.3);
-}
-
-.pipeline-step.completed .pipeline-step-number {
-  background: var(--brand-primary);
-  color: var(--bg-primary);
-  border-color: var(--brand-primary);
-}
-
-.pipeline-step-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.pipeline-step-label {
-  font-family: 'Poppins', sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
-
-.pipeline-step.active .pipeline-step-label {
-  color: var(--brand-primary);
-}
-
-.pipeline-step-desc {
-  font-family: 'Poppins', sans-serif;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.pipeline-step-status {
-  font-family: 'Poppins', sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.pipeline-step.active .pipeline-step-status {
-  color: var(--brand-primary);
-}
-
-.pipeline-step.completed .pipeline-step-status {
-  color: var(--brand-primary);
-}
-
-.pipeline-step:not(.active):not(.completed) {
-  opacity: 0.65;
-}
-
-/* ── Pipeline Progress Bar ── */
-.pipeline-progress-wrap {
-  margin-top: auto;
-  padding-top: 24px;
-}
-
-.pipeline-progress-label {
-  display: flex;
-  justify-content: space-between;
-  font-family: 'Poppins', sans-serif;
-  font-size: 10px;
-  color: var(--text-muted);
-
-  margin-bottom: 8px;
-}
-
-.pipeline-progress-track {
-  height: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 999px;
-  overflow: hidden;
-  position: relative;
-}
-
-.pipeline-progress-bar {
-  height: 100%;
-  background: var(--brand-primary);
-  border-radius: 999px;
-  width: 0%;
-  box-shadow: 0 0 20px rgba(217, 179, 71, 0.3);
-  transition: width 0.3s ease;
 }
 
 /* ── Pricing ── */
@@ -2202,11 +2023,8 @@ body {
     border-radius: 16px;
   }
 
-  .pipeline-container {
+  .hero-clips-grid {
     max-width: 100%;
-    scale: 1;
-    height: auto;
-    min-height: 480px;
   }
 
   .pricing-section {
@@ -2268,9 +2086,8 @@ body {
     margin-bottom: 36px;
   }
 
-  .pipeline-container {
+  .hero-clips-grid {
     max-width: 100%;
-    height: 480px;
   }
 
   .pricing-section {
