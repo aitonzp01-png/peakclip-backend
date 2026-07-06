@@ -1,16 +1,16 @@
-/* Auth shared styles */
+/* Auth shared styles — PeakClip Cream Palette */
 :root {
-  --bg-page: #f5f5f0;
+  --bg-page: #f0f0eb;
   --card-bg: #ffffff;
-  --card-border: #e8e8e2;
-  --input-bg: #f8f8f4;
-  --input-border: #e0e0da;
-  --text-primary: #0f0f0f;
-  --text-secondary: #6b6b72;
-  --placeholder: #9a9aa3;
-  --accent: #c4ff3d;
-  --btn-primary-bg: #0f0f0f;
-  --btn-primary-color: #f5f5f0;
+  --card-border: #e5e5e0;
+  --input-bg: #fafafa;
+  --input-border: #e4e4e7;
+  --text-primary: #0a0a0a;
+  --text-secondary: #666666;
+  --placeholder: #999999;
+  --accent: #c8ff00;
+  --btn-primary-bg: #0a0a0a;
+  --btn-primary-color: #ffffff;
   --disabled-opacity: 0.45;
   --success: #22c55e;
 }

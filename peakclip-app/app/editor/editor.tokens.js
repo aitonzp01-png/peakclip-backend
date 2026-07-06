@@ -1,40 +1,29 @@
 // editor.tokens.js – export of CSS custom properties for the cream‑palette editor
 // These variables are imported by editor.css and can be used by any component.
 export const editorPalette = {
-  // Core colors
-  '--cream-bg': '#f5f5f0',                     // General page background
-  '--cream-panel': '#ffffff',                  // Side panels background
-  '--cream-panel-border': '#e8e8e2',          // Side panels border
-  '--cream-surface': '#f8f8f4',               // Secondary surfaces (e.g., subtitle panel)
-  '--cream-surface-border': '#e0e0da',        // Surface border
-  '--cream-hover': '#f0f0ea',                 // Hover background for buttons/panels
-
-  // Text colors
-  '--cream-text-primary': '#0f0f0f',          // Main/primary text
-  '--cream-text-secondary': '#6b6b72',        // Secondary text
-  '--cream-placeholder': '#9a9aa3',          // Input placeholders
-
-  // Accent & interactive colors
-  '--cream-accent': '#c4ff3d',                // Highlights, selections, playhead, waveform, active border
-  '--cream-primary-btn-bg': '#0f0f0f',        // Primary button background
-  '--cream-primary-btn-color': '#f5f5f0',     // Primary button text color
-  '--cream-accent-btn-bg': '#c4ff3d',        // Accent button (Export / Save) background
-  '--cream-accent-btn-color': '#0f0f0f',     // Accent button text color
-  '--cream-focus-border': '#0f0f0f',        // Focus/selected border
-  '--cream-focus-detail': '#c4ff3d',         // Detail color for selected state (e.g., left icon bar active)
-
-  // Status colors
+  '--cream-bg': '#f0f0eb',
+  '--cream-panel': '#ffffff',
+  '--cream-panel-border': '#e5e5e0',
+  '--cream-surface': '#f8f8f5',
+  '--cream-surface-border': '#e5e5e0',
+  '--cream-hover': '#f0f0f0',
+  '--cream-text-primary': '#0a0a0a',
+  '--cream-text-secondary': '#666666',
+  '--cream-placeholder': '#999999',
+  '--cream-accent': '#c8ff00',
+  '--cream-primary-btn-bg': '#0a0a0a',
+  '--cream-primary-btn-color': '#ffffff',
+  '--cream-accent-btn-bg': '#c8ff00',
+  '--cream-accent-btn-color': '#0a0a0a',
+  '--cream-focus-border': '#0a0a0a',
+  '--cream-focus-detail': '#c8ff00',
   '--cream-success': '#22c55e',
   '--cream-error': '#ef4444',
-
-  // Timeline specific
-  '--cream-tl-bg': '#eeeee8',               // Timeline background
-  '--cream-tl-border': '#e8e8e2',           // Timeline top border
-  '--cream-waveform': 'rgba(196,255,61,0.7)', // Waveform color with opacity
-  '--cream-playhead': '#c4ff3d',            // Playhead line & handle
-
-  // Bounding box (face tracking)
-  '--cream-bbox': '#c4ff3d'
+  '--cream-tl-bg': '#f8f8f5',
+  '--cream-tl-border': '#e5e5e0',
+  '--cream-waveform': 'rgba(200,255,0,0.7)',
+  '--cream-playhead': '#c8ff00',
+  '--cream-bbox': '#c8ff00'
 };
 
 // Helper to inject the variables into :root when needed

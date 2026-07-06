@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS public.clips (
 -- Add missing columns if table already existed without them
 ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
 ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS duration NUMERIC;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS transcript JSONB;
 
 -- Index for fast user-scoped queries
 CREATE INDEX IF NOT EXISTS idx_clips_user_id ON public.clips(user_id);

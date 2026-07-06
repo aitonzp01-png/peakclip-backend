@@ -1,38 +1,40 @@
 /* editor.css – Cream palette styling for the video editor */
 
-/* Inject palette variables */
-@layer editor {
-  :root {
-    /* Core colors */
-    --cream-bg: #f5f5f0;
-    --cream-panel: #ffffff;
-    --cream-panel-border: #e8e8e2;
-    --cream-surface: #f8f8f4;
-    --cream-surface-border: #e0e0da;
-    --cream-hover: #f0f0ea;
-    /* Text */
-    --cream-text-primary: #0f0f0f;
-    --cream-text-secondary: #6b6b72;
-    --cream-placeholder: #9a9aa3;
-    /* Accent */
-    --cream-accent: #c4ff3d;
-    --cream-primary-btn-bg: #0f0f0f;
-    --cream-primary-btn-color: #f5f5f0;
-    --cream-accent-btn-bg: #c4ff3d;
-    --cream-accent-btn-color: #0f0f0f;
-    --cream-focus-border: #0f0f0f;
-    --cream-focus-detail: #c4ff3d;
-    /* Status */
-    --cream-success: #22c55e;
-    --cream-error: #ef4444;
-    /* Timeline */
-    --cream-tl-bg: #eeeee8;
-    --cream-tl-border: #e8e8e2;
-    --cream-waveform: rgba(196,255,61,0.7);
-    --cream-playhead: #c4ff3d;
-    /* Face tracking */
-    --cream-bbox: #c4ff3d;
-  }
+/* Inject palette variables — PeakClip Cream Palette */
+:root {
+  --cream-bg: #f0f0eb;
+  --cream-panel: #ffffff;
+  --cream-panel-border: #e5e5e0;
+  --cream-surface: #f8f8f5;
+  --cream-surface-border: #e5e5e0;
+  --cream-hover: #f0f0f0;
+  --cream-text-primary: #0a0a0a;
+  --cream-text-secondary: #666666;
+  --cream-placeholder: #999999;
+  --cream-accent: #c8ff00;
+  --cream-primary-btn-bg: #0a0a0a;
+  --cream-primary-btn-color: #ffffff;
+  --cream-accent-btn-bg: #c8ff00;
+  --cream-accent-btn-color: #0a0a0a;
+  --cream-focus-border: #0a0a0a;
+  --cream-focus-detail: #c8ff00;
+  --cream-success: #22c55e;
+  --cream-error: #ef4444;
+  --cream-tl-bg: #f8f8f5;
+  --cream-tl-border: #e5e5e0;
+  --cream-waveform: rgba(200,255,0,0.7);
+  --cream-playhead: #c8ff00;
+  --cream-bbox: #c8ff00;
+  --cream-badge-new-bg: #c8ff00;
+  --cream-badge-new-text: #0a0a0a;
+  --cream-zinc-50: #fafafa;
+  --cream-zinc-100: #f4f4f5;
+  --cream-zinc-200: #e4e4e7;
+  --cream-zinc-400: #a1a1aa;
+  --cream-zinc-500: #71717a;
+  --cream-zinc-600: #52525b;
+  --cream-zinc-700: #3f3f46;
+  --cream-zinc-800: #27272a;
 }
 
 /* Global editor layout */
@@ -213,7 +215,7 @@
 /* Central preview area */
 .editor-preview {
   flex: 1;
-  background: var(--cream-hover);
+  background: var(--cream-bg);
   display: flex;
   flex-direction: column;
   align-items: center;
