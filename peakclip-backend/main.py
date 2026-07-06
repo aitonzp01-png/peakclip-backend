@@ -637,7 +637,7 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                     'Accept-Language': 'en-US,en;q=0.5',
                 },
             }
-            if proxy_url:
+            if proxy_url and not has_oauth:
                 ydl_opts['proxy'] = proxy_url
             if cookies_file:
                 ydl_opts['cookies'] = cookies_file
@@ -645,7 +645,7 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 ydl_opts['username'] = 'oauth'
             if cfg:
                 ydl_opts['extractor_args'] = {'youtube': cfg}
-            print(f"yt-dlp attempt {attempt+1}/24 strategy={cfg} format={fmt} proxy={'yes' if proxy_url else 'no'} cookies={'yes' if cookies_file else 'no'} oauth={'yes' if has_oauth else 'no'}")
+            print(f"yt-dlp attempt {attempt+1}/24 strategy={cfg} format={fmt} proxy={'yes' if proxy_url and not has_oauth else 'no'} cookies={'yes' if cookies_file else 'no'} oauth={'yes' if has_oauth else 'no'}")
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([req.url])
             if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
@@ -655,7 +655,7 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
         except Exception as e:
             last_err = e
             err_lower = str(e).lower()
-            if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small"]):
+            if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small", "407", "proxy", "tunnel connection"]):
                 if attempt < 23:
                     wait = min(5 * (2 ** (attempt // 3)), 120)
                     print(f"YouTube issue (attempt {attempt+1}/24): {err_lower[:80]}, waiting {wait}s...")
