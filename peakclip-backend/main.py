@@ -60,6 +60,20 @@ async def lifespan(app: FastAPI):
             print("COOKIES: no YOUTUBE_COOKIES_B64 env var")
     except Exception as e:
         print(f"COOKIES: failed to write: {e}")
+    # Write YouTube OAuth tokens from env var if provided
+    try:
+        oauth_b64 = os.environ.get('YOUTUBE_OAUTH_TOKENS_B64')
+        if oauth_b64:
+            oauth_data = base64.b64decode(oauth_b64).decode('utf-8', errors='replace')
+            cache_dir = os.path.expanduser('~/.cache/yt-dlp')
+            os.makedirs(cache_dir, exist_ok=True)
+            with open(os.path.join(cache_dir, 'tokens.json'), 'w', encoding='utf-8') as f:
+                f.write(oauth_data)
+            print(f"OAUTH: written {len(oauth_data)} bytes to tokens.json")
+        else:
+            print("OAUTH: no YOUTUBE_OAUTH_TOKENS_B64 env var")
+    except Exception as e:
+        print(f"OAUTH: failed to write: {e}")
     await run_migrations()
     await fetch_jwks()
     yield
@@ -591,6 +605,9 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     proxy_url = os.environ.get('YOUTUBE_PROXY')
     # Optional cookies file written by lifespan from YOUTUBE_COOKIES_B64
     cookies_file = 'cookies.txt' if os.path.exists('cookies.txt') else None
+    # Optional OAuth token file written by lifespan from YOUTUBE_OAUTH_TOKENS_B64
+    oauth_token_file = os.path.expanduser('~/.cache/yt-dlp/tokens.json')
+    has_oauth = os.path.exists(oauth_token_file)
 
     last_err = None
     for attempt in range(24):
@@ -624,9 +641,11 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
                 ydl_opts['proxy'] = proxy_url
             if cookies_file:
                 ydl_opts['cookies'] = cookies_file
+            if has_oauth:
+                ydl_opts['username'] = 'oauth'
             if cfg:
                 ydl_opts['extractor_args'] = {'youtube': cfg}
-            print(f"yt-dlp attempt {attempt+1}/24 strategy={cfg} format={fmt} proxy={'yes' if proxy_url else 'no'} cookies={'yes' if cookies_file else 'no'}")
+            print(f"yt-dlp attempt {attempt+1}/24 strategy={cfg} format={fmt} proxy={'yes' if proxy_url else 'no'} cookies={'yes' if cookies_file else 'no'} oauth={'yes' if has_oauth else 'no'}")
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([req.url])
             if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
