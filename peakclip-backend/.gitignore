@@ -1,4 +1,4 @@
-.env
+.env*
 downloads/
 outputs/
 __pycache__/

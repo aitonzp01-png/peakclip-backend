@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 load_dotenv()
+from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Depends, Header, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -160,18 +161,17 @@ async def run_migrations():
     except Exception as e:
         print(f"COLUMN MIGRATION error: {e}")
 
-    # Add start_time / end_time columns to clips table if missing
+    # Ensure subscription columns exist on users table
     try:
-        supabase.table("clips").select("start_time,end_time").limit(1).execute()
-        print("SQL MIGRATION: start_time/end_time columns already exist (OK)")
-    except Exception:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=10) as client:
             headers = {
                 "apikey": service_key,
                 "Authorization": f"Bearer {service_key}",
                 "Content-Type": "application/json",
             }
-            alter_sql = "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC;"
+            alter_sql = """ALTER TABLE public.users ADD COLUMN IF NOT EXISTS subscription_id TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'inactive';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ;"""
             for url in [
                 f"https://{project_ref}.supabase.co/sql/v1/query",
                 f"https://api.supabase.com/v1/projects/{project_ref}/database/query",
@@ -179,7 +179,33 @@ async def run_migrations():
                 try:
                     res = await client.post(url, json={"query": alter_sql}, headers=headers)
                     if res.status_code == 200:
-                        print("SQL MIGRATION: added start_time/end_time columns (OK)")
+                        print(f"COLUMN MIGRATION: subscription columns added (OK)")
+                        break
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"COLUMN MIGRATION subscription error: {e}")
+
+    # Add start_time / end_time / transcript columns to clips table if missing
+    try:
+        supabase.table("clips").select("start_time,end_time,transcript").limit(1).execute()
+        print("SQL MIGRATION: columns already exist (OK)")
+    except Exception:
+        async with httpx.AsyncClient(timeout=15) as client:
+            headers = {
+                "apikey": service_key,
+                "Authorization": f"Bearer {service_key}",
+                "Content-Type": "application/json",
+            }
+            alter_sql = "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS transcript JSONB;"
+            for url in [
+                f"https://{project_ref}.supabase.co/sql/v1/query",
+                f"https://api.supabase.com/v1/projects/{project_ref}/database/query",
+            ]:
+                try:
+                    res = await client.post(url, json={"query": alter_sql}, headers=headers)
+                    if res.status_code == 200:
+                        print("SQL MIGRATION: added columns (OK)")
                         break
                 except Exception:
                     pass
@@ -289,6 +315,8 @@ supabase = create_client(
 
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PRICE_CREATOR = os.getenv("STRIPE_PRICE_CREATOR", "price_creator")
+STRIPE_PRICE_PRO = os.getenv("STRIPE_PRICE_PRO", "price_pro")
 
 # JWT verification
 supabase_url = os.getenv("SUPABASE_URL")
@@ -382,7 +410,6 @@ def health():
         "status": "PeakClip API running",
         "jwks_keys": len(_jwks_keys),
         "jwks_loaded": len(_jwks_keys) > 0,
-        "supabase_url": supabase_url,
     }
 
 
@@ -390,24 +417,9 @@ def health():
 def debug():
     import shutil
     ffmpeg_path = shutil.which("ffmpeg")
-    deno_path = shutil.which("deno")
-    yt_dlp_ok = True
-    try:
-        import yt_dlp
-        yt_dlp_ok = True
-    except:
-        yt_dlp_ok = False
-    openai_key = os.getenv("OPENAI_API_KEY", "")
-    supabase_url = os.getenv("SUPABASE_URL", "")
     return {
         "ffmpeg": ffmpeg_path or "NOT FOUND",
-        "deno": deno_path or "NOT FOUND",
-        "yt_dlp": yt_dlp_ok,
-        "openai_key_set": bool(openai_key),
-        "supabase_url": supabase_url,
-        "allowed_origins": ALLOWED_ORIGINS,
-        "cwd": os.getcwd(),
-        "music_dir_exists": os.path.isdir("music"),
+        "yt_dlp": True,
     }
 
 
@@ -812,7 +824,8 @@ Return JSON with this exact format:
                 "thumbnail_url": thumb_storage_url,
                 "duration": round(duration, 1),
                 "start_time": clip_start,
-                "end_time": clip["end"]
+                "end_time": clip["end"],
+                "transcript": json.dumps(words_data)
             }).execute()
 
             output_clips.append({
@@ -1089,19 +1102,34 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Invalid payload")
     except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
-    if event.get("type") == "checkout.session.completed":
-        session = event["data"]["object"]
+
+    event_type = event.get("type")
+    session = event["data"]["object"]
+
+    plan_map = {
+        STRIPE_PRICE_CREATOR: "creator",
+        STRIPE_PRICE_PRO: "pro",
+    }
+
+    if event_type == "checkout.session.completed":
         user_id = session["metadata"]["user_id"]
         price_id = session["metadata"].get("price_id", "")
-        plan_map = {
-            "price_creator": "creator",
-            "price_pro": "pro",
-        }
         plan = plan_map.get(price_id, "creator")
         credit_amount = 999 if plan == "pro" else 200
+        subscription_id = session.get("subscription")
+        period_end = None
+        if subscription_id:
+            try:
+                subscription = stripe.Subscription.retrieve(subscription_id)
+                period_end = datetime.fromtimestamp(subscription.current_period_end, tz=timezone.utc).isoformat()
+            except Exception:
+                pass
         supabase.table("users").update({
             "plan": plan,
-            "credits": credit_amount
+            "credits": credit_amount,
+            "subscription_id": subscription_id,
+            "subscription_status": "active",
+            "current_period_end": period_end,
         }).eq("id", user_id).execute()
         try:
             supabase.table("credit_transactions").insert({
@@ -1111,6 +1139,53 @@ async def stripe_webhook(request: Request):
             }).execute()
         except Exception as e:
             print(f"credit_transactions insert failed (non-fatal): {e}")
+
+    elif event_type == "customer.subscription.deleted":
+        sub_id = session.get("id")
+        user_result = supabase.table("users").select("id").eq("subscription_id", sub_id).execute()
+        if user_result.data:
+            user_id = user_result.data[0]["id"]
+            supabase.table("users").update({
+                "plan": "free",
+                "credits": 0,
+                "subscription_status": "canceled",
+                "subscription_id": None,
+            }).eq("id", user_id).execute()
+
+    elif event_type == "invoice.paid":
+        sub_id = session.get("subscription")
+        period_end = None
+        if session.get("period_end"):
+            period_end = datetime.fromtimestamp(session["period_end"], tz=timezone.utc).isoformat()
+        if sub_id:
+            user_result = supabase.table("users").select("id,plan").eq("subscription_id", sub_id).execute()
+            if user_result.data:
+                user_id = user_result.data[0]["id"]
+                plan = user_result.data[0].get("plan", "creator")
+                credit_amount = 999 if plan == "pro" else 200
+                supabase.table("users").update({
+                    "subscription_status": "active",
+                    "credits": credit_amount,
+                    "current_period_end": period_end,
+                }).eq("id", user_id).execute()
+                try:
+                    supabase.table("credit_transactions").insert({
+                        "user_id": user_id,
+                        "amount": credit_amount,
+                        "type": "purchase",
+                    }).execute()
+                except Exception as e:
+                    print(f"credit_transactions insert failed (non-fatal): {e}")
+
+    elif event_type == "invoice.payment_failed":
+        sub_id = session.get("subscription")
+        if sub_id:
+            user_result = supabase.table("users").select("id").eq("subscription_id", sub_id).execute()
+            if user_result.data:
+                supabase.table("users").update({
+                    "subscription_status": "past_due",
+                }).eq("id", user_result.data[0]["id"]).execute()
+
     return {"received": True}
 
 
@@ -1343,7 +1418,8 @@ Return JSON with this exact format:
                 "thumbnail_url": thumb_storage_url,
                 "duration": round(duration, 1),
                 "start_time": clip_start,
-                "end_time": clip["end"]
+                "end_time": clip["end"],
+                "transcript": json.dumps(words_data)
             }).execute()
 
             output_clips.append({

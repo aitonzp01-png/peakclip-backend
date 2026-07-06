@@ -593,7 +593,7 @@ export default function Dashboard() {
       clips: '200 clips/month',
       features: ['200 créditos', 'Subtítulos animados', 'Plantillas de gameplay', 'Exportación HD'],
       cta: 'Empezar con Creator',
-      price_id: 'price_creator',
+      price_id: process.env.NEXT_PUBLIC_STRIPE_PRICE_CREATOR || 'price_creator',
       popular: true
     },
     {
@@ -603,7 +603,7 @@ export default function Dashboard() {
       clips: 'Ilimitados',
       features: ['Créditos ilimitados', 'Editor avanzado', 'Auto-publicar en redes', 'Puntuación viral IA', 'Soporte prioritario'],
       cta: 'Empezar con Pro',
-      price_id: 'price_pro'
+      price_id: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO || 'price_pro'
     }
   ];
 
