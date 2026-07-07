@@ -690,9 +690,16 @@ def process_video_background(job_id: str, user_id: str, url: str):
             except Exception as e:
                 last_err = e
                 err_lower = str(e).lower()
-                if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small", "407", "proxy", "tunnel connection"]):
+                # If proxy authentication fails, disable it and retry without proxy
+                if "407" in err_lower or "proxy authentication" in err_lower:
+                    print(f"Proxy authentication failed (407). Disabling proxy for remaining attempts.")
+                    proxy_url = None
                     if attempt < max_attempts - 1:
-                        wait = min(5 * (2 ** (attempt // 3)), 60)
+                        time.sleep(2)
+                        continue
+                if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small", "proxy", "tunnel connection"]):
+                    if attempt < max_attempts - 1:
+                        wait = min(5 * (2 ** (attempt // 3)), 30)
                         print(f"YouTube issue (attempt {attempt+1}/{max_attempts}): {err_lower[:80]}, waiting {wait}s...")
                         time.sleep(wait)
                         continue
