@@ -567,7 +567,7 @@ def extract_youtube_video_id(url: str) -> str | None:
     return None
 
 
-def run_async_in_sync(coro):
+def run_async_in_sync(coro, timeout: float = 120):
     """Run an async coroutine from a sync context in a dedicated thread.
 
     This avoids RuntimeError when asyncio.run() is called from a thread that
@@ -582,48 +582,60 @@ def run_async_in_sync(coro):
             new_loop.close()
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(runner)
-        return future.result()
+        return future.result(timeout=timeout)
+
+
+def _stream_download(client: httpx.Client, url: str, output_path: str, timeout: int = 120) -> bool:
+    """Download a URL to disk with streaming and size validation."""
+    try:
+        with client.stream("GET", url, timeout=timeout) as stream:
+            stream.raise_for_status()
+            with open(output_path, "wb") as f:
+                for chunk in stream.iter_bytes(chunk_size=8192):
+                    f.write(chunk)
+        return os.path.exists(output_path) and os.path.getsize(output_path) >= 1024
+    except Exception as e:
+        print(f"stream download failed for {url[:80]}: {e}")
+        return False
 
 
 def download_with_invidious(url: str, output_path: str) -> bool:
-    """Fallback downloader using Invidious instances for YouTube."""
+    """Fallback downloader using public Invidious instances for YouTube."""
     video_id = extract_youtube_video_id(url)
     if not video_id:
         return False
     invidious_instances = [
-        "https://iv.nboeck.de",
-        "https://iv.datura.network",
-        "https://iv.melmac.space",
-        "https://yt.artemislena.eu",
-        "https://iv.nowhere.moe",
+        "https://iv.nboeck.de", "https://iv.datura.network", "https://iv.melmac.space",
+        "https://yt.artemislena.eu", "https://iv.nowhere.moe", "https://iv.drgns.space",
+        "https://iv.nhc.no", "https://yt.owo.si", "https://iv.nboeck.de",
+        "https://invidious.perennialte.ch", "https://iv.melmac.space",
+        "https://iv.drgns.space", "https://iv.nboeck.de",
     ]
-    with httpx.Client(timeout=30, follow_redirects=True) as client:
+    with httpx.Client(timeout=20, follow_redirects=True) as client:
         for base in invidious_instances:
             try:
-                r = client.get(f"{base}/api/v1/videos/{video_id}")
+                r = client.get(f"{base}/api/v1/videos/{video_id}", timeout=15)
                 if r.status_code != 200:
                     continue
                 data = r.json()
                 formats = data.get("adaptiveFormats", []) + data.get("formatStreams", [])
                 download_url = None
+                # Prefer muxed (video+audio) formats
                 for fmt in formats:
-                    if fmt.get("type", "").startswith("video") and "audio" in fmt.get("type", ""):
+                    fmt_type = fmt.get("type", "")
+                    if fmt_type.startswith("video") and "audio" in fmt_type:
                         download_url = fmt.get("url")
                         if download_url:
                             break
-                if not download_url and formats:
+                # Fallback to any format
+                if not download_url:
                     for fmt in formats:
                         download_url = fmt.get("url")
                         if download_url:
                             break
                 if not download_url:
                     continue
-                with client.stream("GET", download_url, timeout=300) as stream:
-                    stream.raise_for_status()
-                    with open(output_path, "wb") as f:
-                        for chunk in stream.iter_bytes(chunk_size=8192):
-                            f.write(chunk)
-                if os.path.getsize(output_path) >= 1024:
+                if _stream_download(client, download_url, output_path, timeout=120):
                     print(f"Invidious download success from {base}")
                     return True
             except Exception as e:
@@ -633,21 +645,20 @@ def download_with_invidious(url: str, output_path: str) -> bool:
 
 
 def download_with_piped(url: str, output_path: str) -> bool:
-    """Fallback downloader using Piped instances for YouTube."""
+    """Fallback downloader using public Piped instances for YouTube."""
     video_id = extract_youtube_video_id(url)
     if not video_id:
         return False
     piped_instances = [
-        "https://pipedapi.kavin.rocks",
-        "https://api.piped.projecthipbone.dev",
-        "https://pipedapi.moomoo.me",
-        "https://api.piped.privacydev.net",
-        "https://pipedapi.adminforge.de",
+        "https://pipedapi.kavin.rocks", "https://api.piped.projecthipbone.dev",
+        "https://pipedapi.moomoo.me", "https://api.piped.privacydev.net",
+        "https://pipedapi.adminforge.de", "https://api.piped.projecthipbone.dev",
+        "https://pipedapi.moomoo.me", "https://pipedapi.adminforge.de",
     ]
-    with httpx.Client(timeout=30, follow_redirects=True) as client:
+    with httpx.Client(timeout=20, follow_redirects=True) as client:
         for base in piped_instances:
             try:
-                r = client.get(f"{base}/streams/{video_id}")
+                r = client.get(f"{base}/streams/{video_id}", timeout=15)
                 if r.status_code != 200:
                     continue
                 data = r.json()
@@ -663,12 +674,7 @@ def download_with_piped(url: str, output_path: str) -> bool:
                     download_url = streams[0].get("url") or streams[0].get("playbackUrl")
                 if not download_url:
                     continue
-                with client.stream("GET", download_url, timeout=300) as stream:
-                    stream.raise_for_status()
-                    with open(output_path, "wb") as f:
-                        for chunk in stream.iter_bytes(chunk_size=8192):
-                            f.write(chunk)
-                if os.path.getsize(output_path) >= 1024:
+                if _stream_download(client, download_url, output_path, timeout=120):
                     print(f"Piped download success from {base}")
                     return True
             except Exception as e:
@@ -677,30 +683,114 @@ def download_with_piped(url: str, output_path: str) -> bool:
     return False
 
 
+def download_with_realdebrid(url: str, output_path: str) -> bool:
+    """Premium fallback using Real-Debrid (requires REALDEBRID_API_KEY env var)."""
+    token = os.environ.get("REALDEBRID_API_KEY")
+    if not token:
+        return False
+    try:
+        with httpx.Client(timeout=30, follow_redirects=True) as client:
+            # Add link to Real-Debrid
+            r = client.post(
+                "https://api.real-debrid.com/rest/1.0/unrestrict/link",
+                headers={"Authorization": f"Bearer {token}"},
+                data={"link": url},
+                timeout=30,
+            )
+            if r.status_code != 200:
+                print(f"Real-Debrid add link failed: {r.status_code} {r.text[:200]}")
+                return False
+            data = r.json()
+            download_url = data.get("download")
+            if not download_url:
+                print(f"Real-Debrid no download URL: {data}")
+                return False
+            if _stream_download(client, download_url, output_path, timeout=300):
+                print("Real-Debrid download success")
+                return True
+    except Exception as e:
+        print(f"Real-Debrid fallback failed: {e}")
+    return False
+
+
+def download_with_alldebrid(url: str, output_path: str) -> bool:
+    """Premium fallback using AllDebrid (requires ALLDEBRID_API_KEY env var)."""
+    token = os.environ.get("ALLDEBRID_API_KEY")
+    if not token:
+        return False
+    try:
+        with httpx.Client(timeout=30, follow_redirects=True) as client:
+            r = client.get(
+                "https://api.alldebrid.com/v4/link/unlock",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"link": url, "agent": "peakclip"},
+                timeout=30,
+            )
+            if r.status_code != 200:
+                print(f"AllDebrid unlock failed: {r.status_code} {r.text[:200]}")
+                return False
+            data = r.json()
+            if data.get("status") != "success":
+                print(f"AllDebrid error: {data}")
+                return False
+            download_url = data.get("data", {}).get("link")
+            if not download_url:
+                print(f"AllDebrid no link: {data}")
+                return False
+            if _stream_download(client, download_url, output_path, timeout=300):
+                print("AllDebrid download success")
+                return True
+    except Exception as e:
+        print(f"AllDebrid fallback failed: {e}")
+    return False
+
+
 def download_with_cobalt(url: str, output_path: str) -> bool:
-    """Fallback downloader using cobalt.tools API."""
+    """Fallback downloader using a self-hosted or public cobalt API instance.
+
+    For the public api.cobalt.tools you usually need an API key. Set it via
+    COBALT_API_KEY env var. Otherwise only unauthenticated instances work.
+    """
+    api_key = os.environ.get("COBALT_API_KEY")
+    cobalt_url = os.environ.get("COBALT_API_URL", "https://api.cobalt.tools/api/json")
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Api-Key {api_key}"
     try:
         with httpx.Client(timeout=60, follow_redirects=True) as client:
             r = client.post(
-                "https://api.cobalt.tools/api/json",
-                headers={"Accept": "application/json", "Content-Type": "application/json"},
-                json={"url": url, "downloadMode": "audio+video", "videoQuality": "720", "filenamePattern": "classic"}
+                cobalt_url,
+                headers=headers,
+                json={
+                    "url": url,
+                    "downloadMode": "auto",
+                    "videoQuality": "720",
+                    "filenameStyle": "basic",
+                    "youtubeVideoCodec": "h264",
+                },
+                timeout=30,
             )
             if r.status_code != 200:
+                print(f"cobalt API status {r.status_code}: {r.text[:200]}")
                 return False
             data = r.json()
-            if data.get("status") == "error" or not data.get("url"):
+            if data.get("status") == "error":
+                print(f"cobalt API error: {data.get('error', {})}")
                 return False
-            with client.stream("GET", data["url"], timeout=300) as stream:
-                stream.raise_for_status()
-                with open(output_path, "wb") as f:
-                    for chunk in stream.iter_bytes(chunk_size=8192):
-                        f.write(chunk)
-            if os.path.getsize(output_path) >= 1024:
-                print("cobalt.tools download success")
-                return True
+            status = data.get("status")
+            urls = []
+            if status in ("tunnel", "redirect"):
+                urls = [data.get("url")]
+            elif status == "local-processing":
+                urls = data.get("tunnel", [])
+            if not urls:
+                return False
+            for u in urls:
+                if _stream_download(client, u, output_path, timeout=300):
+                    print("cobalt download success")
+                    return True
     except Exception as e:
-        print(f"cobalt.tools fallback failed: {e}")
+        print(f"cobalt fallback failed: {e}")
     return False
 
 
@@ -988,6 +1078,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
             fallback_success = (
                 download_with_invidious(url, video_path) or
                 download_with_piped(url, video_path) or
+                download_with_realdebrid(url, video_path) or
+                download_with_alldebrid(url, video_path) or
                 download_with_cobalt(url, video_path) or
                 run_async_in_sync(download_with_playwright(url, video_path))
             )

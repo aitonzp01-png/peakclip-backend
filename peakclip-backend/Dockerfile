@@ -18,6 +18,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Playwright Chromium browser for the browser-automation fallback downloader
+RUN playwright install chromium || true
+
 COPY . .
 
 # Create necessary directories
