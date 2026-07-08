@@ -31,6 +31,9 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from contextlib import asynccontextmanager
 
+# Set at startup if the bgutil PO token server is reachable
+BGUTIL_POT_AVAILABLE = False
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -77,6 +80,18 @@ async def lifespan(app: FastAPI):
         print(f"OAUTH: failed to write: {e}")
     await run_migrations()
     await fetch_jwks()
+    # Check if bgutil PO token server is reachable (started by Dockerfile CMD)
+    global BGUTIL_POT_AVAILABLE
+    try:
+        import httpx
+        r = httpx.get('http://127.0.0.1:4416/ping', timeout=5)
+        if r.status_code == 200:
+            BGUTIL_POT_AVAILABLE = True
+            print(f"POT SERVER: available ({r.json()})")
+        else:
+            print(f"POT SERVER: unexpected status {r.status_code}")
+    except Exception as e:
+        print(f"POT SERVER: not available ({e})")
     yield
     # Shutdown (nothing to do)
 
@@ -904,7 +919,10 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     extractor_args['youtube']['po_token'] = po_token
                 if visitor_data:
                     extractor_args['youtube']['visitor_data'] = visitor_data
-                if extractor_args['youtube']:
+                # Enable bgutil PO token HTTP provider if its server is running
+                if BGUTIL_POT_AVAILABLE:
+                    extractor_args['youtubepot-bgutilhttp'] = {}
+                if extractor_args['youtube'] or 'youtubepot-bgutilhttp' in extractor_args:
                     ydl_opts['extractor_args'] = extractor_args
                 print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled and not has_oauth else 'no'} cookies={'yes' if cookies_file else 'no'} oauth={'yes' if has_oauth else 'no'}")
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
