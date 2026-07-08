@@ -1075,15 +1075,26 @@ def process_video_background(job_id: str, user_id: str, url: str):
         if last_err is not None or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
             check_deadline("fallbacks")
             jobs_store[job_id] = {"status": "processing", "message": "Trying alternative download methods..."}
-            fallback_success = (
-                download_with_invidious(url, video_path) or
-                download_with_piped(url, video_path) or
-                download_with_realdebrid(url, video_path) or
-                download_with_alldebrid(url, video_path) or
-                download_with_cobalt(url, video_path) or
-                run_async_in_sync(download_with_playwright(url, video_path))
-            )
+            print(f"Job {job_id}: starting fallback downloaders")
+            fallback_success = False
+            for name, fn in [
+                ("invidious", lambda: download_with_invidious(url, video_path)),
+                ("piped", lambda: download_with_piped(url, video_path)),
+                ("real-debrid", lambda: download_with_realdebrid(url, video_path)),
+                ("alldebrid", lambda: download_with_alldebrid(url, video_path)),
+                ("cobalt", lambda: download_with_cobalt(url, video_path)),
+                ("playwright", lambda: run_async_in_sync(download_with_playwright(url, video_path), timeout=30)),
+            ]:
+                try:
+                    print(f"Job {job_id}: trying fallback {name}")
+                    if fn():
+                        fallback_success = True
+                        print(f"Job {job_id}: fallback {name} succeeded")
+                        break
+                except Exception as e:
+                    print(f"Job {job_id}: fallback {name} error: {e}")
             if not fallback_success or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
+                print(f"Job {job_id}: all fallback downloaders failed")
                 jobs_store[job_id] = {"status": "error", "message": "Could not download this video. YouTube is blocking our server. Options: fix YOUTUBE_PROXY credentials, set YOUTUBE_OAUTH_TOKENS_B64, set YOUTUBE_PO_TOKEN+YOUTUBE_VISITOR_DATA, or self-host on a residential IP."}
                 return
 
