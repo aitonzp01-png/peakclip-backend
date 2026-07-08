@@ -447,9 +447,17 @@ def health():
 def debug():
     import shutil
     ffmpeg_path = shutil.which("ffmpeg")
+    pot_status = "unknown"
+    try:
+        import httpx
+        r = httpx.get('http://127.0.0.1:4416/ping', timeout=3)
+        pot_status = "available" if r.status_code == 200 else f"status_{r.status_code}"
+    except Exception as e:
+        pot_status = f"unavailable: {e}"
     return {
         "ffmpeg": ffmpeg_path or "NOT FOUND",
         "yt_dlp": True,
+        "bgutil_pot_server": pot_status,
     }
 
 
@@ -868,7 +876,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
         visitor_data = os.environ.get('YOUTUBE_VISITOR_DATA')
 
         last_err = None
-        max_attempts = 20
+        max_attempts = 12
         proxy_disabled = False
         for attempt in range(max_attempts):
             check_deadline("download")
@@ -925,19 +933,31 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 if extractor_args['youtube'] or 'youtubepot-bgutilhttp' in extractor_args:
                     ydl_opts['extractor_args'] = extractor_args
                 print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled and not has_oauth else 'no'} cookies={'yes' if cookies_file else 'no'} oauth={'yes' if has_oauth else 'no'}")
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-                    try:
-                        future = executor.submit(ydl.download, [url])
-                        future.result(timeout=60)
-                    finally:
-                        executor.shutdown(wait=False)
+                # Run yt-dlp in a subprocess so we can hard-kill it on timeout
+                ytdlp_script = os.path.join(os.path.dirname(__file__), 'ytdlp_download.py')
+                sub_opts = dict(ydl_opts)
+                sub_opts['url'] = url
+                try:
+                    result = subprocess.run(
+                        [sys.executable, ytdlp_script, json.dumps(sub_opts)],
+                        capture_output=True,
+                        text=True,
+                        timeout=45,
+                    )
+                    if result.returncode != 0:
+                        stderr_tail = (result.stderr or '')[-500:]
+                        print(f"yt-dlp attempt {attempt+1} stderr: {stderr_tail}")
+                        raise Exception(f"yt-dlp exited {result.returncode}: {stderr_tail}")
+                except subprocess.TimeoutExpired as e:
+                    stderr_tail = (e.stderr or '')[-300:] if hasattr(e, 'stderr') else ''
+                    print(f"yt-dlp attempt {attempt+1} timed out (45s). stderr: {stderr_tail}")
+                    raise TimeoutError(f"Download attempt {attempt+1} timed out after 45s")
                 if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
                     raise Exception("File not downloaded or too small")
                 last_err = None
                 break
-            except concurrent.futures.TimeoutError:
-                last_err = TimeoutError(f"Download attempt {attempt+1} timed out after 60s")
+            except TimeoutError:
+                last_err = TimeoutError(f"Download attempt {attempt+1} timed out after 45s")
                 print(f"Download attempt {attempt+1}/{max_attempts} timed out")
                 if attempt < max_attempts - 1:
                     time.sleep(min(2 + attempt, 10))
