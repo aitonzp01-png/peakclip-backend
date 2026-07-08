@@ -532,6 +532,225 @@ def resolve_music_path(mood: str) -> str | None:
     return path if os.path.isfile(path) else None
 
 
+def extract_youtube_video_id(url: str) -> str | None:
+    """Extract YouTube video ID from various URL formats."""
+    patterns = [
+        r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/v/|youtube\.com/shorts/)([a-zA-Z0-9_-]{11})',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+
+def run_async_in_sync(coro):
+    """Run an async coroutine from a sync context in a dedicated thread.
+
+    This avoids RuntimeError when asyncio.run() is called from a thread that
+    already has a running event loop (e.g. FastAPI/ASGI worker threads).
+    """
+    def runner():
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        try:
+            return new_loop.run_until_complete(coro)
+        finally:
+            new_loop.close()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(runner)
+        return future.result()
+
+
+def download_with_invidious(url: str, output_path: str) -> bool:
+    """Fallback downloader using Invidious instances for YouTube."""
+    video_id = extract_youtube_video_id(url)
+    if not video_id:
+        return False
+    invidious_instances = [
+        "https://iv.nboeck.de",
+        "https://iv.datura.network",
+        "https://iv.melmac.space",
+        "https://yt.artemislena.eu",
+        "https://iv.nowhere.moe",
+    ]
+    with httpx.Client(timeout=30, follow_redirects=True) as client:
+        for base in invidious_instances:
+            try:
+                r = client.get(f"{base}/api/v1/videos/{video_id}")
+                if r.status_code != 200:
+                    continue
+                data = r.json()
+                formats = data.get("adaptiveFormats", []) + data.get("formatStreams", [])
+                download_url = None
+                for fmt in formats:
+                    if fmt.get("type", "").startswith("video") and "audio" in fmt.get("type", ""):
+                        download_url = fmt.get("url")
+                        if download_url:
+                            break
+                if not download_url and formats:
+                    for fmt in formats:
+                        download_url = fmt.get("url")
+                        if download_url:
+                            break
+                if not download_url:
+                    continue
+                with client.stream("GET", download_url, timeout=300) as stream:
+                    stream.raise_for_status()
+                    with open(output_path, "wb") as f:
+                        for chunk in stream.iter_bytes(chunk_size=8192):
+                            f.write(chunk)
+                if os.path.getsize(output_path) >= 1024:
+                    print(f"Invidious download success from {base}")
+                    return True
+            except Exception as e:
+                print(f"Invidious {base} failed: {e}")
+                continue
+    return False
+
+
+def download_with_piped(url: str, output_path: str) -> bool:
+    """Fallback downloader using Piped instances for YouTube."""
+    video_id = extract_youtube_video_id(url)
+    if not video_id:
+        return False
+    piped_instances = [
+        "https://pipedapi.kavin.rocks",
+        "https://api.piped.projecthipbone.dev",
+        "https://pipedapi.moomoo.me",
+        "https://api.piped.privacydev.net",
+        "https://pipedapi.adminforge.de",
+    ]
+    with httpx.Client(timeout=30, follow_redirects=True) as client:
+        for base in piped_instances:
+            try:
+                r = client.get(f"{base}/streams/{video_id}")
+                if r.status_code != 200:
+                    continue
+                data = r.json()
+                streams = data.get("videoStreams", []) + data.get("audioStreams", [])
+                download_url = None
+                for s in streams:
+                    if s.get("videoOnly"):
+                        continue
+                    url_candidate = s.get("url") or s.get("playbackUrl")
+                    if url_candidate and (download_url is None or s.get("quality") == "720p"):
+                        download_url = url_candidate
+                if not download_url and streams:
+                    download_url = streams[0].get("url") or streams[0].get("playbackUrl")
+                if not download_url:
+                    continue
+                with client.stream("GET", download_url, timeout=300) as stream:
+                    stream.raise_for_status()
+                    with open(output_path, "wb") as f:
+                        for chunk in stream.iter_bytes(chunk_size=8192):
+                            f.write(chunk)
+                if os.path.getsize(output_path) >= 1024:
+                    print(f"Piped download success from {base}")
+                    return True
+            except Exception as e:
+                print(f"Piped {base} failed: {e}")
+                continue
+    return False
+
+
+def download_with_cobalt(url: str, output_path: str) -> bool:
+    """Fallback downloader using cobalt.tools API."""
+    try:
+        with httpx.Client(timeout=60, follow_redirects=True) as client:
+            r = client.post(
+                "https://api.cobalt.tools/api/json",
+                headers={"Accept": "application/json", "Content-Type": "application/json"},
+                json={"url": url, "downloadMode": "audio+video", "videoQuality": "720", "filenamePattern": "classic"}
+            )
+            if r.status_code != 200:
+                return False
+            data = r.json()
+            if data.get("status") == "error" or not data.get("url"):
+                return False
+            with client.stream("GET", data["url"], timeout=300) as stream:
+                stream.raise_for_status()
+                with open(output_path, "wb") as f:
+                    for chunk in stream.iter_bytes(chunk_size=8192):
+                        f.write(chunk)
+            if os.path.getsize(output_path) >= 1024:
+                print("cobalt.tools download success")
+                return True
+    except Exception as e:
+        print(f"cobalt.tools fallback failed: {e}")
+    return False
+
+
+async def download_with_playwright(url: str, output_path: str) -> bool:
+    """Fallback downloader using Playwright browser automation for YouTube."""
+    video_id = extract_youtube_video_id(url)
+    if not video_id:
+        return False
+    try:
+        from playwright.async_api import async_playwright
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+                    '--disable-blink-features=AutomationControlled', '--disable-web-security',
+                ]
+            )
+            context = await browser.new_context(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                viewport={'width': 1920, 'height': 1080},
+                locale='en-US',
+            )
+            page = await context.new_page()
+            await page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                window.chrome = { runtime: {} };
+            """)
+            video_url = None
+            async def handle_route(route, request):
+                nonlocal video_url
+                req_url = request.url
+                if 'googlevideo.com' in req_url and ('videoplayback' in req_url or 'itag' in req_url):
+                    if video_url is None or 'range=' not in req_url:
+                        video_url = req_url
+                await route.continue_()
+            await page.route("**/*", handle_route)
+            try:
+                await page.goto(f"https://www.youtube.com/embed/{video_id}", wait_until="networkidle", timeout=60000)
+            except Exception:
+                try:
+                    await page.goto(f"https://m.youtube.com/watch?v={video_id}", wait_until="domcontentloaded", timeout=60000)
+                except Exception:
+                    await page.goto(f"https://www.youtube.com/watch?v={video_id}", wait_until="domcontentloaded", timeout=60000)
+            try:
+                consent_button = await page.wait_for_selector('button[aria-label*="Accept"], form[action*="consent"] button', timeout=8000)
+                if consent_button:
+                    await consent_button.click()
+                    await page.wait_for_timeout(3000)
+            except Exception:
+                pass
+            try:
+                await page.click('button.ytp-large-play-button, .ytp-button[aria-label="Play"]', timeout=8000)
+                await page.wait_for_timeout(5000)
+            except Exception:
+                await page.wait_for_timeout(12000)
+            await browser.close()
+            if not video_url:
+                return False
+            with httpx.Client(timeout=300, follow_redirects=True) as client:
+                with client.stream("GET", video_url, timeout=300) as stream:
+                    stream.raise_for_status()
+                    with open(output_path, "wb") as f:
+                        for chunk in stream.iter_bytes(chunk_size=8192):
+                            f.write(chunk)
+            if os.path.getsize(output_path) >= 1024:
+                print("Playwright download success")
+                return True
+    except Exception as e:
+        print(f"Playwright fallback failed: {e}")
+    return False
+
+
 # ──────────────────────────────────────────────────────────────
 
 
@@ -581,25 +800,28 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 raise TimeoutError(f"Processing deadline exceeded ({label})")
 
         # Retry download with different strategies
-        # Per yt-dlp PO Token Guide, these clients do NOT require PO tokens:
-        # tv_embedded, web_embedded, android_vr, tv
         strategies = [
-            {'player_client': ['tv_embedded']},
-            {'player_client': ['web_embedded']},
-            {'player_client': ['android_vr']},
-            {'player_client': ['tv']},
-            {'player_client': ['mweb']},
-            {},
-            {'player_client': ['ios']},
-            {'player_client': ['android']},
-            {'player_client': ['web_creator']},
+            {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['web_embedded'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['android_vr'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['tv'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['mweb'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['ios'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['android'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['web_creator'], 'player_skip': ['webpage', 'configs']},
             {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
+            {'player_client': ['web'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
+            {'player_client': ['web_embedded'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
+            {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
+            {'player_client': ['ios'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
+            {'player_client': ['tv'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
+            {},
         ]
         user_agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
             'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
             'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
             'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
@@ -607,14 +829,17 @@ def process_video_background(job_id: str, user_id: str, url: str):
             'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
         ]
         format_fallbacks = [
+            'worst[ext=mp4]/worst',
+            'worstvideo+worstaudio/worst',
             'best[ext=mp4]/best',
             'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'bestvideo+bestaudio/best',
-            'worst[ext=mp4]/worst',
-            'worstvideo+worstaudio/worst',
             'bestaudio/best',
             'worst',
+            'worstvideo[ext=mp4]/worst[ext=mp4]/worst',
+            'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
         ]
+        impersonate_profiles = [None, 'chrome', 'safari', 'chrome-120', 'chrome-119', 'safari-17']
 
         # Optional proxy (residential/rotating proxy can bypass IP blocks)
         proxy_url = os.environ.get('YOUTUBE_PROXY')
@@ -623,14 +848,19 @@ def process_video_background(job_id: str, user_id: str, url: str):
         # Optional OAuth token file written by lifespan from YOUTUBE_OAUTH_TOKENS_B64
         oauth_token_file = os.path.expanduser('~/.cache/yt-dlp/tokens.json')
         has_oauth = os.path.exists(oauth_token_file)
+        # Optional PO token and visitor data to bypass bot checks
+        po_token = os.environ.get('YOUTUBE_PO_TOKEN')
+        visitor_data = os.environ.get('YOUTUBE_VISITOR_DATA')
 
         last_err = None
-        max_attempts = 12
+        max_attempts = 20
+        proxy_disabled = False
         for attempt in range(max_attempts):
             check_deadline("download")
             cfg = strategies[attempt % len(strategies)]
             ua = user_agents[attempt % len(user_agents)]
             fmt = format_fallbacks[attempt % len(format_fallbacks)]
+            imp = impersonate_profiles[attempt % len(impersonate_profiles)]
             try:
                 # Clean partial file from previous timed-out attempt
                 if os.path.exists(video_path):
@@ -645,13 +875,13 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     'no_warnings': True,
                     'extract_flat': False,
                     'noplaylist': True,
-                    'sleep_interval': 2,
+                    'sleep_interval': 1,
                     'sleep_interval_requests': 1,
-                    'extractor_retries': 2,
+                    'extractor_retries': 1,
                     'file_access_retries': 2,
                     'throttledratelimit': 100000,
                     'ignore_no_formats_error': True,
-                    'allow_unplayable_formats': False,
+                    'allow_unplayable_formats': True,
                     'no_check_certificate': True,
                     'socket_timeout': 30,
                     'overwrites': True,
@@ -661,21 +891,27 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         'Accept-Language': 'en-US,en;q=0.5',
                     },
                 }
-                if proxy_url and not has_oauth:
+                if imp:
+                    ydl_opts['impersonate'] = imp
+                if proxy_url and not proxy_disabled and not has_oauth:
                     ydl_opts['proxy'] = proxy_url
                 if cookies_file:
                     ydl_opts['cookies'] = cookies_file
                 if has_oauth:
                     ydl_opts['username'] = 'oauth'
-                if cfg:
-                    ydl_opts['extractor_args'] = {'youtube': cfg}
-                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} proxy={'yes' if proxy_url and not has_oauth else 'no'} cookies={'yes' if cookies_file else 'no'} oauth={'yes' if has_oauth else 'no'}")
+                extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
+                if po_token:
+                    extractor_args['youtube']['po_token'] = po_token
+                if visitor_data:
+                    extractor_args['youtube']['visitor_data'] = visitor_data
+                if extractor_args['youtube']:
+                    ydl_opts['extractor_args'] = extractor_args
+                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled and not has_oauth else 'no'} cookies={'yes' if cookies_file else 'no'} oauth={'yes' if has_oauth else 'no'}")
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    # Wrap the actual download so a hung proxy/connection cannot block forever
                     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
                     try:
                         future = executor.submit(ydl.download, [url])
-                        future.result(timeout=90)
+                        future.result(timeout=60)
                     finally:
                         executor.shutdown(wait=False)
                 if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
@@ -683,27 +919,42 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 last_err = None
                 break
             except concurrent.futures.TimeoutError:
-                last_err = TimeoutError(f"Download attempt {attempt+1} timed out after 90s")
+                last_err = TimeoutError(f"Download attempt {attempt+1} timed out after 60s")
                 print(f"Download attempt {attempt+1}/{max_attempts} timed out")
                 if attempt < max_attempts - 1:
                     time.sleep(min(2 + attempt, 10))
             except Exception as e:
                 last_err = e
                 err_lower = str(e).lower()
-                # If proxy authentication fails, disable it and retry without proxy
-                if "407" in err_lower or "proxy authentication" in err_lower:
-                    print(f"Proxy authentication failed (407). Disabling proxy for remaining attempts.")
-                    proxy_url = None
-                    if attempt < max_attempts - 1:
-                        time.sleep(2)
-                        continue
+                # If proxy fails (auth, DNS, tunnel), disable it and retry without proxy
+                if any(x in err_lower for x in ["407", "proxy authentication", "name or service not known", "tunnel connection failed", "unable to connect to proxy"]):
+                    if proxy_url and not proxy_disabled:
+                        print(f"Proxy failed ({err_lower[:80]}). Disabling proxy for remaining attempts.")
+                        proxy_disabled = True
+                        if attempt < max_attempts - 1:
+                            time.sleep(2)
+                            continue
                 if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small", "proxy", "tunnel connection"]):
                     if attempt < max_attempts - 1:
-                        wait = min(5 * (2 ** (attempt // 3)), 30)
+                        wait = min(3 + attempt, 15)
                         print(f"YouTube issue (attempt {attempt+1}/{max_attempts}): {err_lower[:80]}, waiting {wait}s...")
                         time.sleep(wait)
                         continue
                 jobs_store[job_id] = {"status": "error", "message": f"Download error: {last_err}"}
+                return
+
+        # If yt-dlp completely failed, try public fallback services
+        if last_err is not None or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
+            check_deadline("fallbacks")
+            jobs_store[job_id] = {"status": "processing", "message": "Trying alternative download methods..."}
+            fallback_success = (
+                download_with_invidious(url, video_path) or
+                download_with_piped(url, video_path) or
+                download_with_cobalt(url, video_path) or
+                run_async_in_sync(download_with_playwright(url, video_path))
+            )
+            if not fallback_success or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
+                jobs_store[job_id] = {"status": "error", "message": "Could not download this video. YouTube is blocking our server. Options: fix YOUTUBE_PROXY credentials, set YOUTUBE_OAUTH_TOKENS_B64, set YOUTUBE_PO_TOKEN+YOUTUBE_VISITOR_DATA, or self-host on a residential IP."}
                 return
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
