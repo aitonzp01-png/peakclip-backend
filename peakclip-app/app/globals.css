@@ -1,7 +1,11 @@
 @import "tailwindcss";
 
 /* ── PeakClip Design System ──
-   Indigo/Dark Premium SaaS Identity.
+   Dual system:
+   1. Dark Indigo/Dark tokens below are retained for dashboard/editor/auth compatibility.
+   2. The cream/lime landing pages define their own local palettes inline and are NOT
+      governed by these dark tokens. Only shared variables like fonts should leak globally.
+
    --brand-primary (#6366F1) = signature indigo, modern & vibrant.
    --bg-primary (#050505) = absolute black backdrop.
    All surfaces, borders, and text derive from this 7-color system.
@@ -28,6 +32,13 @@
   --success: #22c55e;
   --error: #ef4444;
 
+  /* Font families — mapped from next/font/google CSS variables injected in layout.tsx.
+     Dashboard/editor/auth use these semantic tokens. Landing pages may override locally. */
+  --font-display: var(--font-bebas-neue), 'Bebas Neue', sans-serif;
+  --font-body: var(--font-poppins), 'Poppins', sans-serif;
+  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', monospace;
+  --font-alt: var(--font-teko), 'Teko', sans-serif;
+
   /* Legacy aliases — keep for dashboard/editor compatibility */
   --peak: var(--brand-primary);
   --peak-light: var(--brand-hover);
@@ -48,13 +59,13 @@
   --color-background: var(--bg-primary);
   --color-foreground: var(--text-primary);
   --font-sans: var(--font-body);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-mono);
 }
 
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -118,7 +129,7 @@ body {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: 3px;
-  font-family: 'Teko', sans-serif;
+  font-family: var(--font-alt);
 }
 
 .sidebar-sub {
@@ -249,7 +260,7 @@ body {
   font-size: 26px;
   font-weight: 700;
   margin-bottom: 6px;
-  font-family: 'Teko', sans-serif;
+  font-family: var(--font-alt);
   letter-spacing: 1px;
 }
 
@@ -287,14 +298,14 @@ body {
   letter-spacing: 1px;
   text-transform: uppercase;
   margin-bottom: 10px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .stat-value {
   font-size: 30px;
   font-weight: 700;
   margin-bottom: 4px;
-  font-family: 'Teko', sans-serif;
+  font-family: var(--font-alt);
   letter-spacing: 1px;
 }
 
@@ -608,7 +619,7 @@ body {
   font-size: 32px;
   font-weight: 700;
   margin-bottom: 4px;
-  font-family: 'Teko', sans-serif;
+  font-family: var(--font-alt);
   letter-spacing: 1px;
 }
 
@@ -718,7 +729,7 @@ body {
   font-weight: 700;
   font-size: 14px;
   letter-spacing: 2px;
-  font-family: 'Teko', sans-serif;
+  font-family: var(--font-alt);
 }
 
 .editor-separator {
@@ -1035,7 +1046,7 @@ body {
   letter-spacing: 1px;
   display: block;
   margin-bottom: 10px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .editor-slider-row {
@@ -1202,603 +1213,16 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Landing Page ── */
+/* ── Landing Page wrapper ──
+   The new cream/lime landing overrides colors locally. Keep this wrapper neutral
+   so it never imposes the dark dashboard palette onto the landing page.
+*/
 
 .landing-bg {
-  background: var(--bg-primary);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99, 102, 241, 0.06), transparent 70%),
-    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(99, 102, 241, 0.03), transparent 60%);
+  background: #f5f5f0;
+  color: #0f0f0f;
 }
 
-.landing-bg::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background:
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(255, 255, 255, 0.015) 2px,
-      rgba(255, 255, 255, 0.015) 4px
-    );
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* ── Navbar ── */
-.navbar {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  width: calc(100% - 48px);
-  max-width: 1200px;
-  height: 72px;
-  background: rgba(8, 8, 8, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 28px;
-  transition: background 250ms ease;
-}
-
-.navbar-brand {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 24px;
-  letter-spacing: 3px;
-  color: var(--text-primary);
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.navbar-brand-dot {
-  color: var(--brand-primary);
-}
-
-.navbar-links {
-  display: flex;
-  align-items: center;
-  gap: 32px;
-}
-
-.navbar-link {
-  font-family: 'Poppins', sans-serif;
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--text-secondary);
-  text-decoration: none;
-  transition: color 250ms ease;
-  position: relative;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-}
-
-.navbar-link:hover {
-  color: var(--text-primary);
-}
-
-.navbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.navbar-login {
-  font-family: 'Poppins', sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 8px 16px;
-  text-decoration: none;
-  transition: color 250ms ease;
-}
-
-.navbar-login:hover {
-  color: var(--text-primary);
-}
-
-.navbar-cta {
-  font-family: 'Poppins', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--bg-primary);
-  background: var(--brand-primary);
-  border: none;
-  border-radius: 999px;
-  padding: 10px 24px;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 250ms ease;
-}
-
-.navbar-cta:hover {
-  background: var(--brand-hover);
-  box-shadow: 0 0 30px var(--brand-glow);
-}
-
-/* ── Hero ── */
-.hero {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  padding: 80px 0 60px;
-  position: relative;
-  z-index: 1;
-}
-
-.hero-container {
-  width: 100%;
-  max-width: 1440px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1.1fr 0.95fr;
-  align-items: center;
-  gap: clamp(60px, 7vw, 120px);
-  padding-inline: clamp(40px, 5vw, 80px);
-}
-
-.hero-left {
-  max-width: 640px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.hero-right {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding-top: 10px;
-}
-
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 36px;
-  padding: 0 20px;
-  background: rgba(217, 179, 71, 0.06);
-  border: 1px solid rgba(217, 179, 71, 0.2);
-  border-radius: 999px;
-  color: var(--brand-primary);
-  font-family: 'Poppins', sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 1px;
-  margin-top: 20px;
-  margin-bottom: 32px;
-  position: relative;
-  z-index: 2;
-  box-shadow: 0 0 40px rgba(99, 102, 241, 0.12);
-}
-
-@keyframes breatheGlow {
-  0%, 100% { box-shadow: 0 0 0px rgba(99, 102, 241, 0); }
-  50% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.2), 0 0 40px rgba(99, 102, 241, 0.1); }
-}
-
-.hero-title {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(88px, 9vw, 126px);
-  line-height: 0.88;
-  font-weight: 900;
-  color: var(--text-primary);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  margin: 0;
-  max-width: 860px;
-}
-
-.hero-title-em {
-  color: var(--brand-primary);
-  display: inline-block;
-}
-
-.hero-sub {
-  color: var(--text-secondary);
-  font-family: 'Poppins', sans-serif;
-  font-size: 18px;
-  line-height: 1.6;
-  max-width: 560px;
-  opacity: 0.78;
-  margin-top: 28px;
-  margin-bottom: 40px;
-}
-
-.hero-actions {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-}
-
-.hero-cta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 72px;
-  padding: 0 42px;
-  background: var(--brand-primary);
-  color: var(--bg-primary);
-  border: none;
-  border-radius: 20px;
-  font-family: 'Poppins', sans-serif;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 300ms ease;
-}
-
-.hero-cta:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 20px 50px rgba(217, 179, 71, 0.35);
-}
-
-.hero-cta-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 72px;
-  padding: 0 42px;
-  background: #111111;
-  color: var(--text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  font-family: 'Poppins', sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 300ms ease;
-}
-
-.hero-cta-secondary:hover {
-  background: #171717;
-}
-
-/* ── Pricing ── */
-.pricing-section {
-  padding: 80px 30px;
-  max-width: 1200px;
-  margin: 0 auto;
-  position: relative;
-  z-index: 1;
-}
-
-.pricing-section[data-yearly="true"] .pricing-save-badge {
-  color: #050505;
-}
-
-.pricing-header {
-  text-align: center;
-  margin-bottom: 60px;
-}
-
-.pricing-label {
-  font-family: 'Poppins', sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--brand-primary);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  margin-bottom: 16px;
-}
-
-.pricing-title {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(48px, 5vw, 72px);
-  line-height: 0.95;
-  letter-spacing: -2px;
-  text-transform: uppercase;
-  color: var(--text-primary);
-  margin-bottom: 16px;
-}
-
-.pricing-desc {
-  font-family: 'Poppins', sans-serif;
-  font-size: 16px;
-  color: var(--text-secondary);
-  max-width: 520px;
-  margin: 0 auto;
-}
-
-/* ── Toggle ── */
-.pricing-toggle-wrap {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 48px;
-}
-
-.pricing-toggle {
-  display: inline-grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: center;
-  padding: 6px;
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
-  position: relative;
-  cursor: pointer;
-  width: fit-content;
-}
-
-.pricing-toggle-option {
-  min-width: 120px;
-  padding: 14px 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Poppins', sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-  z-index: 2;
-  cursor: pointer;
-  transition: color 300ms ease;
-  position: relative;
-  border: none;
-  background: none;
-  border-radius: 999px;
-}
-
-.pricing-toggle-option.active {
-  color: var(--bg-primary);
-}
-
-.pricing-toggle-indicator {
-  position: absolute;
-  top: 6px;
-  bottom: 6px;
-  width: calc(50% - 6px);
-  background: var(--brand-primary);
-  border-radius: 999px;
-  box-shadow: 0 0 30px rgba(217, 179, 71, 0.25);
-  transition: left 300ms ease;
-  z-index: 1;
-}
-
-.pricing-toggle-indicator.left {
-  left: 6px;
-}
-
-.pricing-toggle-indicator.right {
-  left: 50%;
-}
-
-.pricing-save-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 10px;
-  background: rgba(217, 179, 71, 0.12);
-  color: var(--brand-primary);
-  border-radius: 999px;
-  font-family: 'Poppins', sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  margin-left: 8px;
-  white-space: nowrap;
-  min-width: 80px;
-}
-
-/* ── Pricing Cards ── */
-.pricing-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-}
-
-.pricing-card {
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
-  border-radius: 24px;
-  padding: 24px 20px;
-  position: relative;
-  transition: all 300ms ease;
-  overflow: hidden;
-}
-
-.pricing-card::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(
-    ellipse 160% 130% at 0% 0%,
-    rgba(217, 179, 71, 0.55) 0%,
-    rgba(217, 179, 71, 0.18) 25%,
-    transparent 55%
-  );
-  opacity: 0;
-  transition: opacity 500ms ease;
-  pointer-events: none;
-  border-radius: 24px;
-}
-
-.pricing-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
-}
-
-.pricing-card:hover::after {
-  opacity: 1;
-}
-
-.pricing-card.popular::after {
-  opacity: 1;
-}
-
-.pricing-card.popular {
-  border-color: rgba(217, 179, 71, 0.2);
-  background: linear-gradient(180deg, rgba(217, 179, 71, 0.03) 0%, var(--surface) 100%);
-}
-
-.pricing-card-popular-badge {
-  position: absolute;
-  top: -1px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--brand-primary);
-  color: var(--bg-primary);
-  font-family: 'Poppins', sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 6px 20px;
-  border-radius: 0 0 12px 12px;
-  letter-spacing: 2px;
-}
-
-.pricing-card-name {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 20px;
-  letter-spacing: 1px;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
-
-.pricing-card-desc {
-  font-family: 'Poppins', sans-serif;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 24px;
-}
-
-.pricing-card-price {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 48px;
-  letter-spacing: -1px;
-  color: var(--text-primary);
-  line-height: 1;
-  margin-bottom: 4px;
-}
-
-.pricing-card-price-period {
-  font-family: 'Poppins', sans-serif;
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.pricing-card-original {
-  font-family: 'Poppins', sans-serif;
-  font-size: 13px;
-  color: var(--text-muted);
-  text-decoration: line-through;
-  margin-bottom: 4px;
-  min-height: 20px;
-}
-
-.pricing-card-save {
-  font-family: 'Poppins', sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--brand-primary);
-  margin-bottom: 24px;
-  min-height: 18px;
-}
-
-.pricing-card-features {
-  margin-bottom: 32px;
-}
-
-.pricing-card-feature {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-family: 'Poppins', sans-serif;
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
-}
-
-.pricing-card-feature-check {
-  color: var(--brand-primary);
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.pricing-card-cta {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 52px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-primary);
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  font-family: 'Poppins', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 300ms ease;
-}
-
-.pricing-card-cta:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--border-strong);
-}
-
-.pricing-card.popular .pricing-card-cta {
-  background: var(--brand-primary);
-  color: var(--bg-primary);
-  border-color: var(--brand-primary);
-}
-
-.pricing-card.popular .pricing-card-cta:hover {
-  background: var(--brand-hover);
-  box-shadow: 0 0 30px var(--brand-glow);
-}
-
-/* ── Section heading ── */
-.section-heading {
-  text-align: center;
-  margin-bottom: 60px;
-}
-
-.section-label {
-  font-family: 'Poppins', sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--brand-primary);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  margin-bottom: 16px;
-}
-
-.section-title {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(48px, 5vw, 72px);
-  line-height: 0.95;
-  letter-spacing: -2px;
-  text-transform: uppercase;
-  color: var(--text-primary);
-  margin-bottom: 16px;
-}
-
-.section-desc {
-  font-family: 'Poppins', sans-serif;
-  font-size: 16px;
-  color: var(--text-secondary);
-  max-width: 560px;
-  margin: 0 auto;
-}
 
 /* ── Scroll animations ── */
 .reveal {
@@ -1858,7 +1282,7 @@ body {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 9px;
   font-weight: 500;
   padding: 4px;
@@ -1895,7 +1319,9 @@ body {
   white-space: nowrap;
 }
 
-/* ── Responsive ── */
+/* ── Responsive (dashboard/editor/auth only) ──
+   Landing pages handle their own responsive layouts locally.
+*/
 @media (max-width: 768px) {
   .sidebar {
     display: none;
@@ -1950,158 +1376,6 @@ body {
   .clip-actions {
     width: 100%;
     flex-wrap: wrap;
-  }
-
-  /* ── Landing responsive ── */
-  .navbar {
-    top: 12px;
-    width: calc(100% - 24px);
-    padding: 0 16px;
-    height: 60px;
-    border-radius: 20px;
-  }
-
-  .navbar-links {
-    display: none !important;
-  }
-
-  .landing-mobile-btn {
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
-    color: var(--text-primary);
-    font-size: 18px;
-    cursor: pointer;
-    margin: 0;
-  }
-
-  .hero {
-    padding: 80px 20px 60px;
-    min-height: auto;
-  }
-
-  .hero-container {
-    grid-template-columns: 1fr;
-    gap: 48px;
-  }
-
-  .hero-left {
-    max-width: 100%;
-  }
-
-  .hero-right {
-    width: 100%;
-    padding-top: 0;
-  }
-
-  .hero-title {
-    font-size: clamp(48px, 12vw, 64px);
-  }
-
-  .hero-sub {
-    font-size: 15px;
-    max-width: 100%;
-    margin-top: 32px;
-    margin-bottom: 36px;
-  }
-
-  .hero-actions {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .hero-cta,
-  .hero-cta-secondary {
-    width: 100%;
-    height: 60px;
-    padding: 0 28px;
-    border-radius: 16px;
-  }
-
-  .hero-clips-grid {
-    max-width: 100%;
-  }
-
-  .pricing-section {
-    padding: 80px 20px;
-  }
-
-  .pricing-cards {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
-
-  .pricing-card {
-    padding: 28px 24px;
-  }
-
-  .section-title {
-    font-size: clamp(36px, 10vw, 48px);
-  }
-
-  .pricing-toggle-option {
-    min-width: 100px;
-    padding: 12px 18px;
-    font-size: 12px;
-  }
-
-  .pricing-save-badge {
-    min-width: 70px;
-    font-size: 9px;
-    padding: 2px 8px;
-  }
-}
-
-@media (min-width: 769px) and (max-width: 1024px) {
-  .hero-container {
-    grid-template-columns: 1fr 1fr;
-    gap: 32px;
-  }
-
-  .hero {
-    padding: 80px 32px 60px;
-  }
-
-  .hero-left {
-    max-width: 100%;
-  }
-
-  .hero-right {
-    padding-top: 0;
-  }
-
-  .hero-title {
-    font-size: clamp(48px, 6vw, 72px);
-  }
-
-  .hero-sub {
-    font-size: 16px;
-    max-width: 100%;
-    margin-top: 32px;
-    margin-bottom: 36px;
-  }
-
-  .hero-clips-grid {
-    max-width: 100%;
-  }
-
-  .pricing-section {
-    padding: 80px 32px;
-  }
-
-  .pricing-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .pricing-card:last-child {
-    grid-column: 1 / -1;
-    max-width: 50%;
-    justify-self: center;
   }
 }
 
@@ -2175,7 +1449,7 @@ body {
   border-radius: 999px;
   font-size: 9px;
   font-weight: 600;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   backdrop-filter: blur(8px);
 }
 
@@ -2225,7 +1499,7 @@ body {
   font-size: 10px;
   color: var(--text-dim);
   margin-bottom: 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .dash-clip-duration {
@@ -2245,7 +1519,7 @@ body {
   font-weight: 600;
   cursor: pointer;
   border: none;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   text-align: center;
   text-decoration: none;
   transition: all 0.15s;
@@ -2283,7 +1557,7 @@ body {
 .dash-welcome-greeting {
   font-size: 28px;
   font-weight: 700;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   margin-bottom: 4px;
 }
 
@@ -2294,7 +1568,7 @@ body {
 .dash-welcome-sub {
   font-size: 13px;
   color: var(--text-dim);
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
 }
 
 .dash-header-actions {
@@ -2313,7 +1587,7 @@ body {
   border-radius: 999px;
   font-size: 12px;
   color: var(--peak);
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-weight: 500;
 }
 
@@ -2335,7 +1609,7 @@ body {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   transition: opacity 0.15s;
 }
 
@@ -2360,7 +1634,7 @@ body {
   font-size: 20px;
   font-weight: 700;
   margin-bottom: 8px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
 }
 
 .dash-empty-text {
@@ -2380,7 +1654,7 @@ body {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   transition: opacity 0.15s;
 }
 
@@ -2410,7 +1684,7 @@ body {
 }
 
 .login-logo {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 32px;
   letter-spacing: 3px;
   margin: 0 0 8px;
@@ -2424,7 +1698,7 @@ body {
   font-size: 22px;
   font-weight: 700;
   margin: 0 0 4px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   letter-spacing: -0.5px;
 }
 
@@ -2432,7 +1706,7 @@ body {
   font-size: 13px;
   color: var(--text-dim);
   margin: 0 0 28px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
 }
 
 .login-field {
@@ -2444,7 +1718,7 @@ body {
   color: var(--text-dim);
   display: block;
   margin-bottom: 6px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-weight: 500;
 }
 
@@ -2457,7 +1731,7 @@ body {
   color: var(--text);
   font-size: 14px;
   outline: none;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   transition: border-color 0.2s;
   box-sizing: border-box;
 }
@@ -2477,7 +1751,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-size: 12px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   padding: 0;
 }
 
@@ -2495,7 +1769,7 @@ body {
   font-weight: 700;
   cursor: pointer;
   font-size: 14px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   transition: all 0.2s;
   margin-bottom: 16px;
 }
@@ -2526,7 +1800,7 @@ body {
   font-size: 11px;
   color: var(--text-dim);
   white-space: nowrap;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
 }
 
 .login-google-btn {
@@ -2538,7 +1812,7 @@ body {
   color: var(--text);
   cursor: pointer;
   font-size: 13px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -2582,7 +1856,7 @@ body {
   margin-top: 24px;
   font-size: 12px;
   color: var(--text-dim);
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
 }
 
 .login-switch-link {
@@ -2592,7 +1866,7 @@ body {
   cursor: pointer;
   font-weight: 600;
   font-size: 12px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   padding: 0;
 }
 

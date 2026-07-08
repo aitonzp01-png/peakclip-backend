@@ -1,9 +1,23 @@
 /* ── PeakClip Extended Styles ──
    Imported after globals.css in layout.tsx.
-   Uses the same design tokens defined in globals.css.
-   Fonts: 'Bebas Neue' (display), 'Poppins' (body), 'JetBrains Mono' (mono)
+
+   Dual system:
+   • Auth / dashboard / editor styles below are unscoped and consume the dark
+     tokens defined in globals.css.
+   • Legacy landing section styles are wrapped in @scope (.landing-bg) and their
+     colors have been neutralized to the cream/lime palette so they do not
+     clash with the new landing design.
+
+   Fonts: --font-display (Bebas Neue), --font-body (Poppins),
+          --font-mono (JetBrains Mono), --font-alt (Teko)
 */
 
+/* ── Scoped old landing styles ──
+   These legacy landing section styles are scoped to .landing-bg so they never
+   apply globally to dashboard/editor/auth. Colors have been neutralized to the
+   cream/lime palette to avoid clashing with the new landing design.
+*/
+@scope (.landing-bg) {
 /* ════════════════════════════════════════════════════════════════
    1. HOW IT WORKS SECTION
    ════════════════════════════════════════════════════════════════ */
@@ -24,8 +38,8 @@
 }
 
 .how-card {
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
+  background: #ffffff;
+  border: 1px solid #e8e8e2;
   border-radius: 24px;
   padding: 40px 32px;
   position: relative;
@@ -40,15 +54,15 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: var(--brand-grad);
+  background: linear-gradient(135deg, #c4ff3d, #d4ff5a);
   opacity: 0;
   transition: opacity 300ms ease;
 }
 
 .how-card:hover {
   transform: translateY(-6px);
-  border-color: var(--brand-border);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 40px rgba(99, 102, 241, 0.05);
+  border-color: rgba(196, 255, 61, 0.35);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 40px rgba(196, 255, 61, 0.08);
 }
 
 .how-card:hover::before {
@@ -56,10 +70,10 @@
 }
 
 .how-number {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 64px;
   line-height: 1;
-  color: rgba(99, 102, 241, 0.12);
+  color: rgba(196, 255, 61, 0.18);
   position: absolute;
   top: 12px;
   right: 20px;
@@ -71,8 +85,8 @@
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: var(--brand-dim);
-  border: 1px solid var(--brand-border);
+  background: rgba(196, 255, 61, 0.12);
+  border: 1px solid rgba(196, 255, 61, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -84,16 +98,16 @@
 }
 
 .how-card:hover .how-icon {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: var(--brand-primary);
-  box-shadow: 0 0 30px var(--brand-glow);
+  background: rgba(196, 255, 61, 0.22);
+  border-color: #0f0f0f;
+  box-shadow: 0 0 30px rgba(196, 255, 61, 0.25);
 }
 
 .how-card-title {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 22px;
   letter-spacing: 1px;
-  color: var(--text-primary);
+  color: #0f0f0f;
   margin-bottom: 12px;
   position: relative;
   z-index: 1;
@@ -101,10 +115,10 @@
 }
 
 .how-card-desc {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.7;
-  color: var(--text-secondary);
+  color: #6b6b72;
   position: relative;
   z-index: 1;
 }
@@ -138,8 +152,8 @@
     height: 2px;
     background: repeating-linear-gradient(
       90deg,
-      var(--brand-border) 0px,
-      var(--brand-border) 8px,
+      rgba(196, 255, 61, 0.35) 0px,
+      rgba(196, 255, 61, 0.35) 8px,
       transparent 8px,
       transparent 16px
     );
@@ -154,7 +168,7 @@
     top: 46px;
     right: -24px;
     font-size: 20px;
-    color: var(--brand-primary);
+    color: #0f0f0f;
     z-index: 2;
     animation: connectorPulse 2s ease-in-out infinite;
     opacity: 0.6;
@@ -196,8 +210,8 @@
 }
 
 .feature-card {
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
+  background: #ffffff;
+  border: 1px solid #e8e8e2;
   border-radius: 20px;
   padding: 32px 28px;
   transition: all 300ms ease;
@@ -221,7 +235,7 @@
 
 .feature-card:hover {
   transform: translateY(-4px);
-  border-color: var(--brand-border);
+  border-color: rgba(196, 255, 61, 0.35);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
 }
 
@@ -234,8 +248,8 @@
   height: 100%;
   background: radial-gradient(
     ellipse 160% 130% at 0% 0%,
-    rgba(99, 102, 241, 0.4) 0%,
-    rgba(99, 102, 241, 0.12) 25%,
+    rgba(196, 255, 61, 0.25) 0%,
+    rgba(196, 255, 61, 0.18) 25%,
     transparent 55%
   );
   opacity: 0;
@@ -249,15 +263,15 @@
 }
 
 .feature-card:hover::before {
-  background: linear-gradient(135deg, var(--brand-border), var(--brand-primary), var(--brand-border));
+  background: linear-gradient(135deg, rgba(196, 255, 61, 0.35), #0f0f0f, rgba(196, 255, 61, 0.35));
 }
 
 .feature-icon {
   width: 48px;
   height: 48px;
   border-radius: 14px;
-  background: var(--brand-dim);
-  border: 1px solid var(--brand-border);
+  background: rgba(196, 255, 61, 0.12);
+  border: 1px solid rgba(196, 255, 61, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -267,24 +281,24 @@
 }
 
 .feature-card:hover .feature-icon {
-  background: rgba(99, 102, 241, 0.15);
-  box-shadow: 0 0 25px var(--brand-glow);
+  background: rgba(196, 255, 61, 0.22);
+  box-shadow: 0 0 25px rgba(196, 255, 61, 0.25);
 }
 
 .feature-card-title {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 20px;
   letter-spacing: 0.5px;
-  color: var(--text-primary);
+  color: #0f0f0f;
   margin-bottom: 10px;
   text-transform: uppercase;
 }
 
 .feature-card-desc {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   line-height: 1.7;
-  color: var(--text-secondary);
+  color: #6b6b72;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -306,8 +320,8 @@
 }
 
 .testimonial-card {
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
+  background: #ffffff;
+  border: 1px solid #e8e8e2;
   border-radius: 20px;
   padding: 32px;
   position: relative;
@@ -322,14 +336,14 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: var(--brand-grad);
+  background: linear-gradient(135deg, #c4ff3d, #d4ff5a);
   opacity: 0;
   transition: opacity 300ms ease;
 }
 
 .testimonial-card:hover {
-  border-color: var(--brand-border);
-  box-shadow: 0 0 40px rgba(217, 179, 71, 0.04), 0 12px 40px rgba(0, 0, 0, 0.2);
+  border-color: rgba(196, 255, 61, 0.35);
+  box-shadow: 0 0 40px rgba(196, 255, 61, 0.08), 0 12px 40px rgba(0, 0, 0, 0.2);
 }
 
 .testimonial-card:hover::before {
@@ -347,13 +361,13 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: var(--brand-grad);
+  background: linear-gradient(135deg, #c4ff3d, #d4ff5a);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 20px;
-  color: var(--bg-primary);
+  color: #f5f5f0;
   flex-shrink: 0;
   letter-spacing: 1px;
   position: relative;
@@ -364,7 +378,7 @@
   position: absolute;
   inset: -3px;
   border-radius: 50%;
-  border: 1px solid var(--brand-border);
+  border: 1px solid rgba(196, 255, 61, 0.35);
   opacity: 0;
   transition: opacity 300ms ease;
 }
@@ -377,16 +391,16 @@
   display: flex;
   gap: 3px;
   margin-bottom: 16px;
-  color: var(--brand-primary);
+  color: #0f0f0f;
   font-size: 16px;
   letter-spacing: 2px;
 }
 
 .testimonial-text {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.8;
-  color: var(--text-secondary);
+  color: #6b6b72;
   margin-bottom: 24px;
   font-style: italic;
   position: relative;
@@ -395,9 +409,9 @@
 
 .testimonial-text::before {
   content: '\201C';
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 48px;
-  color: var(--brand-primary);
+  color: #0f0f0f;
   opacity: 0.2;
   position: absolute;
   top: -16px;
@@ -406,17 +420,17 @@
 }
 
 .testimonial-author {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #0f0f0f;
   margin-bottom: 2px;
 }
 
 .testimonial-role {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
-  color: var(--text-muted);
+  color: #6b6b72;
 }
 
 .testimonial-author-info {
@@ -449,8 +463,8 @@
 }
 
 .story-card {
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
+  background: #ffffff;
+  border: 1px solid #e8e8e2;
   border-radius: 20px;
   padding: 28px 24px;
   transition: all 300ms ease;
@@ -465,14 +479,14 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: var(--brand-grad);
+  background: linear-gradient(135deg, #c4ff3d, #d4ff5a);
   opacity: 0;
   transition: opacity 300ms ease;
 }
 
 .story-card:hover {
   transform: translateY(-4px);
-  border-color: var(--brand-border);
+  border-color: rgba(196, 255, 61, 0.35);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
 }
 
@@ -491,48 +505,48 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--brand-grad);
+  background: linear-gradient(135deg, #c4ff3d, #d4ff5a);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 18px;
-  color: var(--bg-primary);
+  color: #f5f5f0;
   flex-shrink: 0;
   letter-spacing: 1px;
 }
 
 .story-name {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 15px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #0f0f0f;
 }
 
 .story-username {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
-  color: var(--text-muted);
+  color: #6b6b72;
 }
 
 .story-stat {
   display: inline-flex;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
   font-weight: 700;
-  color: var(--brand-primary);
-  background: var(--brand-dim);
-  border: 1px solid var(--brand-border);
+  color: #0f0f0f;
+  background: rgba(196, 255, 61, 0.12);
+  border: 1px solid rgba(196, 255, 61, 0.35);
   padding: 4px 14px;
   border-radius: 999px;
   margin-bottom: 14px;
 }
 
 .story-quote {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.7;
-  color: var(--text-secondary);
+  color: #6b6b72;
   font-style: italic;
 }
 
@@ -581,19 +595,19 @@
 }
 
 .faq-item {
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
+  background: #ffffff;
+  border: 1px solid #e8e8e2;
   border-radius: 16px;
   overflow: hidden;
   transition: border-color 300ms ease;
 }
 
 .faq-item:hover {
-  border-color: var(--brand-border);
+  border-color: rgba(196, 255, 61, 0.35);
 }
 
 .faq-item.open {
-  border-color: var(--brand-border);
+  border-color: rgba(196, 255, 61, 0.35);
 }
 
 .faq-question {
@@ -604,8 +618,8 @@
   padding: 20px 24px;
   background: none;
   border: none;
-  color: var(--text-primary);
-  font-family: 'Poppins', sans-serif;
+  color: #0f0f0f;
+  font-family: var(--font-body);
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
@@ -615,11 +629,11 @@
 }
 
 .faq-question:hover {
-  color: var(--brand-primary);
+  color: #0f0f0f;
 }
 
 .faq-item.open .faq-question {
-  color: var(--brand-primary);
+  color: #0f0f0f;
 }
 
 .faq-toggle {
@@ -629,13 +643,13 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--text-muted);
+  color: #6b6b72;
   transition: all 300ms ease;
   font-size: 14px;
 }
 
 .faq-item.open .faq-toggle {
-  color: var(--brand-primary);
+  color: #0f0f0f;
   transform: rotate(180deg);
 }
 
@@ -659,10 +673,10 @@
 }
 
 .faq-answer-inner {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.8;
-  color: var(--text-secondary);
+  color: #6b6b72;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -679,7 +693,7 @@
 
 .cta-box {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%);
-  border: 1px solid var(--brand-border);
+  border: 1px solid rgba(196, 255, 61, 0.35);
   border-radius: 32px;
   padding: 80px 40px;
   text-align: center;
@@ -694,7 +708,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: var(--brand-grad);
+  background: linear-gradient(135deg, #c4ff3d, #d4ff5a);
   opacity: 0.6;
 }
 
@@ -702,27 +716,27 @@
   content: '';
   position: absolute;
   inset: -50%;
-  background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.06), transparent 60%);
+  background: radial-gradient(circle at 50% 0%, rgba(196, 255, 61, 0.10), transparent 60%);
   pointer-events: none;
 }
 
 .cta-title {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: clamp(48px, 5vw, 72px);
   line-height: 0.95;
   letter-spacing: -2px;
   text-transform: uppercase;
-  color: var(--text-primary);
+  color: #0f0f0f;
   margin-bottom: 20px;
   position: relative;
   z-index: 1;
 }
 
 .cta-desc {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 18px;
   line-height: 1.6;
-  color: var(--text-secondary);
+  color: #6b6b72;
   max-width: 520px;
   margin: 0 auto 36px;
   position: relative;
@@ -735,11 +749,11 @@
   justify-content: center;
   height: 60px;
   padding: 0 40px;
-  background: var(--brand-primary);
-  color: var(--bg-primary);
+  background: #0f0f0f;
+  color: #f5f5f0;
   border: none;
   border-radius: 16px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 16px;
   font-weight: 700;
   cursor: pointer;
@@ -751,12 +765,12 @@
 
 .cta-btn:hover {
   transform: translateY(-3px);
-  background: var(--brand-hover);
+  background: #c4ff3d;
   box-shadow: 0 20px 50px rgba(99, 102, 241, 0.35);
 }
 
 .cta-btn:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid #0f0f0f;
   outline-offset: 4px;
 }
 
@@ -765,8 +779,8 @@
    ════════════════════════════════════════════════════════════════ */
 
 .footer {
-  background: var(--surface);
-  border-top: 1px solid var(--border-soft);
+  background: #ffffff;
+  border-top: 1px solid #e8e8e2;
   padding: 80px 50px 0;
   position: relative;
   z-index: 1;
@@ -787,30 +801,30 @@
 }
 
 .footer-brand {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 28px;
   letter-spacing: 3px;
-  color: var(--text-primary);
+  color: #0f0f0f;
   margin-bottom: 16px;
 }
 
 .footer-brand-dot {
-  color: var(--brand-primary);
+  color: #0f0f0f;
 }
 
 .footer-brand-desc {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   line-height: 1.8;
-  color: var(--text-muted);
+  color: #6b6b72;
   max-width: 280px;
 }
 
 .footer-col-title {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #0f0f0f;
   margin-bottom: 20px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -826,9 +840,9 @@
 }
 
 .footer-link {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
-  color: var(--text-muted);
+  color: #6b6b72;
   text-decoration: none;
   transition: color 250ms ease;
   background: none;
@@ -839,11 +853,11 @@
 }
 
 .footer-link:hover {
-  color: var(--brand-primary);
+  color: #0f0f0f;
 }
 
 .footer-link:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid #0f0f0f;
   outline-offset: 2px;
 }
 
@@ -857,12 +871,12 @@
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  border: 1px solid var(--border-soft);
+  border: 1px solid #e8e8e2;
   background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: #6b6b72;
   text-decoration: none;
   font-size: 16px;
   transition: all 250ms ease;
@@ -870,18 +884,18 @@
 }
 
 .footer-social-link:hover {
-  background: var(--brand-dim);
-  border-color: var(--brand-border);
-  color: var(--brand-primary);
+  background: rgba(196, 255, 61, 0.12);
+  border-color: rgba(196, 255, 61, 0.35);
+  color: #0f0f0f;
 }
 
 .footer-social-link:focus-visible {
-  outline: 2px solid var(--brand-primary);
+  outline: 2px solid #0f0f0f;
   outline-offset: 2px;
 }
 
 .footer-bottom {
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid #e8e8e2;
   padding: 24px 0;
   max-width: 1200px;
   margin: 0 auto;
@@ -893,9 +907,9 @@
 }
 
 .footer-bottom-text {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
-  color: var(--text-muted);
+  color: #6b6b72;
 }
 
 .footer-bottom-links {
@@ -905,9 +919,9 @@
 }
 
 .footer-bottom-link {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
-  color: var(--text-muted);
+  color: #6b6b72;
   text-decoration: none;
   transition: color 250ms ease;
   background: none;
@@ -917,13 +931,13 @@
 }
 
 .footer-bottom-link:hover {
-  color: var(--brand-primary);
+  color: #0f0f0f;
 }
 
 .footer-bottom-separator {
   width: 1px;
   height: 12px;
-  background: var(--brand-border);
+  background: rgba(196, 255, 61, 0.35);
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -988,14 +1002,14 @@
 }
 
 .hero-clip-stat {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 10px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.85);
 }
 
 .hero-clip-creator {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.6);
@@ -1073,8 +1087,8 @@
 .showcase-card {
   flex: 0 0 200px;
   scroll-snap-align: start;
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
+  background: #ffffff;
+  border: 1px solid #e8e8e2;
   border-radius: 16px;
   overflow: hidden;
   transition: all 300ms ease;
@@ -1083,7 +1097,7 @@
 
 .showcase-card:hover {
   transform: translateY(-4px);
-  border-color: var(--brand-border);
+  border-color: rgba(196, 255, 61, 0.35);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
 }
 
@@ -1119,7 +1133,7 @@
   position: relative;
   z-index: 2;
   align-self: flex-end;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 10px;
   font-weight: 600;
   color: white;
@@ -1156,10 +1170,10 @@
 }
 
 .showcase-creator {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #0f0f0f;
   margin-bottom: 4px;
 }
 
@@ -1167,9 +1181,9 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
-  color: var(--text-muted);
+  color: #6b6b72;
 }
 
 .showcase-stat-dot {
@@ -1188,12 +1202,12 @@
 
 .showcase-fade-left {
   left: 0;
-  background: linear-gradient(90deg, var(--bg-primary), transparent);
+  background: linear-gradient(90deg, #f5f5f0, transparent);
 }
 
 .showcase-fade-right {
   right: 0;
-  background: linear-gradient(270deg, var(--bg-primary), transparent);
+  background: linear-gradient(270deg, #f5f5f0, transparent);
 }
 
 /* ── Showcase responsive ── */
@@ -1229,6 +1243,10 @@
     font-size: 10px;
   }
 }
+
+
+}
+
 
 /* ════════════════════════════════════════════════════════════════
    7. LOGIN PAGE
@@ -1279,7 +1297,7 @@
 }
 
 .login-logo {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 32px;
   letter-spacing: 4px;
   color: var(--text-primary);
@@ -1292,7 +1310,7 @@
 }
 
 .login-title {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 36px;
   letter-spacing: -1px;
   text-transform: uppercase;
@@ -1302,7 +1320,7 @@
 }
 
 .login-subtitle {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   color: var(--text-muted);
   text-align: center;
@@ -1320,7 +1338,7 @@
 }
 
 .login-label {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -1336,7 +1354,7 @@
   border: 1px solid var(--border-soft);
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   outline: none;
   transition: all 250ms ease;
@@ -1362,7 +1380,7 @@
 }
 
 .login-error {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
   color: var(--error);
   margin-top: 6px;
@@ -1372,7 +1390,7 @@
 }
 
 .login-success {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
   color: var(--success);
   margin-top: 6px;
@@ -1388,7 +1406,7 @@
   color: var(--bg-primary);
   border: none;
   border-radius: 12px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
@@ -1432,7 +1450,7 @@
 }
 
 .login-divider-text {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
@@ -1445,7 +1463,7 @@
   color: var(--text-primary);
   border: 1px solid var(--border-soft);
   border-radius: 12px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -1473,7 +1491,7 @@
 .login-switch {
   text-align: center;
   margin-top: 24px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   color: var(--text-muted);
 }
@@ -1505,7 +1523,7 @@
 }
 
 .login-forgot-link {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
   color: var(--brand-primary);
   text-decoration: none;
@@ -1539,7 +1557,7 @@
 }
 
 .dash-welcome-greeting {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 32px;
   letter-spacing: 0px;
   text-transform: uppercase;
@@ -1548,7 +1566,7 @@
 }
 
 .dash-welcome-sub {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   color: var(--text-muted);
 }
@@ -1571,7 +1589,7 @@
   background: var(--brand-dim);
   border: 1px solid var(--brand-border);
   border-radius: 999px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
   color: var(--brand-primary);
   font-weight: 600;
@@ -1597,7 +1615,7 @@
   color: var(--bg-primary);
   border: none;
   border-radius: 12px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
@@ -1682,7 +1700,7 @@
 }
 
 .dash-clip-thumb-label {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   color: var(--text-muted);
 }
@@ -1693,7 +1711,7 @@
   right: 10px;
   padding: 4px 12px;
   border-radius: 999px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -1735,7 +1753,7 @@
 }
 
 .dash-clip-title {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
@@ -1753,13 +1771,13 @@
 }
 
 .dash-clip-date {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   color: var(--text-muted);
 }
 
 .dash-clip-duration {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   color: var(--text-muted);
   display: flex;
@@ -1780,7 +1798,7 @@
   gap: 6px;
   padding: 8px 12px;
   border-radius: 8px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -1835,7 +1853,7 @@
 }
 
 .dash-empty-title {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 28px;
   letter-spacing: 0px;
   color: var(--text-primary);
@@ -1844,7 +1862,7 @@
 }
 
 .dash-empty-text {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   color: var(--text-muted);
   margin-bottom: 24px;
@@ -1862,7 +1880,7 @@
   color: var(--bg-primary);
   border: none;
   border-radius: 12px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
@@ -1949,7 +1967,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 9px;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -1992,7 +2010,7 @@
 }
 
 .editor-track-item-label {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 9px;
   color: var(--brand-primary);
   white-space: nowrap;
@@ -2081,7 +2099,7 @@
 }
 
 .editor-playback-time {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-dim);
   min-width: 60px;
@@ -2100,7 +2118,7 @@
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--text-dim);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   cursor: pointer;
   transition: all 150ms ease;
@@ -2157,7 +2175,7 @@
 }
 
 .editor-zoom-level {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-dim);
   min-width: 32px;
@@ -2173,7 +2191,7 @@
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: 8px;
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   color: var(--text-primary);
   white-space: nowrap;
@@ -2319,60 +2337,60 @@ a:hover svg,
 
 /* ── Tablet (769px - 1024px) ── */
 @media (min-width: 769px) and (max-width: 1024px) {
-  .how-section {
+  .landing-bg .how-section {
     padding: 80px 32px;
   }
 
-  .how-grid {
+  .landing-bg .how-grid {
     gap: 24px;
   }
 
-  .how-card {
+  .landing-bg .how-card {
     padding: 32px 24px;
   }
 
-  .how-number {
+  .landing-bg .how-number {
     font-size: 48px;
   }
 
-  .features-section {
+  .landing-bg .features-section {
     padding: 80px 32px;
   }
 
-  .features-grid {
+  .landing-bg .features-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .testimonials-section {
+  .landing-bg .testimonials-section {
     padding: 80px 32px;
   }
 
-  .faq-section {
+  .landing-bg .faq-section {
     padding: 80px 32px;
   }
 
-  .cta-section {
+  .landing-bg .cta-section {
     padding: 60px 32px 80px;
   }
 
-  .cta-box {
+  .landing-bg .cta-box {
     padding: 60px 32px;
   }
 
-  .cta-title {
+  .landing-bg .cta-title {
     font-size: clamp(40px, 5vw, 56px);
   }
 
-  .footer {
+  .landing-bg .footer {
     padding: 60px 32px 0;
   }
 
-  .footer-grid {
+  .landing-bg .footer-grid {
     grid-template-columns: 1fr 1fr;
     gap: 32px;
   }
 
-  .footer-col:first-child {
+  .landing-bg .footer-col:first-child {
     grid-column: 1 / -1;
   }
 
@@ -2389,167 +2407,167 @@ a:hover svg,
     align-items: flex-start;
   }
 
-  .how-grid::after {
+  .landing-bg .how-grid::after {
     display: none;
   }
 
-  .how-card:nth-child(1)::after,
-  .how-card:nth-child(2)::after {
+  .landing-bg .how-card:nth-child(1)::after,
+  .landing-bg .how-card:nth-child(2)::after {
     display: none;
   }
 }
 
 /* ── Mobile (max-width: 768px) ── */
 @media (max-width: 768px) {
-  .how-section {
+  .landing-bg .how-section {
     padding: 60px 20px;
   }
 
-  .how-grid {
+  .landing-bg .how-grid {
     grid-template-columns: 1fr;
     gap: 20px;
   }
 
-  .how-grid::after {
+  .landing-bg .how-grid::after {
     display: none;
   }
 
-  .how-card {
+  .landing-bg .how-card {
     padding: 28px 24px;
   }
 
-  .how-card:hover {
+  .landing-bg .how-card:hover {
     transform: translateY(-3px);
   }
 
-  .how-number {
+  .landing-bg .how-number {
     font-size: 42px;
   }
 
-  .how-card-title {
+  .landing-bg .how-card-title {
     font-size: 20px;
   }
 
-  .how-card-desc {
+  .landing-bg .how-card-desc {
     font-size: 13px;
   }
 
-  .how-connector {
+  .landing-bg .how-connector {
     display: none;
   }
 
-  .how-card:nth-child(1)::after,
-  .how-card:nth-child(2)::after {
+  .landing-bg .how-card:nth-child(1)::after,
+  .landing-bg .how-card:nth-child(2)::after {
     display: none;
   }
 
-  .features-section {
+  .landing-bg .features-section {
     padding: 60px 20px;
   }
 
-  .features-grid {
+  .landing-bg .features-grid {
     grid-template-columns: 1fr;
     gap: 16px;
   }
 
-  .feature-card {
+  .landing-bg .feature-card {
     padding: 24px 20px;
   }
 
-  .feature-card-title {
+  .landing-bg .feature-card-title {
     font-size: 18px;
   }
 
-  .feature-card-desc {
+  .landing-bg .feature-card-desc {
     font-size: 12px;
   }
 
-  .testimonials-section {
+  .landing-bg .testimonials-section {
     padding: 60px 20px;
   }
 
-  .testimonials-grid {
+  .landing-bg .testimonials-grid {
     grid-template-columns: 1fr;
     gap: 16px;
   }
 
-  .testimonial-card {
+  .landing-bg .testimonial-card {
     padding: 24px;
   }
 
-  .testimonial-text {
+  .landing-bg .testimonial-text {
     font-size: 13px;
   }
 
-  .faq-section {
+  .landing-bg .faq-section {
     padding: 60px 20px;
   }
 
-  .faq-question {
+  .landing-bg .faq-question {
     padding: 16px 18px;
     font-size: 14px;
   }
 
-  .faq-answer {
+  .landing-bg .faq-answer {
     padding: 0 18px;
   }
 
-  .faq-item.open .faq-answer {
+  .landing-bg .faq-item.open .faq-answer {
     padding: 0 18px 16px;
   }
 
-  .faq-answer-inner {
+  .landing-bg .faq-answer-inner {
     font-size: 13px;
   }
 
-  .cta-section {
+  .landing-bg .cta-section {
     padding: 40px 20px 60px;
   }
 
-  .cta-box {
+  .landing-bg .cta-box {
     padding: 48px 24px;
     border-radius: 24px;
   }
 
-  .cta-title {
+  .landing-bg .cta-title {
     font-size: clamp(32px, 10vw, 42px);
   }
 
-  .cta-desc {
+  .landing-bg .cta-desc {
     font-size: 15px;
     margin-bottom: 28px;
   }
 
-  .cta-btn {
+  .landing-bg .cta-btn {
     width: 100%;
     height: 52px;
     font-size: 15px;
   }
 
-  .footer {
+  .landing-bg .footer {
     padding: 48px 20px 0;
   }
 
-  .footer-grid {
+  .landing-bg .footer-grid {
     grid-template-columns: 1fr;
     gap: 36px;
   }
 
-  .footer-col:first-child {
+  .landing-bg .footer-col:first-child {
     order: -1;
   }
 
-  .footer-brand-desc {
+  .landing-bg .footer-brand-desc {
     max-width: 100%;
   }
 
-  .footer-bottom {
+  .landing-bg .footer-bottom {
     flex-direction: column;
     text-align: center;
     padding: 20px 0;
   }
 
-  .footer-bottom-links {
+  .landing-bg .footer-bottom-links {
     justify-content: center;
   }
 

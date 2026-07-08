@@ -208,6 +208,15 @@ export default function FAQ() {
             max-width: 100% !important;
           }
         }
+        @media (prefers-reduced-motion: reduce) {
+          .faq-title-wrap, .faq-question-btn span, .faq-question-btn + div {
+            transition: none !important;
+          }
+          .faq-title-wrap {
+            opacity: 1 !important;
+            transform: translateY(0) !important;
+          }
+        }
       `}</style>
     </section>
   )

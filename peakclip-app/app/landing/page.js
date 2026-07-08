@@ -61,6 +61,16 @@ export default function Landing() {
       <CTA />
 
       <Footer />
+
+      <style>{`
+        @media (prefers-reduced-motion: reduce) {
+          .reveal {
+            opacity: 1 !important;
+            transform: none !important;
+            transition: none !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

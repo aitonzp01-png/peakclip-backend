@@ -1,16 +1,34 @@
 import type { Metadata } from "next";
-// Font imports removed
+import { Bebas_Neue, Poppins, JetBrains_Mono, Teko } from "next/font/google";
 import "./globals.css";
 import "./peakclip.css";
-import { fonts } from "../lib/tokens";
 
-// Removed Bebas Neue font definition
+const bebasNeue = Bebas_Neue({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-bebas-neue",
+  display: "swap",
+});
 
-// Removed Poppins font definition
+const poppins = Poppins({
+  weight: ["400", "500", "600", "700"],
+  subsets: ["latin"],
+  variable: "--font-poppins",
+  display: "swap",
+});
 
-// Removed JetBrains Mono font definition
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 
-// Removed Teko font definition
+const teko = Teko({
+  weight: ["400", "500", "600", "700"],
+  subsets: ["latin"],
+  variable: "--font-teko",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "PeakClip — From long video to viral clip in seconds",
@@ -25,7 +43,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className="h-full antialiased"
+      className={`${bebasNeue.variable} ${poppins.variable} ${jetbrainsMono.variable} ${teko.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

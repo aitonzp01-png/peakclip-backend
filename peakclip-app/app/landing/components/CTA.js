@@ -77,33 +77,14 @@ export default function CTA() {
           {/* Input + Button */}
           <form
             onSubmit={(e) => e.preventDefault()}
-            style={{
-              maxWidth: 480, margin: '0 auto 24px',
-              display: 'flex', gap: 0, alignItems: 'stretch',
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 100, overflow: 'hidden',
-            }}
+            className="cta-form"
           >
             <input
               type="email"
               placeholder="you@email.com"
-              style={{
-                flex: 1, background: 'none', border: 'none',
-                padding: '16px 22px', fontSize: 14,
-                color: '#f5f5f0', outline: 'none',
-                fontFamily: 'inherit',
-              }}
+              className="cta-form-input"
             />
-            <button type="submit" style={{
-              background: '#f5f5f0', color: '#0f0f0f',
-              border: 'none', padding: '16px 28px',
-              fontWeight: 700, fontSize: 14, cursor: 'pointer',
-              whiteSpace: 'nowrap', fontFamily: 'inherit',
-              transition: 'background 0.2s',
-            }}
-              className="cta-submit-btn"
-            >
+            <button type="submit" className="cta-form-btn">
               Start Free
             </button>
           </form>
@@ -122,31 +103,78 @@ export default function CTA() {
           opacity: 1 !important;
           transform: translateY(0) scale(1) !important;
         }
-        .cta-submit-btn:hover {
-          background: #c4ff3d !important;
+        .cta-form {
+          max-width: 480px;
+          margin: 0 auto 24px;
+          display: flex;
+          gap: 0;
+          align-items: stretch;
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 100px;
+          overflow: hidden;
+        }
+        .cta-form-input {
+          flex: 1;
+          background: none;
+          border: none;
+          padding: 16px 22px;
+          font-size: 14px;
+          color: #f5f5f0;
+          outline: none;
+          font-family: inherit;
+        }
+        .cta-form-input::placeholder {
+          color: rgba(255,255,255,0.4);
+        }
+        .cta-form-btn {
+          background: #f5f5f0;
+          color: #0f0f0f;
+          border: none;
+          padding: 16px 28px;
+          font-weight: 700;
+          font-size: 14px;
+          cursor: pointer;
+          white-space: nowrap;
+          font-family: inherit;
+          transition: background 0.2s;
+        }
+        .cta-form-btn:hover {
+          background: #c4ff3d;
         }
         @media (max-width: 768px) {
-          section[style*="padding: 0 80px 100px"] {
+          section {
             padding: 0 20px 60px !important;
           }
           .cta-final-card {
             padding: 40px 24px !important;
           }
-          form[style*="border-radius: 100"] {
-            flex-direction: column !important;
-            border-radius: 16px !important;
-            background: transparent !important;
-            border: none !important;
-            gap: 12px !important;
+          .cta-form {
+            flex-direction: column;
+            border-radius: 20px;
+            gap: 12px;
+            padding: 12px;
           }
-          input[type="email"] {
-            border-radius: 100px !important;
-            border: 1px solid rgba(255,255,255,0.12) !important;
-            background: rgba(255,255,255,0.08) !important;
-            text-align: center !important;
+          .cta-form-input {
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+            padding: 14px 18px;
           }
-          button[type="submit"] {
-            border-radius: 100px !important;
+          .cta-form-btn {
+            width: 100%;
+            border-radius: 12px;
+            padding: 14px 18px;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .cta-final-card {
+            transition: none !important;
+            opacity: 1 !important;
+            transform: none !important;
+          }
+          .cta-form-btn {
+            transition: none !important;
           }
         }
       `}</style>

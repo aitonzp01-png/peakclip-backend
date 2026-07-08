@@ -323,10 +323,20 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .db-btn-accent:hover {
   filter: brightness(0.95);
+}
+
+.db-btn-accent-icon {
+  display: none;
+}
+
+.db-topbar-btn-text {
+  display: inline;
 }
 
 /* Notifications Bell */
@@ -935,6 +945,27 @@ body {
   background-color: #1a1a1a;
 }
 
+/* Pricing / Upgrade Cards Grid */
+.db-pricing-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+@media (min-width: 640px) {
+  .db-pricing-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .db-pricing-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 /* Grid of Clip Cards */
 .db-clips-grid {
   display: grid;
@@ -968,8 +999,6 @@ body {
 }
 
 .db-clip-img {
-  width: 100%;
-  height: 100%;
   object-fit: cover;
 }
 
@@ -1126,36 +1155,62 @@ body {
     transform: translateX(-100%);
     z-index: 200;
   }
-  
+
   .db-sidebar.open {
     transform: translateX(0);
   }
-  
+
   .db-topbar {
     left: 0;
     width: 100%;
     padding: 0 16px;
   }
-  
+
   .db-topbar-mobile-btn {
     display: block;
   }
-  
+
   .db-content {
     margin-left: 0;
     padding: 80px 16px 32px;
   }
-  
+
   .db-clips-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .db-input-card {
     padding: 24px;
   }
-  
+
   .db-secondary-row {
     justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .db-topbar-right {
+    gap: 8px;
+  }
+
+  .db-credits-badge {
+    padding: 6px;
+  }
+
+  .db-topbar-credits-text {
+    display: none;
+  }
+
+  .db-btn-accent {
+    padding: 8px;
+  }
+
+  .db-btn-accent-icon {
+    display: inline-flex;
+  }
+
+  .db-topbar-btn-text {
+    display: none;
   }
 }
 

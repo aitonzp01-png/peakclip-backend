@@ -969,14 +969,9 @@ export default function EditorPage() {
       </div>
     </div>
   ) : (
-    <div style={{
-      height: '100vh',
-      backgroundColor: 'var(--cream-bg)',
-      fontFamily: 'Inter, sans-serif',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      color: 'var(--cream-text-primary)'
+    <>
+    <div className="editor-layout" style={{
+      fontFamily: 'Inter, sans-serif'
     }}>
       <style jsx global>{`
         * {
@@ -1197,23 +1192,11 @@ export default function EditorPage() {
       </header>
 
       {/* --- MAIN WORKSPACE --- */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        height: 'calc(100vh - 56px - 180px)',
-        overflow: 'hidden'
-      }}>
+      <div className="editor-workspace">
         
         {/* PANEL IZQUIERDO: TRANSCRIPIÓN (w-72 bg-zinc-900 border-r border-zinc-800) */}
         {leftPanelOpen && (
-          <aside style={{
-            width: '288px',
-            backgroundColor: 'var(--cream-panel)',
-            borderRight: '1px solid var(--cream-panel-border)',
-            display: 'flex',
-            flexDirection: 'column',
-            flexShrink: 0
-          }}>
+          <aside className="editor-left-panel">
             <div style={{ padding: '16px', borderBottom: '1px solid var(--cream-panel-border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button
                 onClick={() => setAudioCleanActive(!audioCleanActive)}
@@ -1343,13 +1326,7 @@ export default function EditorPage() {
         )}
 
         {/* PANEL CENTRAL: PREVIEW */}
-        <main style={{
-          flex: 1,
-          backgroundColor: 'var(--cream-bg)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden'
-        }}>
+        <main className="editor-preview">
           {/* Preview settings bar */}
           <div style={{
             height: '42px',
@@ -1411,27 +1388,13 @@ export default function EditorPage() {
           </div>
 
           {/* Preview box area */}
-          <div style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-            position: 'relative',
-            backgroundColor: 'var(--cream-bg)'
-          }}>
+          <div className="editor-preview-stage">
             <div
               onMouseMove={handleCanvasMouseMove}
               onMouseUp={handleCanvasMouseUp}
+              className="editor-preview-box"
               style={{
-                width: aspectRatio === '9:16' ? '280px' : aspectRatio === '16:9' ? '500px' : aspectRatio === '1:1' ? '340px' : '300px',
-                height: aspectRatio === '9:16' ? '497px' : aspectRatio === '16:9' ? '281px' : aspectRatio === '1:1' ? '340px' : '375px',
-                backgroundColor: 'var(--cream-text-primary)',
-                boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
-                position: 'relative',
-                overflow: 'hidden',
-                borderRadius: '12px',
-                border: '1px solid var(--cream-panel-border)'
+                '--preview-ratio': aspectRatio === '9:16' ? '9 / 16' : aspectRatio === '16:9' ? '16 / 9' : aspectRatio === '1:1' ? '1 / 1' : '4 / 5'
               }}
             >
               <video
@@ -1522,23 +1485,10 @@ export default function EditorPage() {
         </main>
 
         {/* PANEL DERECHO: HERRAMIENTAS (sidebar 40px + contenido 280px) */}
-        <aside style={{
-          width: rightPanelOpen ? '320px' : '40px',
-          backgroundColor: 'var(--cream-panel)',
-          borderLeft: '1px solid var(--cream-panel-border)',
-          display: 'flex',
-          flexShrink: 0
-        }}>
+        <aside className={`editor-right-aside ${rightPanelOpen ? 'open' : 'closed'}`}>
           {/* Sidebar vertical de 40px */}
-          <div style={{
-            width: '40px',
-            backgroundColor: 'var(--cream-surface)',
-            borderRight: rightPanelOpen ? '1px solid var(--cream-panel-border)' : 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            paddingTop: '8px',
-            gap: '12px'
+          <div className="editor-right-bar" style={{
+            borderRight: rightPanelOpen ? '1px solid var(--cream-panel-border)' : 'none'
           }}>
             {[
               { id: 'presets', label: 'Estilos', icon: <Palette size={18} strokeWidth={1.5} /> },
@@ -1584,7 +1534,7 @@ export default function EditorPage() {
 
           {/* Panel de Contenido */}
           {rightPanelOpen && (
-            <div style={{ width: '280px', padding: '16px', overflowY: 'auto' }}>
+            <div className="editor-right-content">
               
               {/* Estilos — incluye presets, tipografía y efectos */}
               {activeRightTab === 'presets' && (
@@ -1821,17 +1771,12 @@ export default function EditorPage() {
         </aside>
       </div>
 
-      {/* --- TIMELINE (180px height, bg-zinc-950 border-t border-zinc-800) --- */}
+      {/* --- TIMELINE (fluid height, bg-zinc-950 border-t border-zinc-800) --- */}
       <footer
+        className="editor-timeline"
         onMouseMove={handleTimelineMouseMove}
         onMouseUp={handleTimelineMouseUp}
         style={{
-          height: '180px',
-          backgroundColor: 'var(--cream-tl-bg)',
-          borderTop: '1px solid var(--cream-panel-border)',
-          display: 'flex',
-          flexDirection: 'column',
-          flexShrink: 0,
           position: 'relative',
           userSelect: 'none'
         }}
@@ -2068,6 +2013,20 @@ export default function EditorPage() {
         </div>
       )}
     </div>
+
+    {/* --- MOBILE FALLBACK --- */}
+    <div className="editor-mobile-message">
+      <Monitor size={48} strokeWidth={1.5} color="var(--cream-accent)" />
+      <h2>Editor optimizado para escritorio</h2>
+      <p>PeakClip funciona mejor en pantallas grandes. Ábrelo en un ordenador para editar, sincronizar subtítulos y exportar clips sin límites.</p>
+      <button
+        className="editor-mobile-btn"
+        onClick={() => router.push('/dashboard')}
+      >
+        Volver al dashboard
+      </button>
+    </div>
+    </>
   )
 
   return <ErrorBoundary>{editorContent}</ErrorBoundary>

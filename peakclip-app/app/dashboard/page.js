@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getSupabaseClient } from '../../lib/supabase';
 import Sidebar from './components/Sidebar.jsx';
@@ -835,7 +836,14 @@ export default function Dashboard() {
                         >
                           <div className="db-clip-thumbnail">
                             {clip.thumbnail_url ? (
-                              <img src={clip.thumbnail_url} alt={clip.title} className="db-clip-img" />
+                              <Image
+                                src={clip.thumbnail_url}
+                                alt={clip.title || 'Miniatura del clip'}
+                                fill
+                                sizes="(max-width: 768px) 50vw, 25vw"
+                                className="db-clip-img"
+                                style={{ objectFit: 'cover' }}
+                              />
                             ) : (
                               <div className="db-clip-thumb-placeholder">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -994,7 +1002,14 @@ export default function Dashboard() {
                       >
                         <div className="db-clip-thumbnail">
                           {clip.thumbnail_url ? (
-                            <img src={clip.thumbnail_url} alt={clip.title} className="db-clip-img" />
+                            <Image
+                              src={clip.thumbnail_url}
+                              alt={clip.title || 'Miniatura del clip'}
+                              fill
+                              sizes="(max-width: 768px) 50vw, 25vw"
+                              className="db-clip-img"
+                              style={{ objectFit: 'cover' }}
+                            />
                           ) : (
                             <div className="db-clip-thumb-placeholder">
                               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1135,7 +1150,7 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', maxWidth: '960px', margin: '0 auto' }}>
+                <div className="db-pricing-grid">
                   {pricingPlans.map((p, idx) => (
                     <div
                       key={idx}

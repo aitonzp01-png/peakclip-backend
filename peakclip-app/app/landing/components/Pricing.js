@@ -189,7 +189,7 @@ export default function Pricing() {
           flexWrap: 'wrap', alignItems: 'stretch',
           marginBottom: 32,
         }}>
-          {plans.map((plan, i) => {
+          {plans.map((plan) => {
             const monthly = plan.monthlyPrice || plan.price
             const yearlyPerMonth = plan.name !== 'Free' ? getYearlyPerMonth(monthly) : 0
             const yearlyTotal = plan.name !== 'Free' ? getYearlyTotal(monthly) : 0
@@ -357,6 +357,23 @@ export default function Pricing() {
           .pricing-toggle button {
             padding: 10px 20px !important;
             font-size: 13px !important;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .pricing-title-wrap, .pricing-card-item, .pricing-price-block, .pricing-toggle-slider, .pricing-cta-btn {
+            transition: none !important;
+            animation: none !important;
+          }
+          .pricing-title-wrap {
+            opacity: 1 !important;
+            transform: translateY(0) !important;
+          }
+          .pricing-card-item:hover, .pricing-card-item[style*="translateY(-12px)"]:hover {
+            transform: none !important;
+          }
+          .pricing-price-block {
+            opacity: 1 !important;
+            transform: none !important;
           }
         }
       `}</style>

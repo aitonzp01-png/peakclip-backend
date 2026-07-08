@@ -263,6 +263,19 @@ export default function HowItWorks() {
             height: 85px !important;
           }
         }
+        @media (prefers-reduced-motion: reduce) {
+          .carousel-row {
+            animation-play-state: paused !important;
+          }
+          .resultados-title, .resultados-card, .resultados-cta {
+            transition: none !important;
+            transform: none !important;
+          }
+          .resultados-title {
+            opacity: 1 !important;
+            transform: translateY(0) !important;
+          }
+        }
       `}</style>
     </section>
   )

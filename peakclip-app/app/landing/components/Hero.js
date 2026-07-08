@@ -1,12 +1,181 @@
 'use client'
 
+import { useState } from 'react'
+
 const cards = [
-  { id: 'dQw4w9WgXcQ', views: '2.6M', comments: '12k', r: -9, y: 20, w: 148, h: 264 },
-  { id: 'RlPNh_PBZb4', views: '1.2M', comments: '8.4k', r: -3.5, y: -4, w: 148, h: 264 },
-  { id: '9bZkp7q19f0', views: '4.8M', comments: '31k', r: 0, y: -8, w: 164, h: 292 },
-  { id: 'V-_O7nl0Ii0', views: '890k', comments: '3.1k', r: 7, y: -3, w: 148, h: 264 },
-  { id: 'M7lc1UVf-VE', views: '1.8M', comments: '9.7k', r: 12, y: 16, w: 148, h: 264 },
+  {
+    id: 'dQw4w9WgXcQ',
+    title: 'This trick went viral 😱',
+    channel: 'PeakClips',
+    initial: 'P',
+    avatarColor: '#c4ff3d',
+    views: '2.6M',
+    duration: '0:32',
+    gradient: 'linear-gradient(160deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%)',
+    r: -9, y: 20, w: 148, h: 264,
+  },
+  {
+    id: 'RlPNh_PBZb4',
+    title: 'Nobody expected this ending',
+    channel: 'Viral Cut',
+    initial: 'V',
+    avatarColor: '#60a5fa',
+    views: '1.2M',
+    duration: '0:45',
+    gradient: 'linear-gradient(160deg, #a18cd1 0%, #fbc2eb 100%)',
+    r: -3.5, y: -4, w: 148, h: 264,
+  },
+  {
+    id: '9bZkp7q19f0',
+    title: 'The moment that broke the internet',
+    channel: 'Short Kings',
+    initial: 'S',
+    avatarColor: '#f87171',
+    views: '4.8M',
+    duration: '0:28',
+    gradient: 'linear-gradient(160deg, #84fab0 0%, #8fd3f4 100%)',
+    r: 0, y: -8, w: 164, h: 292,
+  },
+  {
+    id: 'V-_O7nl0Ii0',
+    title: 'Wait for the reaction 🔥',
+    channel: 'ClipLab',
+    initial: 'C',
+    avatarColor: '#fbbf24',
+    views: '890k',
+    duration: '0:19',
+    gradient: 'linear-gradient(160deg, #fccb90 0%, #d57eeb 100%)',
+    r: 7, y: -3, w: 148, h: 264,
+  },
+  {
+    id: 'M7lc1UVf-VE',
+    title: 'This is why I use PeakClip',
+    channel: 'Creator Pro',
+    initial: 'C',
+    avatarColor: '#34d399',
+    views: '1.8M',
+    duration: '0:36',
+    gradient: 'linear-gradient(160deg, #43e97b 0%, #38f9d7 100%)',
+    r: 12, y: 16, w: 148, h: 264,
+  },
 ]
+
+function ShortCard({ card }) {
+  const [active, setActive] = useState(false)
+
+  return (
+    <div
+      className="hero-card"
+      onClick={() => setActive(true)}
+      style={{
+        width: card.w, height: card.h, flexShrink: 0,
+        borderRadius: 20, overflow: 'hidden',
+        background: '#111',
+        boxShadow: '0 10px 36px rgba(0,0,0,0.13)',
+        transform: `rotate(${card.r}deg) translateY(${card.y}px)`,
+        cursor: 'pointer', position: 'relative',
+        transition: 'transform 0.4s cubic-bezier(.22,.68,0,1.2), box-shadow 0.4s',
+      }}
+    >
+      {active && (
+        <iframe
+          src={`https://www.youtube.com/embed/${card.id}?autoplay=1&mute=1&loop=1&playlist=${card.id}&controls=0&modestbranding=1&rel=0&playsinline=1`}
+          style={{
+            position: 'absolute', top: 0, left: '50%',
+            transform: 'translateX(-50%)',
+            width: '100%', height: '100%',
+            border: 'none', zIndex: 3,
+          }}
+          title={card.title}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      )}
+
+      {/* Thumbnail facade */}
+      <div className="hero-card-thumb" style={{
+        position: 'absolute', inset: 0,
+        background: card.gradient,
+        display: 'flex', flexDirection: 'column',
+        justifyContent: 'space-between', padding: 12,
+        zIndex: active ? 0 : 2,
+      }}>
+        {/* Top row: avatar + channel, duration */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 8,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{
+              width: 26, height: 26, borderRadius: '50%',
+              background: card.avatarColor,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 800, color: '#0f0f0f',
+              flexShrink: 0,
+            }}>
+              {card.initial}
+            </div>
+            <span style={{
+              fontSize: 11, fontWeight: 700, color: 'rgba(0,0,0,0.75)',
+              textShadow: '0 1px 2px rgba(255,255,255,0.4)',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 78,
+            }}>
+              {card.channel}
+            </span>
+          </div>
+          <span style={{
+            fontSize: 10, fontWeight: 700, color: 'rgba(0,0,0,0.7)',
+            background: 'rgba(255,255,255,0.55)', borderRadius: 4,
+            padding: '2px 5px',
+          }}>
+            {card.duration}
+          </span>
+        </div>
+
+        {/* Center play */}
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -55%)',
+          width: 42, height: 42, borderRadius: '50%',
+          background: 'rgba(0,0,0,0.22)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+
+        {/* Bottom title + stats */}
+        <div>
+          <div style={{
+            fontSize: 13, fontWeight: 900, color: '#0f0f0f',
+            lineHeight: 1.15, marginBottom: 8,
+            textShadow: '0 1px 0 rgba(255,255,255,0.35)',
+            display: '-webkit-box',
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}>
+            {card.title}
+          </div>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'rgba(0,0,0,0.45)', borderRadius: 8,
+            padding: '5px 8px', color: 'white', fontSize: 11, fontWeight: 700,
+            backdropFilter: 'blur(4px)',
+          }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            {card.views} views
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Hero() {
   return (
@@ -119,92 +288,15 @@ export default function Hero() {
         </a>
       </div>
 
-      {/* Mosaic of 5 YouTube clips */}
+      {/* Mosaic of 5 short clips */}
       <div className="hero-mosaic" style={{
         zIndex: 2,
         animation: 'fade-up 0.6s 0.65s ease both',
         display: 'flex', gap: 14, marginTop: 60,
         alignItems: 'center', justifyContent: 'center',
       }}>
-        {cards.map((card, i) => (
-          <div key={card.id}
-            className="hero-card"
-            onClick={(e) => {
-              e.currentTarget.classList.toggle('active')
-              const iframe = e.currentTarget.querySelector('iframe')
-              if (e.currentTarget.classList.contains('active')) {
-                iframe.style.pointerEvents = 'all'
-              } else {
-                iframe.style.pointerEvents = 'none'
-              }
-            }}
-            style={{
-              width: card.w, height: card.h, flexShrink: 0,
-              borderRadius: 20, overflow: 'hidden',
-              background: '#111',
-              boxShadow: '0 10px 36px rgba(0,0,0,0.13)',
-              transform: `rotate(${card.r}deg) translateY(${card.y}px)`,
-              cursor: 'pointer', position: 'relative',
-              transition: 'transform 0.4s cubic-bezier(.22,.68,0,1.2), box-shadow 0.4s',
-            }}
-          >
-            <iframe
-              src={`https://www.youtube.com/embed/${card.id}?autoplay=1&mute=1&loop=1&playlist=${card.id}&controls=0&modestbranding=1&rel=0&playsinline=1`}
-              style={{
-                position: 'absolute', top: 0, left: '50%',
-                transform: 'translateX(-50%)',
-                width: '100%', height: '100%',
-                border: 'none', pointerEvents: 'none',
-              }}
-              title="Video preview"
-            />
-
-            {/* Overlay */}
-            <div className="hero-card-overlay" style={{
-              position: 'absolute', inset: 0, zIndex: 2,
-              background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.55) 100%)',
-              transition: 'opacity 0.3s',
-            }}>
-              {/* Play button */}
-              <div className="hero-card-play" style={{
-                position: 'absolute', top: '50%', left: '50%',
-                transform: 'translate(-50%,-55%)',
-                width: 42, height: 42, borderRadius: '50%',
-                background: 'rgba(255,255,255,0.22)',
-                backdropFilter: 'blur(6px)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'background 0.3s, transform 0.3s',
-              }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </div>
-
-              {/* Stats */}
-              <div className="hero-card-stats" style={{
-                position: 'absolute', bottom: 10, left: 8, right: 8,
-                background: 'rgba(0,0,0,0.35)',
-                backdropFilter: 'blur(5px)', borderRadius: 9,
-                padding: '5px 9px',
-                display: 'flex', justifyContent: 'space-between',
-                fontSize: 11, fontWeight: 700, color: 'white',
-              }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                  {card.views}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                  {card.comments}
-                </span>
-              </div>
-            </div>
-          </div>
+        {cards.map((card) => (
+          <ShortCard key={card.id} card={card} />
         ))}
       </div>
 
@@ -219,31 +311,18 @@ export default function Hero() {
       </p>
 
       <style>{`
-        /* Card hover */
         .hero-card:hover {
           transform: rotate(0deg) translateY(-12px) scale(1.05) !important;
           box-shadow: 0 20px 48px rgba(0,0,0,0.22) !important;
           z-index: 10;
         }
-        .hero-card:hover .hero-card-play {
-          background: rgba(255,255,255,0.32);
-          transform: translate(-50%,-55%) scale(1.1);
-        }
-        /* Active state (clicked to unmute) */
-        .hero-card.active .hero-card-overlay {
-          opacity: 0;
-          pointer-events: none;
-        }
-        /* Primary button hover */
         .hero-primary-btn:hover {
           transform: translateY(-2px);
           box-shadow: 0 6px 20px rgba(0,0,0,0.18);
         }
-        /* Secondary button hover */
         .hero-secondary-btn:hover {
           border-color: #0f0f0f;
         }
-        /* Mobile responsive */
         @media (max-width: 768px) {
           .hero-mosaic {
             overflow-x: auto !important;
@@ -264,6 +343,23 @@ export default function Hero() {
             height: 258px !important;
           }
           h1 { letter-spacing: -2px !important; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          section *, section *::before, section *::after {
+            animation: none !important;
+            transition: none !important;
+          }
+          section > svg {
+            opacity: 0.22 !important;
+            transform: translateX(-50%) !important;
+          }
+          .hero-mosaic, .hero-card, h1, p, .hero-primary-btn, .hero-secondary-btn, div[style*="animation: fade-up"] {
+            opacity: 1 !important;
+            transform: none !important;
+          }
+          .hero-card {
+            transform: rotate(0deg) translateY(0) !important;
+          }
         }
       `}</style>
     </section>

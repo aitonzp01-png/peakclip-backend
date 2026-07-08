@@ -285,12 +285,12 @@ export default function ComoFunciona() {
         </div>
 
         {/* Steps */}
-        <div style={{
+        <div className="cf-steps-grid" style={{
           display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 28,
           alignItems: 'start',
         }}>
           {steps.map((step, i) => (
-            <div key={step.num} style={{
+            <div key={step.num} className="cf-step" style={{
               opacity: 0, transform: 'translateY(30px)',
               animation: `cf-step-in 0.6s ${0.15 + i * 0.12}s ease forwards`,
             }}>
@@ -336,8 +336,7 @@ export default function ComoFunciona() {
         {/* Connector arrows (desktop) */}
         <div style={{
           position: 'absolute', top: '58%', left: '50%', transform: 'translate(-50%, -50%)',
-          width: '78%', pointerEvents: 'none', display: 'flex', justifyContent: 'space-between',
-          padding: '0 3%', display: 'none',
+          width: '78%', pointerEvents: 'none', display: 'none',
         }}>
           {[0, 1].map(i => (
             <svg key={i} width="48" height="24" viewBox="0 0 48 24" fill="none">
@@ -347,7 +346,7 @@ export default function ComoFunciona() {
         </div>
 
         {/* Bottom CTA */}
-        <div style={{
+        <div className="cf-bottom-cta" style={{
           marginTop: 80, textAlign: 'center',
           opacity: 0, animation: 'cf-step-in 0.6s 0.7s ease forwards',
         }}>
@@ -395,13 +394,23 @@ export default function ComoFunciona() {
           50% { transform: translateX(4px); }
         }
         @media (max-width: 900px) {
-          div[style*="grid-template-columns: repeat(3, 1fr)"] {
+          .cf-steps-grid {
             grid-template-columns: 1fr !important;
             gap: 48px !important;
           }
         }
         @media (max-width: 768px) {
           section#como-funciona { padding: 72px 0 !important; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .cf-title, .cf-step, .cf-bottom-cta, .cf-card-hover, .cf-cta-btn, .cf-cta-btn svg {
+            animation: none !important;
+            transition: none !important;
+          }
+          .cf-title, .cf-step, .cf-bottom-cta {
+            opacity: 1 !important;
+            transform: none !important;
+          }
         }
       `}</style>
     </section>

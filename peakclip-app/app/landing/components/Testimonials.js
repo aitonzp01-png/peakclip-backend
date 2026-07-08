@@ -154,7 +154,7 @@ export default function Testimonials() {
       </div>
 
       {/* Stats bar */}
-      <div style={{
+      <div className="ts-stats" style={{
         display: 'flex', justifyContent: 'center', gap: 0,
         maxWidth: 600, margin: '0 auto 48px',
       }}>
@@ -288,18 +288,31 @@ export default function Testimonials() {
           section#testimonios {
             padding: 60px 0 !important;
           }
-          div[style*="padding: 0 40px;"] {
+          .ts-stats {
             flex-direction: column !important;
             gap: 16px !important;
             max-width: 300px !important;
           }
-          div[style*="padding: 0 40px;"] > div {
+          .ts-stats > div {
             padding: 0 !important;
             padding-bottom: 16px !important;
           }
-          div[style*="padding: 0 40px;"] > div[style*="width: 1px"] {
+          .ts-stats > div[style*="width: 1px"] {
             width: 100% !important;
             height: 1px !important;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ts-track {
+            animation-play-state: paused !important;
+          }
+          .ts-title, .ts-card {
+            transition: none !important;
+            transform: none !important;
+          }
+          .ts-title {
+            opacity: 1 !important;
+            transform: translateY(0) !important;
           }
         }
       `}</style>

@@ -78,7 +78,7 @@ export default function Footer() {
       padding: '60px 80px 40px',
     }}>
       <div className="footer-grid" style={{
-        display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr',
+        display: 'grid',
         gap: 40, marginBottom: 48,
       }}>
         {/* Brand column */}
@@ -165,18 +165,6 @@ export default function Footer() {
         }
         .footer-link-item:hover {
           color: #0f0f0f !important;
-        }
-        @media (max-width: 768px) {
-          footer { padding: 40px 20px 24px !important; }
-          .footer-grid {
-            grid-template-columns: 1fr 1fr !important;
-            gap: 32px !important;
-          }
-          .footer-bottom {
-            flex-direction: column !important;
-            gap: 8px !important;
-            text-align: center !important;
-          }
         }
       `}</style>
     </footer>
