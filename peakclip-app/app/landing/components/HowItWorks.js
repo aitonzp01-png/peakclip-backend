@@ -1,26 +1,36 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import LazyShort from './LazyShort'
+
+const gradients = [
+  'linear-gradient(160deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%)',
+  'linear-gradient(160deg, #a18cd1 0%, #fbc2eb 100%)',
+  'linear-gradient(160deg, #84fab0 0%, #8fd3f4 100%)',
+  'linear-gradient(160deg, #fccb90 0%, #d57eeb 100%)',
+  'linear-gradient(160deg, #43e97b 0%, #38f9d7 100%)',
+  'linear-gradient(160deg, #fa709a 0%, #fee140 100%)',
+]
 
 const row1Clips = [
-  { name: 'Alex R.', category: 'PODCAST', views: '2.6M', initial: 'A' },
-  { name: 'Sara M.', category: 'FITNESS', views: '1.2M', initial: 'S' },
-  { name: 'Juan Pro', category: 'GAMING', views: '4.8M', initial: 'J' },
-  { name: 'Tech Talk', category: 'TECH', views: '890k', initial: 'T' },
-  { name: 'Marta G.', category: 'VLOGS', views: '3.1M', initial: 'M' },
-  { name: 'Fin Libre', category: 'FINANCE', views: '540k', initial: 'F' },
+  { id: 'dQw4w9WgXcQ', name: 'Alex R.', category: 'PODCAST', views: '2.6M', initial: 'A', avatarColor: '#ff9a9e', title: 'This podcast clip broke the internet', duration: '0:32' },
+  { id: '9bZkp7q19f0', name: 'Sara M.', category: 'FITNESS', views: '1.2M', initial: 'S', avatarColor: '#a18cd1', title: 'Nobody expected this workout result', duration: '0:45' },
+  { id: 'M7lc1UVf-VE', name: 'Juan Pro', category: 'GAMING', views: '4.8M', initial: 'J', avatarColor: '#84fab0', title: 'The moment that broke the internet', duration: '0:28' },
+  { id: 'V-_O7nl0Ii0', name: 'Tech Talk', category: 'TECH', views: '890k', initial: 'T', avatarColor: '#fccb90', title: 'Wait for the reaction', duration: '0:19' },
+  { id: 'LXb3EKWsInQ', name: 'Marta G.', category: 'VLOGS', views: '3.1M', initial: 'M', avatarColor: '#43e97b', title: 'This is why I use PeakClip', duration: '0:36' },
+  { id: 'jfKfPfyJRdk', name: 'Fin Libre', category: 'FINANCE', views: '540k', initial: 'F', avatarColor: '#fa709a', title: 'One tip that changed everything', duration: '0:41' },
 ]
 
 const row2Clips = [
-  { name: 'Carlos V.', category: 'MUSIC', views: '2.2M', initial: 'C' },
-  { name: 'Ana B.', category: 'LIFESTYLE', views: '780k', initial: 'A' },
-  { name: 'Mike D.', category: 'COMEDY', views: '5.1M', initial: 'M' },
-  { name: 'Luna R.', category: 'BEAUTY', views: '1.9M', initial: 'L' },
-  { name: 'Pro Clips', category: 'SPORTS', views: '3.4M', initial: 'P' },
-  { name: 'Dev Talk', category: 'TECH', views: '670k', initial: 'D' },
+  { id: 'kJQP7kiw5Fk', name: 'Carlos V.', category: 'MUSIC', views: '2.2M', initial: 'C', avatarColor: '#ff9a9e', title: 'This song went viral overnight', duration: '0:29' },
+  { id: '60ItHLz5WEA', name: 'Ana B.', category: 'LIFESTYLE', views: '780k', initial: 'A', avatarColor: '#a18cd1', title: 'Day in the life that blew up', duration: '0:33' },
+  { id: 'Rbm6GXllBiw', name: 'Mike D.', category: 'COMEDY', views: '5.1M', initial: 'M', avatarColor: '#84fab0', title: 'The punchline nobody saw coming', duration: '0:24' },
+  { id: '0e3GPea1Tyg', name: 'Luna R.', category: 'BEAUTY', views: '1.9M', initial: 'L', avatarColor: '#fccb90', title: 'This transformation is insane', duration: '0:38' },
+  { id: 'NIUqjLJ_2XY', name: 'Pro Clips', category: 'SPORTS', views: '3.4M', initial: 'P', avatarColor: '#43e97b', title: 'He did WHAT in the final second', duration: '0:27' },
+  { id: 'tAGnKpE4NCI', name: 'Dev Talk', category: 'TECH', views: '670k', initial: 'D', avatarColor: '#fa709a', title: 'Code that will blow your mind', duration: '0:35' },
 ]
 
-function ClipCard({ clip }) {
+function ClipCard({ clip, index }) {
   return (
     <div className="resultados-card" style={{
       width: 180, height: 320, flexShrink: 0,
@@ -29,33 +39,19 @@ function ClipCard({ clip }) {
       boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
       transition: 'transform 0.3s ease, box-shadow 0.3s ease',
     }}>
-      {/* Video zone */}
-      <div style={{
-        height: 224, position: 'relative', overflow: 'hidden',
-        background: 'linear-gradient(150deg, #e8e8e2, #d4d4cc 70%)',
-      }}>
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'radial-gradient(circle at 25% 25%, rgba(196,255,61,0.3), transparent 60%)',
-          pointerEvents: 'none',
-        }} />
-
-        {/* Views badge */}
-        <div style={{
-          position: 'absolute', top: 8, right: 8,
-          background: 'rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
-          borderRadius: 20, padding: '3px 8px',
-          display: 'flex', alignItems: 'center', gap: 4,
-        }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'white' }}>
-            {clip.views}
-          </span>
-        </div>
+      {/* Short video */}
+      <div style={{ height: 224, position: 'relative' }}>
+        <LazyShort
+          videoId={clip.id}
+          title={clip.title}
+          channel={clip.name}
+          initial={clip.initial}
+          avatarColor={clip.avatarColor}
+          views={clip.views}
+          duration={clip.duration}
+          gradient={gradients[index % gradients.length]}
+          style={{ width: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' }}
+        />
       </div>
 
       {/* Info zone */}
@@ -102,7 +98,7 @@ function CarouselRow({ clips, direction }) {
       animation: `${animName} ${duration} linear infinite`,
     }}>
       {doubled.map((clip, i) => (
-        <ClipCard key={`${clip.name}-${i}`} clip={clip} />
+        <ClipCard key={`${clip.name}-${i}`} clip={clip} index={i % clips.length} />
       ))}
     </div>
   )

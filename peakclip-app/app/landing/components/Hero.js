@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import LazyShort from './LazyShort'
 
 const cards = [
   {
@@ -61,119 +61,25 @@ const cards = [
 ]
 
 function ShortCard({ card }) {
-  const [active, setActive] = useState(false)
-
   return (
-    <div
+    <LazyShort
+      videoId={card.id}
+      title={card.title}
+      channel={card.channel}
+      initial={card.initial}
+      avatarColor={card.avatarColor}
+      views={card.views}
+      duration={card.duration}
+      gradient={card.gradient}
+      active
       className="hero-card"
-      onClick={() => setActive(true)}
       style={{
         width: card.w, height: card.h, flexShrink: 0,
-        borderRadius: 20, overflow: 'hidden',
-        background: '#111',
         boxShadow: '0 10px 36px rgba(0,0,0,0.13)',
         transform: `rotate(${card.r}deg) translateY(${card.y}px)`,
-        cursor: 'pointer', position: 'relative',
         transition: 'transform 0.4s cubic-bezier(.22,.68,0,1.2), box-shadow 0.4s',
       }}
-    >
-      {active && (
-        <iframe
-          src={`https://www.youtube.com/embed/${card.id}?autoplay=1&mute=1&loop=1&playlist=${card.id}&controls=0&modestbranding=1&rel=0&playsinline=1`}
-          style={{
-            position: 'absolute', top: 0, left: '50%',
-            transform: 'translateX(-50%)',
-            width: '100%', height: '100%',
-            border: 'none', zIndex: 3,
-          }}
-          title={card.title}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      )}
-
-      {/* Thumbnail facade */}
-      <div className="hero-card-thumb" style={{
-        position: 'absolute', inset: 0,
-        background: card.gradient,
-        display: 'flex', flexDirection: 'column',
-        justifyContent: 'space-between', padding: 12,
-        zIndex: active ? 0 : 2,
-      }}>
-        {/* Top row: avatar + channel, duration */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          gap: 8,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{
-              width: 26, height: 26, borderRadius: '50%',
-              background: card.avatarColor,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 800, color: '#0f0f0f',
-              flexShrink: 0,
-            }}>
-              {card.initial}
-            </div>
-            <span style={{
-              fontSize: 11, fontWeight: 700, color: 'rgba(0,0,0,0.75)',
-              textShadow: '0 1px 2px rgba(255,255,255,0.4)',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 78,
-            }}>
-              {card.channel}
-            </span>
-          </div>
-          <span style={{
-            fontSize: 10, fontWeight: 700, color: 'rgba(0,0,0,0.7)',
-            background: 'rgba(255,255,255,0.55)', borderRadius: 4,
-            padding: '2px 5px',
-          }}>
-            {card.duration}
-          </span>
-        </div>
-
-        {/* Center play */}
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%, -55%)',
-          width: 42, height: 42, borderRadius: '50%',
-          background: 'rgba(0,0,0,0.22)',
-          backdropFilter: 'blur(6px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        </div>
-
-        {/* Bottom title + stats */}
-        <div>
-          <div style={{
-            fontSize: 13, fontWeight: 900, color: '#0f0f0f',
-            lineHeight: 1.15, marginBottom: 8,
-            textShadow: '0 1px 0 rgba(255,255,255,0.35)',
-            display: '-webkit-box',
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}>
-            {card.title}
-          </div>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: 'rgba(0,0,0,0.45)', borderRadius: 8,
-            padding: '5px 8px', color: 'white', fontSize: 11, fontWeight: 700,
-            backdropFilter: 'blur(4px)',
-          }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            {card.views} views
-          </div>
-        </div>
-      </div>
-    </div>
+    />
   )
 }
 
