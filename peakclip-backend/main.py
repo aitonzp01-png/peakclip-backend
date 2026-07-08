@@ -876,7 +876,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
         visitor_data = os.environ.get('YOUTUBE_VISITOR_DATA')
 
         last_err = None
-        max_attempts = 12
+        max_attempts = 8
         proxy_disabled = False
         for attempt in range(max_attempts):
             check_deadline("download")
@@ -942,7 +942,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         [sys.executable, ytdlp_script, json.dumps(sub_opts)],
                         capture_output=True,
                         text=True,
-                        timeout=45,
+                        timeout=30,
                     )
                     if result.returncode != 0:
                         stderr_tail = (result.stderr or '')[-500:]
@@ -950,14 +950,14 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         raise Exception(f"yt-dlp exited {result.returncode}: {stderr_tail}")
                 except subprocess.TimeoutExpired as e:
                     stderr_tail = (e.stderr or '')[-300:] if hasattr(e, 'stderr') else ''
-                    print(f"yt-dlp attempt {attempt+1} timed out (45s). stderr: {stderr_tail}")
-                    raise TimeoutError(f"Download attempt {attempt+1} timed out after 45s")
+                    print(f"yt-dlp attempt {attempt+1} timed out (30s). stderr: {stderr_tail}")
+                    raise TimeoutError(f"Download attempt {attempt+1} timed out after 30s")
                 if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
                     raise Exception("File not downloaded or too small")
                 last_err = None
                 break
             except TimeoutError:
-                last_err = TimeoutError(f"Download attempt {attempt+1} timed out after 45s")
+                last_err = TimeoutError(f"Download attempt {attempt+1} timed out after 30s")
                 print(f"Download attempt {attempt+1}/{max_attempts} timed out")
                 if attempt < max_attempts - 1:
                     time.sleep(min(2 + attempt, 10))
