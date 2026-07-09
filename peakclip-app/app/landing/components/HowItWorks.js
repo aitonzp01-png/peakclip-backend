@@ -86,9 +86,8 @@ function ClipCard({ clip, index }) {
     <div className="resultados-card" style={{
       width: 180, height: 320, flexShrink: 0,
       borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
-      background: '#ffffff', border: '1px solid #e8e8e3',
-      boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
-      transition: 'transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease',
+      background: '#ffffff', border: '1px solid #e8e8e2',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
     }}>
       {/* Short video */}
       <div style={{ height: 224, position: 'relative' }}>
@@ -230,7 +229,7 @@ export default function HowItWorks() {
       </div>
 
       {/* Carousels */}
-      <div style={{ width: '100%', overflow: 'hidden', marginTop: 40 }}>
+      <div className="carousel-wrapper" style={{ width: '100%', overflow: 'hidden', marginTop: 40, position: 'relative' }}>
         <div style={{ marginBottom: 16 }}>
           <CarouselRow clips={row1Clips} direction="left" />
         </div>
@@ -272,11 +271,37 @@ export default function HowItWorks() {
           from { transform: translateX(-50%); }
           to { transform: translateX(0); }
         }
+        .carousel-row {
+          padding: 18px 0;
+          will-change: transform;
+        }
         .carousel-row:hover { animation-play-state: paused; }
+        .resultados-card {
+          transition: transform 0.35s cubic-bezier(.22,.68,0,1.2), border-color 0.35s, box-shadow 0.35s;
+        }
         .resultados-card:hover {
-          transform: scale(1.04) !important;
+          transform: scale(1.03) !important;
           border-color: ${accent} !important;
           box-shadow: 0 12px 32px rgba(255,31,31,0.14) !important;
+          z-index: 2;
+        }
+        .carousel-wrapper::before,
+        .carousel-wrapper::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          width: 80px;
+          pointer-events: none;
+          z-index: 5;
+        }
+        .carousel-wrapper::before {
+          left: 0;
+          background: linear-gradient(90deg, #f6f6f2 0%, rgba(246,246,242,0) 100%);
+        }
+        .carousel-wrapper::after {
+          right: 0;
+          background: linear-gradient(270deg, #f6f6f2 0%, rgba(246,246,242,0) 100%);
         }
         .resultados-cta:hover {
           background: #d90000;
