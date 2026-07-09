@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import LazyShort from './LazyShort'
 
 const accent = '#ff1f1f'
+const accentHover = '#d90000'
 const accentSoft = '#ffe5e5'
 
 const gradients = [
@@ -255,10 +256,13 @@ export default function HowItWorks() {
             fontWeight: 700, fontSize: 15,
             padding: '16px 32px', borderRadius: 100,
             border: 'none', cursor: 'pointer',
-            textDecoration: 'none', display: 'inline-block',
+            textDecoration: 'none', display: 'inline-flex',
+            alignItems: 'center', gap: 8,
+            position: 'relative', overflow: 'hidden',
             transition: 'transform 0.25s, box-shadow 0.25s, background 0.25s',
           }}>
-          Start free →
+          <span style={{ position: 'relative', zIndex: 1 }}>Start free</span>
+          <span className="resultados-cta-arrow" style={{ position: 'relative', zIndex: 1 }}>→</span>
         </a>
       </div>
 
@@ -304,9 +308,31 @@ export default function HowItWorks() {
           background: linear-gradient(270deg, #f6f6f2 0%, rgba(246,246,242,0) 100%);
         }
         .resultados-cta:hover {
-          background: #d90000;
+          background: ${accentHover};
           transform: scale(1.03);
-          box-shadow: 0 6px 24px rgba(255,31,31,0.30);
+          box-shadow: 0 8px 28px rgba(255,31,31,0.25);
+        }
+        .resultados-cta-arrow {
+          transition: transform 0.25s ease;
+          display: inline-block;
+        }
+        .resultados-cta:hover .resultados-cta-arrow {
+          transform: translateX(4px);
+        }
+        .resultados-cta::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 60%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+          transform: skewX(-20deg);
+          transition: left 0.5s ease;
+        }
+        .resultados-cta:hover::before {
+          left: 140%;
+          transition: left 0.6s ease;
         }
         .resultados-title.visible {
           opacity: 1 !important;

@@ -151,6 +151,27 @@ export default function Navbar() {
             transform: translateY(-1px);
             box-shadow: 0 4px 18px rgba(255,31,31,0.28);
           }
+          .navbar-cta-btn svg {
+            transition: transform 0.25s ease;
+          }
+          .navbar-cta-btn:hover svg {
+            transform: translateX(3px);
+          }
+          .navbar-cta-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 60%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+            transform: skewX(-20deg);
+            transition: left 0.5s ease;
+          }
+          .navbar-cta-btn:hover::before {
+            left: 140%;
+            transition: left 0.6s ease;
+          }
           .navbar-hamburger {
             display: none;
             align-items: center;
