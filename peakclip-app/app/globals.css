@@ -35,9 +35,8 @@
   /* Font families — mapped from next/font/google CSS variables injected in layout.tsx.
      Dashboard/editor/auth use these semantic tokens. Landing pages may override locally. */
   --font-display: var(--font-bebas-neue), 'Bebas Neue', sans-serif;
-  --font-body: var(--font-poppins), 'Poppins', sans-serif;
+  --font-body: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', monospace;
-  --font-alt: var(--font-teko), 'Teko', sans-serif;
 
   /* Legacy aliases — keep for dashboard/editor compatibility */
   --peak: var(--brand-primary);
@@ -1214,12 +1213,12 @@ body {
 }
 
 /* ── Landing Page wrapper ──
-   The new cream/lime landing overrides colors locally. Keep this wrapper neutral
-   so it never imposes the dark dashboard palette onto the landing page.
+   The redesigned landing uses a light studio background with a red playhead accent.
+   Keep this wrapper neutral so it never imposes the dark dashboard palette.
 */
 
 .landing-bg {
-  background: #f5f5f0;
+  background: #f6f6f2;
   color: #0f0f0f;
 }
 

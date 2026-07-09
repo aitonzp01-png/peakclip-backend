@@ -17,10 +17,10 @@ export default function Navbar() {
     if (!nav) return
     const onScroll = () => {
       if (window.scrollY > 20) {
-        nav.style.background = 'rgba(245,245,240,0.96)'
+        nav.style.background = 'rgba(246,246,242,0.96)'
         nav.style.boxShadow = '0 1px 16px rgba(0,0,0,0.07)'
       } else {
-        nav.style.background = 'rgba(245,245,240,0.72)'
+        nav.style.background = 'rgba(246,246,242,0.9)'
         nav.style.boxShadow = 'none'
       }
     }
@@ -46,9 +46,9 @@ export default function Navbar() {
         style={{
           position: 'fixed', top: 0, left: 0, right: 0,
           height: 64, zIndex: 100,
-          background: 'rgba(245,245,240,0.72)',
+          background: 'rgba(246,246,242,0.9)',
           backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-          borderBottom: '1px solid rgba(0,0,0,0.06)',
+          borderBottom: '1px solid #e8e8e3',
           padding: '0 40px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           animation: 'fade-in-nav 0.5s ease forwards',
@@ -63,20 +63,17 @@ export default function Navbar() {
 
         {/* Logo */}
         <a href="/" style={{
-          fontWeight: 900, fontSize: 19, letterSpacing: '-1px',
+          fontFamily: 'var(--font-display), "Bebas Neue", sans-serif',
+          fontWeight: 400, fontSize: 21, letterSpacing: '0.5px',
           textTransform: 'uppercase', color: '#0f0f0f',
           textDecoration: 'none', position: 'relative',
-          display: 'inline-block',
+          display: 'inline-flex', alignItems: 'center', gap: 6,
         }}>
-          PEAK<span style={{ position: 'relative' }}>
-            CLIP
-            <span style={{
-              content: "''", position: 'absolute', bottom: -2, left: 0, right: 0,
-              height: 3, background: '#c4ff3d', borderRadius: 2,
-              transform: 'scaleX(0)', transformOrigin: 'left',
-              animation: 'underline-in 0.6s 0.4s ease forwards',
-            }} />
-          </span>
+          PEAKCLIP
+          <span style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: '#ff1f1f', flexShrink: 0,
+          }} />
         </a>
 
         {/* Center links - hidden on mobile */}
@@ -86,7 +83,8 @@ export default function Navbar() {
           {links.map((link) => (
             <a key={link.label} href={link.href}
               style={{
-                padding: '8px 18px', fontSize: 14, color: '#6b6b72',
+                padding: '8px 18px', fontSize: 14, color: '#6b6b6b',
+                fontFamily: 'var(--font-body), Inter, sans-serif',
                 fontWeight: 500, textDecoration: 'none',
                 position: 'relative', transition: 'color 0.2s',
               }}
@@ -102,19 +100,15 @@ export default function Navbar() {
           className="navbar-cta-btn"
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            background: '#0f0f0f', color: '#f5f5f0',
+            background: '#ff1f1f', color: '#ffffff',
             padding: '10px 22px', borderRadius: 100, fontSize: 14,
+            fontFamily: 'var(--font-body), Inter, sans-serif',
             fontWeight: 700, textDecoration: 'none',
             position: 'relative', overflow: 'hidden',
             border: 'none', cursor: 'pointer',
-            transition: 'transform 0.2s, box-shadow 0.2s',
+            transition: 'transform 0.2s, background 0.2s, box-shadow 0.2s',
           }}
         >
-          <span className="cta-sweep" style={{
-            position: 'absolute', inset: 0, background: '#c4ff3d',
-            transform: 'translateX(-101%)',
-            transition: 'transform 0.32s ease', zIndex: 0,
-          }} />
           <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
             Start free
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -137,9 +131,6 @@ export default function Navbar() {
         </button>
 
         <style>{`
-          @keyframes underline-in {
-            to { transform: scaleX(1); }
-          }
           .navbar-link-item::after {
             content: '';
             position: absolute;
@@ -147,8 +138,8 @@ export default function Navbar() {
             left: 18px;
             right: 18px;
             height: 2px;
-            background: #c4ff3d;
-            border-radius: 2px;
+            background: #ff1f1f;
+            borderRadius: 2px;
             transform: scaleX(0);
             transform-origin: center;
             transition: transform 0.25s ease;
@@ -156,11 +147,10 @@ export default function Navbar() {
           .navbar-link-item:hover { color: #0f0f0f !important; }
           .navbar-link-item:hover::after { transform: scaleX(1); }
           .navbar-cta-btn:hover {
+            background: #d90000;
             transform: translateY(-1px);
-            box-shadow: 0 4px 18px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 18px rgba(255,31,31,0.28);
           }
-          .navbar-cta-btn:hover .cta-sweep { transform: translateX(0); }
-          .navbar-cta-btn:hover .cta-sweep + span { color: #0f0f0f; }
           .navbar-hamburger {
             display: none;
             align-items: center;
@@ -168,7 +158,7 @@ export default function Navbar() {
             width: 40px;
             height: 40px;
             border-radius: 10px;
-            border: 1px solid rgba(0,0,0,0.1);
+            border: 1px solid #e8e8e3;
             background: #ffffff;
             color: #0f0f0f;
             cursor: pointer;
@@ -177,10 +167,12 @@ export default function Navbar() {
             .navbar-center-links { display: none !important; }
             nav { padding: 0 20px !important; }
             .navbar-hamburger { display: flex !important; }
+            .navbar-cta-btn span { font-size: 13px; }
+            .navbar-cta-btn { padding: 9px 16px !important; }
           }
           @media (prefers-reduced-motion: reduce) {
             nav { animation: none !important; }
-            .navbar-cta-btn, .cta-sweep, .navbar-link-item::after {
+            .navbar-cta-btn, .navbar-link-item::after {
               transition: none !important;
             }
           }
@@ -195,8 +187,14 @@ export default function Navbar() {
       />
       <div className={`mobile-sheet ${menuOpen ? 'open' : ''}`}>
         <div className="mobile-sheet-header">
-          <span style={{ fontWeight: 900, fontSize: 19, letterSpacing: '-1px', textTransform: 'uppercase', color: '#0f0f0f' }}>
-            PEAK<span style={{ color: '#c4ff3d' }}>CLIP</span>
+          <span style={{
+            fontFamily: 'var(--font-display), "Bebas Neue", sans-serif',
+            fontWeight: 400, fontSize: 21, letterSpacing: '0.5px',
+            textTransform: 'uppercase', color: '#0f0f0f',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+            PEAKCLIP
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ff1f1f' }} />
           </span>
           <button
             type="button"
@@ -250,7 +248,7 @@ export default function Navbar() {
           right: 0;
           bottom: 0;
           width: min(320px, 85vw);
-          background: #f5f5f0;
+          background: #ffffff;
           box-shadow: -8px 0 40px rgba(0,0,0,0.12);
           transform: translateX(100%);
           transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -272,8 +270,8 @@ export default function Navbar() {
           width: 36px;
           height: 36px;
           border-radius: 10px;
-          border: 1px solid rgba(0,0,0,0.1);
-          background: #ffffff;
+          border: 1px solid #e8e8e3;
+          background: #f6f6f2;
           color: #0f0f0f;
           cursor: pointer;
           display: flex;
@@ -288,19 +286,21 @@ export default function Navbar() {
         .mobile-sheet-link {
           font-size: 18px;
           font-weight: 600;
+          font-family: var(--font-body), Inter, sans-serif;
           color: #0f0f0f;
           text-decoration: none;
           padding: 12px 16px;
           border-radius: 12px;
-          transition: background 0.2s;
+          transition: background 0.2s, color 0.2s;
         }
         .mobile-sheet-link:hover {
-          background: rgba(0,0,0,0.05);
+          background: #ffe5e5;
+          color: #ff1f1f;
         }
         .mobile-sheet-cta {
           margin-top: 16px;
-          background: #0f0f0f;
-          color: #f5f5f0;
+          background: #ff1f1f;
+          color: #ffffff;
           font-size: 15px;
           font-weight: 700;
           text-align: center;
@@ -310,7 +310,7 @@ export default function Navbar() {
           transition: transform 0.2s, background 0.2s;
         }
         .mobile-sheet-cta:hover {
-          background: #1f1f1f;
+          background: #d90000;
           transform: translateY(-1px);
         }
         @media (prefers-reduced-motion: reduce) {

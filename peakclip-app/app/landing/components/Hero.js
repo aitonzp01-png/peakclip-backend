@@ -2,269 +2,226 @@
 
 import LazyShort from './LazyShort'
 
-const cards = [
-  {
-    id: 'dQw4w9WgXcQ',
-    title: 'This trick went viral 😱',
-    channel: 'PeakClips',
-    initial: 'P',
-    avatarColor: '#c4ff3d',
-    views: '2.6M',
-    duration: '0:32',
-    gradient: 'linear-gradient(160deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%)',
-    r: -9, y: 20, w: 148, h: 264,
-  },
-  {
-    id: 'RlPNh_PBZb4',
-    title: 'Nobody expected this ending',
-    channel: 'Viral Cut',
-    initial: 'V',
-    avatarColor: '#60a5fa',
-    views: '1.2M',
-    duration: '0:45',
-    gradient: 'linear-gradient(160deg, #a18cd1 0%, #fbc2eb 100%)',
-    r: -3.5, y: -4, w: 148, h: 264,
-  },
-  {
-    id: '9bZkp7q19f0',
-    title: 'The moment that broke the internet',
-    channel: 'Short Kings',
-    initial: 'S',
-    avatarColor: '#f87171',
-    views: '4.8M',
-    duration: '0:28',
-    gradient: 'linear-gradient(160deg, #84fab0 0%, #8fd3f4 100%)',
-    r: 0, y: -8, w: 164, h: 292,
-  },
-  {
-    id: 'V-_O7nl0Ii0',
-    title: 'Wait for the reaction 🔥',
-    channel: 'ClipLab',
-    initial: 'C',
-    avatarColor: '#fbbf24',
-    views: '890k',
-    duration: '0:19',
-    gradient: 'linear-gradient(160deg, #fccb90 0%, #d57eeb 100%)',
-    r: 7, y: -3, w: 148, h: 264,
-  },
-  {
-    id: 'M7lc1UVf-VE',
-    title: 'This is why I use PeakClip',
-    channel: 'Creator Pro',
-    initial: 'C',
-    avatarColor: '#34d399',
-    views: '1.8M',
-    duration: '0:36',
-    gradient: 'linear-gradient(160deg, #43e97b 0%, #38f9d7 100%)',
-    r: 12, y: 16, w: 148, h: 264,
-  },
+const creators = [
+  { initial: 'M', color: '#ff1f1f' },
+  { initial: 'P', color: '#0f0f0f' },
+  { initial: 'S', color: '#6b6b6b' },
 ]
-
-function ShortCard({ card }) {
-  return (
-    <LazyShort
-      videoId={card.id}
-      title={card.title}
-      channel={card.channel}
-      initial={card.initial}
-      avatarColor={card.avatarColor}
-      views={card.views}
-      duration={card.duration}
-      gradient={card.gradient}
-      active
-      className="hero-card"
-      style={{
-        width: card.w, height: card.h, flexShrink: 0,
-        boxShadow: '0 10px 36px rgba(0,0,0,0.13)',
-        transform: `rotate(${card.r}deg) translateY(${card.y}px)`,
-        transition: 'transform 0.4s cubic-bezier(.22,.68,0,1.2), box-shadow 0.4s',
-      }}
-    />
-  )
-}
 
 export default function Hero() {
   return (
-    <section style={{
+    <section className="hero-section" style={{
       position: 'relative', minHeight: '100vh',
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center',
-      padding: '100px 24px 60px', textAlign: 'center',
-      overflow: 'hidden', background: '#f5f5f0',
+      display: 'flex', alignItems: 'center',
+      padding: '120px 80px 80px', textAlign: 'left',
+      overflow: 'hidden', background: '#f6f6f2',
     }}>
-      {/* SVG blob background */}
-      <svg width="820" height="820" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"
-        style={{
-          position: 'absolute', top: -260, left: '50%',
-          transform: 'translateX(-50%)', opacity: 0.22,
-          filter: 'blur(50px)', zIndex: 0,
-          animation: 'drift 14s ease-in-out infinite',
-        }}
-      >
-        <defs>
-          <radialGradient id="heroBlob" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#c4ff3d" stopOpacity="0.7" />
-            <stop offset="100%" stopColor="#f5f5f0" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <circle cx="300" cy="300" r="300" fill="url(#heroBlob)" />
-      </svg>
-
-      {/* Eyebrow badge */}
+      {/* Subtle background accent */}
       <div style={{
-        zIndex: 2,
-        animation: 'fade-up 0.5s 0.2s ease both',
-        display: 'inline-flex', alignItems: 'center', gap: 8,
-        background: '#ffffff', border: '1px solid #e2e2de',
-        borderRadius: 100, padding: '6px 16px',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
-        fontSize: 13, color: '#6b6b72', marginBottom: 26,
-      }}>
-        <div style={{
-          width: 6, height: 6, borderRadius: '50%',
-          background: '#22c55e',
-          animation: 'pulse-dot 1.8s ease-in-out infinite',
-        }} />
-        +2,400 clips created this week
-      </div>
+        position: 'absolute', top: '10%', right: '-10%',
+        width: '50vw', height: '50vw', borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(255,31,31,0.06) 0%, rgba(246,246,242,0) 70%)',
+        pointerEvents: 'none', zIndex: 0,
+      }} />
 
-      {/* H1 */}
-      <h1 style={{
-        zIndex: 2,
-        animation: 'fade-up 0.55s 0.3s ease both',
-        fontSize: 'clamp(42px, 7vw, 88px)',
-        fontWeight: 900, letterSpacing: '-3px',
-        lineHeight: 0.97, maxWidth: 860,
-        color: '#0f0f0f', margin: 0,
+      <div className="hero-grid" style={{
+        position: 'relative', zIndex: 2,
+        display: 'grid', gridTemplateColumns: '1fr 1fr',
+        gap: 64, alignItems: 'center', width: '100%', maxWidth: 1200, margin: '0 auto',
       }}>
-        Turn your videos into{' '}
-        <span style={{
-          fontStyle: 'italic',
-          background: '#c4ff3d',
-          color: '#0f0f0f',
-          padding: '2px 10px',
-          borderRadius: 8,
-          display: 'inline-block',
+        {/* Left column */}
+        <div className="hero-left">
+          {/* Eyebrow badge */}
+          <div style={{
+            animation: 'fade-up 0.5s 0.2s ease both',
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            background: '#ffffff', border: '1px solid #e8e8e3',
+            borderRadius: 100, padding: '6px 16px',
+            fontSize: 13, color: '#6b6b6b', marginBottom: 26,
+          }}>
+            <div style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: '#ff1f1f',
+              animation: 'pulse-dot 1.8s ease-in-out infinite',
+            }} />
+            +2,400 clips created this week
+          </div>
+
+          {/* H1 */}
+          <h1 style={{
+            animation: 'fade-up 0.55s 0.3s ease both',
+            fontFamily: 'var(--font-display), "Bebas Neue", sans-serif',
+            fontSize: 'clamp(52px, 7vw, 92px)',
+            fontWeight: 400, letterSpacing: '-0.5px',
+            lineHeight: 1.0, maxWidth: 640,
+            color: '#0f0f0f', margin: 0, textTransform: 'uppercase',
+          }}>
+            Turn long videos into{' '}
+            <span style={{
+              background: '#ff1f1f', color: '#ffffff',
+              padding: '0 14px', borderRadius: 6,
+              display: 'inline-block',
+            }}>
+              viral clips
+            </span>
+          </h1>
+
+          {/* Subtitle */}
+          <p style={{
+            animation: 'fade-up 0.55s 0.4s ease both',
+            marginTop: 24, fontSize: 17,
+            fontFamily: 'var(--font-body), Inter, sans-serif',
+            color: '#6b6b6b', maxWidth: 460,
+            lineHeight: 1.6, margin: '24px 0 0',
+          }}>
+            Upload your long content — we turn it into clips ready for TikTok, Reels and Shorts.
+          </p>
+
+          {/* Buttons */}
+          <div style={{
+            animation: 'fade-up 0.55s 0.5s ease both',
+            display: 'flex', gap: 12, marginTop: 32,
+            flexWrap: 'wrap',
+          }}>
+            <a href="/register"
+              className="hero-primary-btn"
+              style={{
+                background: '#ff1f1f', color: '#ffffff',
+                padding: '15px 28px', borderRadius: 100,
+                fontFamily: 'var(--font-body), Inter, sans-serif',
+                fontWeight: 700, fontSize: 15,
+                border: 'none', cursor: 'pointer',
+                textDecoration: 'none',
+                transition: 'transform 0.2s, background 0.2s, box-shadow 0.2s',
+              }}>
+              Create my first clip
+            </a>
+            <a href="#como-funciona"
+              className="hero-secondary-btn"
+              style={{
+                background: '#ffffff', color: '#0f0f0f',
+                padding: '15px 24px', borderRadius: 100,
+                fontFamily: 'var(--font-body), Inter, sans-serif',
+                fontWeight: 600, fontSize: 15,
+                border: '1px solid #ff1f1f', cursor: 'pointer',
+                textDecoration: 'none',
+                transition: 'border-color 0.2s, color 0.2s, background 0.2s',
+              }}>
+              See how it works
+            </a>
+          </div>
+
+          {/* Creator avatars */}
+          <div style={{
+            animation: 'fade-up 0.55s 0.6s ease both',
+            display: 'flex', alignItems: 'center', gap: 14, marginTop: 40,
+          }}>
+            <div style={{ display: 'flex', marginLeft: 4 }}>
+              {creators.map((creator, i) => (
+                <div key={i} style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  background: creator.color,
+                  color: '#ffffff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'var(--font-body), Inter, sans-serif',
+                  fontSize: 13, fontWeight: 800,
+                  border: '2px solid #f6f6f2',
+                  marginLeft: -10,
+                }}>
+                  {creator.initial}
+                </div>
+              ))}
+            </div>
+            <p style={{
+              fontSize: 14, color: '#6b6b6b',
+              fontFamily: 'var(--font-body), Inter, sans-serif',
+              margin: 0,
+            }}>
+              Used by <strong style={{ color: '#0f0f0f' }}>2,400+ creators</strong>
+            </p>
+          </div>
+        </div>
+
+        {/* Right column - single demo Short */}
+        <div className="hero-right" style={{
+          animation: 'fade-up 0.6s 0.65s ease both',
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
         }}>
-          viral clips
-        </span>
-      </h1>
-
-      {/* Subtitle */}
-      <p style={{
-        zIndex: 2,
-        animation: 'fade-up 0.55s 0.4s ease both',
-        marginTop: 20, fontSize: 17,
-        color: '#6b6b72', maxWidth: 440,
-        lineHeight: 1.5, margin: '20px 0 0',
-      }}>
-        Upload your long content — we turn it into clips ready for TikTok, Reels and Shorts.
-      </p>
-
-      {/* Buttons */}
-      <div style={{
-        zIndex: 2,
-        animation: 'fade-up 0.55s 0.5s ease both',
-        display: 'flex', gap: 12, marginTop: 32,
-        justifyContent: 'center', flexWrap: 'wrap',
-      }}>
-        <a href="/register"
-          className="hero-primary-btn"
-          style={{
-            background: '#0f0f0f', color: '#f5f5f0',
-            padding: '15px 28px', borderRadius: 100,
-            fontWeight: 700, fontSize: 15,
-            border: 'none', cursor: 'pointer',
-            textDecoration: 'none',
-            transition: 'transform 0.2s, box-shadow 0.2s',
+          <div className="hero-phone" style={{
+            width: 280, height: 498,
+            borderRadius: 36,
+            background: '#0f0f0f',
+            padding: 10,
+            boxShadow: '0 24px 60px rgba(0,0,0,0.18)',
           }}>
-          Create my first clip
-        </a>
-        <a href="#como-funciona"
-          className="hero-secondary-btn"
-          style={{
-            background: 'transparent', color: '#0f0f0f',
-            padding: '15px 24px', borderRadius: 100,
-            fontWeight: 600, fontSize: 15,
-            border: '1px solid #cececa', cursor: 'pointer',
-            textDecoration: 'none',
-            transition: 'border-color 0.2s',
-          }}>
-          See how it works
-        </a>
+            <div style={{
+              width: '100%', height: '100%',
+              borderRadius: 28, overflow: 'hidden',
+              background: '#111',
+            }}>
+              <LazyShort
+                videoId="NIUqjLJ_2XY"
+                title="I spent 7 days in..."
+                channel="MrBeast"
+                initial="M"
+                avatarColor="#ff1f1f"
+                views="12M"
+                duration="0:32"
+                gradient="linear-gradient(160deg, #ff9a9e 0%, #fecfef 100%)"
+                active
+                style={{ width: '100%', height: '100%', borderRadius: 28 }}
+              />
+            </div>
+          </div>
+        </div>
       </div>
-
-      {/* Mosaic of 5 short clips */}
-      <div className="hero-mosaic" style={{
-        zIndex: 2,
-        animation: 'fade-up 0.6s 0.65s ease both',
-        display: 'flex', gap: 14, marginTop: 60,
-        alignItems: 'center', justifyContent: 'center',
-      }}>
-        {cards.map((card) => (
-          <ShortCard key={card.id} card={card} />
-        ))}
-      </div>
-
-      {/* Trust text */}
-      <p style={{
-        zIndex: 2,
-        animation: 'fade-up 0.55s 0.75s ease both',
-        marginTop: 36, fontSize: 13, color: '#6b6b72',
-        textAlign: 'center',
-      }}>
-        Used by creators on YouTube, Twitch and Instagram
-      </p>
 
       <style>{`
-        .hero-card:hover {
-          transform: rotate(0deg) translateY(-12px) scale(1.05) !important;
-          box-shadow: 0 20px 48px rgba(0,0,0,0.22) !important;
-          z-index: 10;
-        }
         .hero-primary-btn:hover {
+          background: #d90000;
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+          box-shadow: 0 6px 20px rgba(255,31,31,0.28);
         }
         .hero-secondary-btn:hover {
-          border-color: #0f0f0f;
+          background: #ffe5e5;
+          color: #d90000;
         }
-        @media (max-width: 768px) {
-          .hero-mosaic {
-            overflow-x: auto !important;
-            scroll-behavior: smooth !important;
-            padding-bottom: 12px !important;
-            justify-content: flex-start !important;
+        @media (max-width: 900px) {
+          .hero-section {
+            padding: 100px 24px 60px !important;
+            text-align: center !important;
           }
-          section { padding: 90px 16px 48px !important; }
-          h1 { letter-spacing: -1.5px !important; }
+          .hero-grid {
+            grid-template-columns: 1fr !important;
+            gap: 48px !important;
+          }
+          .hero-left {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+          }
+          h1 {
+            letter-spacing: -0.5px !important;
+            max-width: 100% !important;
+          }
         }
-        @media (min-width: 768px) and (max-width: 1024px) {
-          .hero-card {
-            width: 130px !important;
-            height: 232px !important;
+        @media (max-width: 640px) {
+          .hero-phone {
+            width: 240px !important;
+            height: 426px !important;
           }
-          .hero-card:nth-child(3) {
-            width: 144px !important;
-            height: 258px !important;
-          }
-          h1 { letter-spacing: -2px !important; }
         }
         @media (prefers-reduced-motion: reduce) {
-          section *, section *::before, section *::after {
+          .hero-section *, .hero-section *::before, .hero-section *::after {
             animation: none !important;
             transition: none !important;
           }
-          section > svg {
-            opacity: 0.22 !important;
-            transform: translateX(-50%) !important;
+          .hero-section > div[style*="radial-gradient"] {
+            opacity: 1 !important;
           }
-          .hero-mosaic, .hero-card, h1, p, .hero-primary-btn, .hero-secondary-btn, div[style*="animation: fade-up"] {
+          .hero-left > div, .hero-left > h1, .hero-left > p, .hero-right {
             opacity: 1 !important;
             transform: none !important;
-          }
-          .hero-card {
-            transform: rotate(0deg) translateY(0) !important;
           }
         }
       `}</style>

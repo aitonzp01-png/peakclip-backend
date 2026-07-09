@@ -97,7 +97,7 @@ export default function Pricing() {
 
   return (
     <section id="precios" ref={sectionRef} style={{
-      background: '#f5f5f0', padding: '100px 24px',
+      background: '#f6f6f2', padding: '100px 24px',
       position: 'relative',
     }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -109,26 +109,29 @@ export default function Pricing() {
         }}>
           <span style={{
             fontSize: 12, fontWeight: 600, letterSpacing: 3,
-            color: '#6b6b72', textTransform: 'uppercase',
+            color: '#6b6b6b', textTransform: 'uppercase',
             display: 'block', marginBottom: 16,
           }}>
             PRICING
           </span>
           <h2 style={{
-            fontSize: 'clamp(36px,5vw,64px)', fontWeight: 900,
-            letterSpacing: -2, lineHeight: 0.97, color: '#0f0f0f',
+            fontFamily: 'var(--font-display), "Bebas Neue", sans-serif',
+            fontSize: 'clamp(44px,6vw,80px)',
+            fontWeight: 400,
+            letterSpacing: '-0.5px',
+            lineHeight: 1.05,
+            color: '#0f0f0f',
             marginBottom: 16,
           }}>
             Simple,<br />
             <span style={{
-              fontStyle: 'italic', color: '#0f0f0f',
-              background: '#c4ff3d', padding: '0 8px',
-              borderRadius: 8,
+              background: '#ff1f1f', color: '#ffffff',
+              padding: '0 10px', borderRadius: 6,
             }}>
               no surprises.
             </span>
           </h2>
-          <p style={{ fontSize: 16, color: '#6b6b72', maxWidth: 420, margin: '0 auto' }}>
+          <p style={{ fontSize: 16, color: '#6b6b6b', maxWidth: 420, margin: '0 auto', lineHeight: 1.6 }}>
             Start free. Scale when you're ready.
           </p>
         </div>
@@ -137,7 +140,7 @@ export default function Pricing() {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 48 }}>
           <div className="pricing-toggle" style={{
             display: 'inline-flex', background: '#ffffff', borderRadius: 100,
-            border: '1px solid #e8e8e2', padding: 4, position: 'relative',
+            border: '1px solid #e8e8e3', padding: 4, position: 'relative',
           }}>
             <div className="pricing-toggle-slider" style={{
               position: 'absolute', top: 4, bottom: 4,
@@ -153,7 +156,7 @@ export default function Pricing() {
                 padding: '10px 32px', borderRadius: 100, border: 'none',
                 fontSize: 14, fontWeight: 600, cursor: 'pointer',
                 background: 'transparent',
-                color: yearly ? '#6b6b72' : '#f5f5f0',
+                color: yearly ? '#6b6b6b' : '#ffffff',
                 transition: 'color 0.3s ease',
                 position: 'relative', zIndex: 1,
               }}
@@ -166,7 +169,7 @@ export default function Pricing() {
                 padding: '10px 32px', borderRadius: 100, border: 'none',
                 fontSize: 14, fontWeight: 600, cursor: 'pointer',
                 background: 'transparent',
-                color: yearly ? '#f5f5f0' : '#6b6b72',
+                color: yearly ? '#ffffff' : '#6b6b6b',
                 transition: 'color 0.3s ease',
                 position: 'relative', zIndex: 1,
               }}
@@ -174,7 +177,7 @@ export default function Pricing() {
               Yearly
               <span style={{
                 marginLeft: 6, fontSize: 10, fontWeight: 700,
-                color: yearly ? '#c4ff3d' : '#6b6b72',
+                color: yearly ? '#ff1f1f' : '#6b6b6b',
                 transition: 'color 0.3s ease',
               }}>
                 -20%
@@ -201,19 +204,19 @@ export default function Pricing() {
               <div key={plan.name} className="pricing-card-item" style={{
                 flex: '1 1 280px', maxWidth: 340, minWidth: 260,
                 display: 'flex', flexDirection: 'column',
-                background: plan.popular ? '#0f0f0f' : '#ffffff',
+                background: plan.popular ? '#ffffff' : '#ffffff',
                 borderRadius: 20,
-                border: plan.popular ? 'none' : '1px solid #e8e8e2',
+                border: plan.popular ? '2px solid #ff1f1f' : '1px solid #e8e8e3',
                 padding: 32,
                 transform: plan.popular ? 'translateY(-12px)' : 'none',
-                boxShadow: plan.popular ? '0 24px 60px rgba(0,0,0,0.18)' : '0 2px 12px rgba(0,0,0,0.04)',
+                boxShadow: plan.popular ? '0 24px 60px rgba(255,31,31,0.12)' : '0 2px 12px rgba(0,0,0,0.04)',
                 position: 'relative',
                 transition: 'transform 0.3s ease, box-shadow 0.3s ease',
               }}>
                 {plan.popular && (
                   <span style={{
                     position: 'absolute', top: 16, right: 16,
-                    background: '#c4ff3d', color: '#0f0f0f',
+                    background: '#ff1f1f', color: '#ffffff',
                     fontSize: 10, fontWeight: 800, letterSpacing: 1,
                     padding: '4px 12px', borderRadius: 100,
                   }}>
@@ -224,7 +227,7 @@ export default function Pricing() {
                 {/* Plan name */}
                 <div style={{
                   fontSize: 18, fontWeight: 800,
-                  color: plan.popular ? '#f5f5f0' : '#0f0f0f',
+                  color: plan.popular ? '#ff1f1f' : '#0f0f0f',
                   marginBottom: 8, letterSpacing: '-0.3px',
                 }}>
                   {plan.name}
@@ -239,22 +242,22 @@ export default function Pricing() {
                 }}>
                   <div style={{
                     fontSize: 42, fontWeight: 900,
-                    color: plan.popular ? '#f5f5f0' : '#0f0f0f',
+                    color: '#0f0f0f',
                     letterSpacing: -2, lineHeight: 1,
                   }}>
                     {plan.name === 'Free' ? '$0' : `$${displayPrice}`}
-                    <span style={{ fontSize: 16, fontWeight: 500, color: '#6b6b72', letterSpacing: 0 }}>{suffix}</span>
+                    <span style={{ fontSize: 16, fontWeight: 500, color: '#6b6b6b', letterSpacing: 0 }}>{suffix}</span>
                   </div>
                   {showOriginal && (
                     <>
                       <div style={{
-                        fontSize: 13, color: '#6b6b72', marginTop: 4,
+                        fontSize: 13, color: '#6b6b6b', marginTop: 4,
                         textDecoration: 'line-through',
                       }}>
                         ${monthly}/mes
                       </div>
                       <div style={{
-                        fontSize: 11, color: '#6b6b72', marginTop: 2,
+                        fontSize: 11, color: '#6b6b6b', marginTop: 2,
                       }}>
                         (${Math.round(yearlyTotal)}/año)
                       </div>
@@ -273,10 +276,10 @@ export default function Pricing() {
                     textDecoration: 'none', marginBottom: 28,
                     transition: 'all 0.25s',
                     ...(plan.popular
-                      ? { background: '#c4ff3d', color: '#0f0f0f', border: 'none' }
+                      ? { background: '#ff1f1f', color: '#ffffff', border: 'none' }
                       : plan.outline
                         ? { background: 'transparent', color: '#0f0f0f', border: '1.5px solid #0f0f0f' }
-                        : { background: '#0f0f0f', color: '#f5f5f0', border: 'none' }
+                        : { background: '#0f0f0f', color: '#ffffff', border: 'none' }
                     ),
                   }}
                 >
@@ -289,14 +292,10 @@ export default function Pricing() {
                     <div key={feat} style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       fontSize: 13,
-                      color: plan.popular ? '#d0d0d8' : '#4a4a4a',
+                      color: '#6b6b6b',
                     }}>
                       <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                        {plan.popular ? (
-                          <CheckIcon color="#c4ff3d" />
-                        ) : (
-                          <CheckIcon color="#22c55e" />
-                        )}
+                        <CheckIcon color={plan.popular ? '#ff1f1f' : '#0f0f0f'} />
                       </span>
                       {feat}
                     </div>
@@ -309,8 +308,8 @@ export default function Pricing() {
 
         {/* Trial note */}
         <p style={{
-          textAlign: 'center', fontSize: 13, color: '#6b6b72', maxWidth: 480,
-          margin: '0 auto',
+          textAlign: 'center', fontSize: 13, color: '#6b6b6b', maxWidth: 480,
+          margin: '0 auto', lineHeight: 1.6,
         }}>
           All plans include a 14-day free trial. No credit card required.
         </p>
@@ -327,18 +326,18 @@ export default function Pricing() {
         }
         .pricing-card-item[style*="translateY(-12px)"]:hover {
           transform: translateY(-16px) !important;
-          box-shadow: 0 32px 72px rgba(0,0,0,0.25) !important;
+          box-shadow: 0 32px 72px rgba(255,31,31,0.18) !important;
         }
         .pricing-cta-btn.outline:hover {
           background: #0f0f0f !important;
-          color: #f5f5f0 !important;
+          color: #ffffff !important;
         }
         .pricing-cta-btn.popular:hover {
-          background: #d4ff5a !important;
+          background: #d90000 !important;
           transform: scale(1.02);
         }
         .pricing-toggle button:focus-visible {
-          outline: 2px solid #c4ff3d;
+          outline: 2px solid #ff1f1f;
           outline-offset: 2px;
         }
         @media (max-width: 768px) {

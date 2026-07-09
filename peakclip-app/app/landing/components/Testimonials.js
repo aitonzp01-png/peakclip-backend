@@ -114,7 +114,7 @@ export default function Testimonials() {
 
   return (
     <section id="testimonios" ref={sectionRef} style={{
-      background: '#f5f5f0', padding: '100px 0',
+      background: '#f6f6f2', padding: '100px 0',
       position: 'relative', overflow: 'hidden',
     }}>
       {/* Title */}
@@ -125,29 +125,32 @@ export default function Testimonials() {
       }}>
         <span style={{
           fontSize: 12, fontWeight: 600, letterSpacing: 3,
-          color: '#6b6b72', textTransform: 'uppercase',
+          color: '#6b6b6b', textTransform: 'uppercase',
           display: 'block', marginBottom: 16,
         }}>
           REAL TESTIMONIALS
         </span>
         <h2 style={{
-          fontSize: 'clamp(36px,5vw,64px)', fontWeight: 900,
-          letterSpacing: -2, lineHeight: 0.97, color: '#0f0f0f',
+          fontFamily: 'var(--font-display), "Bebas Neue", sans-serif',
+          fontSize: 'clamp(44px,6vw,80px)',
+          fontWeight: 400,
+          letterSpacing: '-0.5px',
+          lineHeight: 1.05,
+          color: '#0f0f0f',
           marginBottom: 16,
         }}>
           What{' '}
           <span style={{
-            fontStyle: 'italic', color: '#0f0f0f',
-            background: '#c4ff3d', padding: '0 8px',
-            borderRadius: 8,
+            background: '#ff1f1f', color: '#ffffff',
+            padding: '0 10px', borderRadius: 6,
           }}>
             creators
           </span>{' '}
           say
         </h2>
         <p style={{
-          fontSize: 16, color: '#6b6b72', maxWidth: 420,
-          margin: '0 auto',
+          fontSize: 16, color: '#6b6b6b', maxWidth: 420,
+          margin: '0 auto', lineHeight: 1.6,
         }}>
           Over 2,400 creators trust PeakClip to grow their audience.
         </p>
@@ -162,25 +165,25 @@ export default function Testimonials() {
           <span style={{ fontSize: 32, fontWeight: 900, color: '#0f0f0f', display: 'block' }}>
             2,400+
           </span>
-          <span style={{ fontSize: 13, color: '#6b6b72', display: 'block', marginTop: 4 }}>
+          <span style={{ fontSize: 13, color: '#6b6b6b', display: 'block', marginTop: 4 }}>
             active creators
           </span>
         </div>
-        <div style={{ width: 1, background: '#e0e0da' }} />
+        <div style={{ width: 1, background: '#e8e8e3' }} />
         <div style={{ padding: '0 40px', textAlign: 'center' }}>
           <span style={{ fontSize: 32, fontWeight: 900, color: '#0f0f0f', display: 'block' }}>
             48M+
           </span>
-          <span style={{ fontSize: 13, color: '#6b6b72', display: 'block', marginTop: 4 }}>
+          <span style={{ fontSize: 13, color: '#6b6b6b', display: 'block', marginTop: 4 }}>
             views generated
           </span>
         </div>
-        <div style={{ width: 1, background: '#e0e0da' }} />
+        <div style={{ width: 1, background: '#e8e8e3' }} />
         <div style={{ padding: '0 40px', textAlign: 'center', paddingRight: 0 }}>
-          <span style={{ fontSize: 32, fontWeight: 900, color: '#c4ff3d', display: 'block' }}>
+          <span style={{ fontSize: 32, fontWeight: 900, color: '#ff1f1f', display: 'block' }}>
             4.9★
           </span>
-          <span style={{ fontSize: 13, color: '#6b6b72', display: 'block', marginTop: 4 }}>
+          <span style={{ fontSize: 13, color: '#6b6b6b', display: 'block', marginTop: 4 }}>
             average rating
           </span>
         </div>
@@ -199,7 +202,7 @@ export default function Testimonials() {
               maxWidth: 380, minWidth: 280,
               flexShrink: 0,
               background: '#ffffff', borderRadius: 20,
-              border: '1px solid #e8e8e2',
+              border: '1px solid #e8e8e3',
               boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
               overflow: 'hidden',
               transition: 'transform 0.3s ease, box-shadow 0.3s ease',
@@ -211,10 +214,10 @@ export default function Testimonials() {
               }}>
                 <div style={{
                   width: 48, height: 48, borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #e8e8e2, #d4d4cc)',
+                  background: '#ffe5e5',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   flexShrink: 0,
-                  fontSize: 18, fontWeight: 800, color: '#0f0f0f',
+                  fontSize: 18, fontWeight: 800, color: '#ff1f1f',
                 }}>
                   {t.initial}
                 </div>
@@ -222,14 +225,14 @@ export default function Testimonials() {
                   <div style={{ fontSize: 15, fontWeight: 700, color: '#0f0f0f' }}>
                     {t.name}
                   </div>
-                  <div style={{ fontSize: 12, color: '#6b6b72', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: '#8a8a8a', marginTop: 2 }}>
                     {t.role}
                   </div>
                 </div>
                 <span style={{
-                  background: 'rgba(196,255,61,0.15)',
-                  border: '1px solid rgba(196,255,61,0.35)',
-                  color: '#0f0f0f',
+                  background: '#ffe5e5',
+                  border: '1px solid #ffe5e5',
+                  color: '#ff1f1f',
                   borderRadius: 100, padding: '4px 10px',
                   fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
                 }}>
@@ -240,14 +243,14 @@ export default function Testimonials() {
               {/* Quote */}
               <div style={{ padding: '16px 24px 24px', position: 'relative' }}>
                 <span style={{
-                  fontSize: 40, color: '#c4ff3d',
+                  fontSize: 40, color: '#ff1f1f',
                   lineHeight: 0.6, fontFamily: 'Georgia, serif',
-                  display: 'block', marginBottom: 4, opacity: 0.6,
+                  display: 'block', marginBottom: 4, opacity: 0.4,
                 }}>
-                  "
+                  &ldquo;
                 </span>
                 <p style={{
-                  fontSize: 14, color: '#4a4a4a', lineHeight: 1.6,
+                  fontSize: 14, color: '#6b6b6b', lineHeight: 1.6,
                   fontWeight: 400, margin: 0,
                 }}>
                   {t.quote}
@@ -268,7 +271,7 @@ export default function Testimonials() {
         }
         .ts-card:hover {
           transform: translateY(-4px) !important;
-          box-shadow: 0 12px 32px rgba(0,0,0,0.1) !important;
+          box-shadow: 0 12px 32px rgba(0,0,0,0.08) !important;
         }
         .ts-title.visible {
           opacity: 1 !important;

@@ -25,40 +25,34 @@ export default function CTA() {
 
   return (
     <section ref={sectionRef} style={{
-      background: '#f5f5f0', padding: '0 80px 100px',
+      background: '#f6f6f2', padding: '0 80px 100px',
       position: 'relative',
     }}>
       <div className="cta-final-card" style={{
         maxWidth: 860, margin: '0 auto', borderRadius: 28,
         overflow: 'hidden', position: 'relative',
-        background: 'radial-gradient(ellipse at 60% 40%, #3a2a1a 0%, #1a1218 50%, #0f0d0f 100%)',
+        background: '#0f0f0f',
         padding: '72px 64px', textAlign: 'center',
         opacity: 0, transform: 'translateY(20px) scale(0.97)',
         transition: 'opacity 0.7s ease, transform 0.7s ease',
       }}>
-        {/* Blob SVG */}
-        <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"
-          style={{
-            position: 'absolute', top: -80, right: -80,
-            opacity: 0.08, filter: 'blur(80px)', pointerEvents: 'none',
-          }}
-        >
-          <defs>
-            <radialGradient id="ctaBlob" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#c4ff3d" stopOpacity="0.9" />
-              <stop offset="100%" stopColor="#c4ff3d" stopOpacity="0" />
-            </radialGradient>
-          </defs>
-          <circle cx="200" cy="200" r="200" fill="url(#ctaBlob)" />
-        </svg>
+        {/* Red glow */}
+        <div style={{
+          position: 'absolute', top: '-40%', left: '50%',
+          transform: 'translateX(-50%)',
+          width: '80%', height: '120%',
+          background: 'radial-gradient(ellipse at center, rgba(255,31,31,0.14) 0%, rgba(15,15,15,0) 70%)',
+          pointerEvents: 'none', zIndex: 0,
+        }} />
 
         <div style={{ position: 'relative', zIndex: 1 }}>
           {/* Badge */}
           <span style={{
             display: 'inline-block',
-            background: 'rgba(196,255,61,0.12)',
-            border: '1px solid rgba(196,255,61,0.25)',
-            color: '#c4ff3d', fontSize: 11, fontWeight: 700,
+            background: 'rgba(255,31,31,0.12)',
+            border: '1px solid rgba(255,31,31,0.25)',
+            color: '#ff1f1f', fontSize: 11, fontWeight: 700,
+            fontFamily: 'var(--font-body), Inter, sans-serif',
             padding: '6px 16px', borderRadius: 100,
             marginBottom: 20, letterSpacing: 1,
           }}>
@@ -67,9 +61,11 @@ export default function CTA() {
 
           {/* Title */}
           <h2 style={{
-            fontSize: 'clamp(28px,4vw,48px)', fontWeight: 900,
-            color: '#f5f5f0', marginBottom: 28, lineHeight: 1.05,
-            letterSpacing: -1.5,
+            fontFamily: 'var(--font-display), "Bebas Neue", sans-serif',
+            fontSize: 'clamp(48px, 6vw, 80px)',
+            fontWeight: 400,
+            color: '#ffffff', marginBottom: 28, lineHeight: 1.0,
+            letterSpacing: '-0.5px', textTransform: 'uppercase',
           }}>
             Start Using PeakClip
           </h2>
@@ -91,6 +87,7 @@ export default function CTA() {
 
           <p style={{
             fontSize: 12, color: 'rgba(255,255,255,0.35)',
+            fontFamily: 'var(--font-body), Inter, sans-serif',
             margin: 0,
           }}>
             No credit card · First 3 clips free
@@ -116,50 +113,52 @@ export default function CTA() {
         }
         .cta-form-input {
           flex: 1;
-          background: none;
+          background: #ffffff;
           border: none;
           padding: 16px 22px;
           font-size: 14px;
-          color: #f5f5f0;
+          color: #0f0f0f;
           outline: none;
-          font-family: inherit;
+          font-family: var(--font-body), Inter, sans-serif;
         }
         .cta-form-input::placeholder {
-          color: rgba(255,255,255,0.4);
+          color: #8a8a8a;
         }
         .cta-form-btn {
-          background: #f5f5f0;
-          color: #0f0f0f;
+          background: #ff1f1f;
+          color: #ffffff;
           border: none;
           padding: 16px 28px;
           font-weight: 700;
           font-size: 14px;
+          font-family: var(--font-body), Inter, sans-serif;
           cursor: pointer;
           white-space: nowrap;
-          font-family: inherit;
           transition: background 0.2s;
         }
         .cta-form-btn:hover {
-          background: #c4ff3d;
+          background: #d90000;
         }
         @media (max-width: 768px) {
           section {
             padding: 0 20px 60px !important;
           }
           .cta-final-card {
-            padding: 40px 24px !important;
+            padding: 48px 24px !important;
           }
           .cta-form {
             flex-direction: column;
             border-radius: 20px;
             gap: 12px;
             padding: 12px;
+            background: rgba(255,255,255,0.08);
           }
           .cta-form-input {
             width: 100%;
             box-sizing: border-box;
             text-align: center;
             padding: 14px 18px;
+            border-radius: 12px;
           }
           .cta-form-btn {
             width: 100%;

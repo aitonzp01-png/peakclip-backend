@@ -7,7 +7,7 @@ export default function LazyShort({
   title,
   channel,
   initial,
-  avatarColor,
+  avatarColor = '#ff1f1f',
   views,
   duration,
   gradient,

@@ -3,31 +3,82 @@
 import { useEffect, useRef } from 'react'
 import LazyShort from './LazyShort'
 
+const accent = '#ff1f1f'
+const accentSoft = '#ffe5e5'
+
 const gradients = [
-  'linear-gradient(160deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%)',
-  'linear-gradient(160deg, #a18cd1 0%, #fbc2eb 100%)',
-  'linear-gradient(160deg, #84fab0 0%, #8fd3f4 100%)',
-  'linear-gradient(160deg, #fccb90 0%, #d57eeb 100%)',
-  'linear-gradient(160deg, #43e97b 0%, #38f9d7 100%)',
-  'linear-gradient(160deg, #fa709a 0%, #fee140 100%)',
+  'linear-gradient(160deg, #ffe5e5 0%, #fff0f0 100%)',
+  'linear-gradient(160deg, #f6f6f2 0%, #e8e8e3 100%)',
+  'linear-gradient(160deg, #ffd6d6 0%, #fff5f5 100%)',
+  'linear-gradient(160deg, #f0f0ea 0%, #ffffff 100%)',
+  'linear-gradient(160deg, #ffcece 0%, #fffafa 100%)',
+  'linear-gradient(160deg, #e8e8e3 0%, #f6f6f2 100%)',
 ]
 
 const row1Clips = [
-  { id: 'dQw4w9WgXcQ', name: 'Alex R.', category: 'PODCAST', views: '2.6M', initial: 'A', avatarColor: '#ff9a9e', title: 'This podcast clip broke the internet', duration: '0:32' },
-  { id: '9bZkp7q19f0', name: 'Sara M.', category: 'FITNESS', views: '1.2M', initial: 'S', avatarColor: '#a18cd1', title: 'Nobody expected this workout result', duration: '0:45' },
-  { id: 'M7lc1UVf-VE', name: 'Juan Pro', category: 'GAMING', views: '4.8M', initial: 'J', avatarColor: '#84fab0', title: 'The moment that broke the internet', duration: '0:28' },
-  { id: 'V-_O7nl0Ii0', name: 'Tech Talk', category: 'TECH', views: '890k', initial: 'T', avatarColor: '#fccb90', title: 'Wait for the reaction', duration: '0:19' },
-  { id: 'LXb3EKWsInQ', name: 'Marta G.', category: 'VLOGS', views: '3.1M', initial: 'M', avatarColor: '#43e97b', title: 'This is why I use PeakClip', duration: '0:36' },
-  { id: 'jfKfPfyJRdk', name: 'Fin Libre', category: 'FINANCE', views: '540k', initial: 'F', avatarColor: '#fa709a', title: 'One tip that changed everything', duration: '0:41' },
+  {
+    id: 'NIUqjLJ_2XY',
+    name: 'MrBeast Clips',
+    category: 'ENTERTAINMENT',
+    views: '12M',
+    initial: 'M',
+    avatarColor: '#ff1f1f',
+    title: 'I survived 24 hours in Antarctica',
+    duration: '0:32',
+  },
+  {
+    id: 'M7lc1UVf-VE',
+    name: 'Creator Academy',
+    category: 'TUTORIAL',
+    views: '3.2M',
+    initial: 'C',
+    avatarColor: '#0f0f0f',
+    title: 'How I edit viral shorts in 5 minutes',
+    duration: '0:45',
+  },
+  {
+    id: 'V-_O7nl0Ii0',
+    name: 'Tech Reacts',
+    category: 'REACTION',
+    views: '5.8M',
+    initial: 'T',
+    avatarColor: '#6b6b6b',
+    title: 'Reacting to the craziest phone ever',
+    duration: '0:28',
+  },
 ]
 
 const row2Clips = [
-  { id: 'kJQP7kiw5Fk', name: 'Carlos V.', category: 'MUSIC', views: '2.2M', initial: 'C', avatarColor: '#ff9a9e', title: 'This song went viral overnight', duration: '0:29' },
-  { id: '60ItHLz5WEA', name: 'Ana B.', category: 'LIFESTYLE', views: '780k', initial: 'A', avatarColor: '#a18cd1', title: 'Day in the life that blew up', duration: '0:33' },
-  { id: 'Rbm6GXllBiw', name: 'Mike D.', category: 'COMEDY', views: '5.1M', initial: 'M', avatarColor: '#84fab0', title: 'The punchline nobody saw coming', duration: '0:24' },
-  { id: '0e3GPea1Tyg', name: 'Luna R.', category: 'BEAUTY', views: '1.9M', initial: 'L', avatarColor: '#fccb90', title: 'This transformation is insane', duration: '0:38' },
-  { id: 'NIUqjLJ_2XY', name: 'Pro Clips', category: 'SPORTS', views: '3.4M', initial: 'P', avatarColor: '#43e97b', title: 'He did WHAT in the final second', duration: '0:27' },
-  { id: 'tAGnKpE4NCI', name: 'Dev Talk', category: 'TECH', views: '670k', initial: 'D', avatarColor: '#fa709a', title: 'Code that will blow your mind', duration: '0:35' },
+  {
+    id: '0e3GPea1Tyg',
+    name: 'Viral Pets',
+    category: 'ANIMALS',
+    views: '8.1M',
+    initial: 'V',
+    avatarColor: '#d90000',
+    title: 'This cat saved his owner at 3am',
+    duration: '0:19',
+  },
+  {
+    id: 'LXb3EKWsInQ',
+    name: 'Travel Shorts',
+    category: 'TRAVEL',
+    views: '4.5M',
+    initial: 'T',
+    avatarColor: '#ff1f1f',
+    title: 'The place that does not feel real',
+    duration: '0:36',
+  },
+  {
+    id: 'pJ8HV3HmX9U',
+    name: 'Edit Pro',
+    category: 'CREATOR',
+    views: '2.9M',
+    initial: 'E',
+    avatarColor: '#0f0f0f',
+    title: 'The editing trick everyone uses now',
+    duration: '0:41',
+  },
 ]
 
 function ClipCard({ clip, index }) {
@@ -35,9 +86,9 @@ function ClipCard({ clip, index }) {
     <div className="resultados-card" style={{
       width: 180, height: 320, flexShrink: 0,
       borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
-      background: '#ffffff', border: '1px solid #e8e8e2',
-      boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+      background: '#ffffff', border: '1px solid #e8e8e3',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.05)',
+      transition: 'transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease',
     }}>
       {/* Short video */}
       <div style={{ height: 224, position: 'relative' }}>
@@ -63,9 +114,10 @@ function ClipCard({ clip, index }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{
             width: 32, height: 32, borderRadius: '50%',
-            background: '#f0f0ea',
+            background: clip.avatarColor || '#f6f6f2',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 700, color: '#6b6b72', flexShrink: 0,
+            fontSize: 14, fontWeight: 700, color: '#ffffff', flexShrink: 0,
+            border: '1px solid #e8e8e3',
           }}>
             {clip.initial}
           </div>
@@ -77,8 +129,13 @@ function ClipCard({ clip, index }) {
           </span>
         </div>
         <span style={{
-          fontSize: 11, fontWeight: 600, color: '#c4ff3d',
+          fontSize: 11, fontWeight: 700,
+          color: accent,
           textTransform: 'uppercase', letterSpacing: '0.5px',
+          background: accentSoft,
+          borderRadius: 4,
+          padding: '2px 6px',
+          width: 'fit-content',
         }}>
           {clip.category}
         </span>
@@ -88,9 +145,9 @@ function ClipCard({ clip, index }) {
 }
 
 function CarouselRow({ clips, direction }) {
-  const doubled = [...clips, ...clips]
+  const doubled = [...clips, ...clips, ...clips, ...clips]
   const animName = direction === 'left' ? 'scroll-left' : 'scroll-right'
-  const duration = direction === 'left' ? '28s' : '22s'
+  const duration = direction === 'left' ? '32s' : '26s'
 
   return (
     <div className="carousel-row" style={{
@@ -127,7 +184,7 @@ export default function HowItWorks() {
 
   return (
     <section id="resultados" ref={sectionRef} style={{
-      background: '#f5f5f0', padding: '100px 0',
+      background: '#f6f6f2', padding: '100px 0',
       position: 'relative',
     }}>
       {/* Title */}
@@ -138,28 +195,34 @@ export default function HowItWorks() {
       }}>
         <span style={{
           fontSize: 12, fontWeight: 600, letterSpacing: 3,
-          color: '#6b6b72', textTransform: 'uppercase',
+          color: '#6b6b6b', textTransform: 'uppercase',
           display: 'block', marginBottom: 16,
         }}>
           RESULTS
         </span>
         <h2 style={{
-          fontSize: 'clamp(40px,6vw,72px)', fontWeight: 900,
-          letterSpacing: -2, lineHeight: 0.97, color: '#0f0f0f',
+          fontFamily: 'Bebas Neue, Inter, sans-serif',
+          fontSize: 'clamp(40px, 6vw, 72px)',
+          fontWeight: 400,
+          letterSpacing: '-0.5px',
+          lineHeight: 1.05,
+          color: '#0f0f0f',
           marginBottom: 16,
         }}>
           Content that<br />
           actually{' '}
           <span style={{
-            fontStyle: 'italic', color: '#0f0f0f',
-            background: '#c4ff3d', padding: '0 8px',
+            color: '#ffffff',
+            background: accent,
+            padding: '0 10px',
             borderRadius: 8,
+            display: 'inline-block',
           }}>
             works.
           </span>
         </h2>
         <p style={{
-          fontSize: 16, color: '#6b6b72', maxWidth: 420,
+          fontSize: 16, color: '#6b6b6b', maxWidth: 420,
           margin: '0 auto',
         }}>
           Real clips generated by PeakClip with millions of views.
@@ -181,7 +244,7 @@ export default function HowItWorks() {
         textAlign: 'center', marginTop: 48, padding: '0 24px',
       }}>
         <span style={{
-          fontSize: 14, color: '#6b6b72', display: 'block',
+          fontSize: 14, color: '#6b6b6b', display: 'block',
           marginBottom: 16,
         }}>
           Want your videos to reach millions of people?
@@ -189,12 +252,12 @@ export default function HowItWorks() {
         <a href="/register"
           className="resultados-cta"
           style={{
-            background: '#c4ff3d', color: '#0f0f0f',
+            background: accent, color: '#ffffff',
             fontWeight: 700, fontSize: 15,
             padding: '16px 32px', borderRadius: 100,
             border: 'none', cursor: 'pointer',
             textDecoration: 'none', display: 'inline-block',
-            transition: 'transform 0.25s, box-shadow 0.25s',
+            transition: 'transform 0.25s, box-shadow 0.25s, background 0.25s',
           }}>
           Start free →
         </a>
@@ -212,11 +275,13 @@ export default function HowItWorks() {
         .carousel-row:hover { animation-play-state: paused; }
         .resultados-card:hover {
           transform: scale(1.04) !important;
-          box-shadow: 0 12px 32px rgba(0,0,0,0.14) !important;
+          border-color: ${accent} !important;
+          box-shadow: 0 12px 32px rgba(255,31,31,0.14) !important;
         }
         .resultados-cta:hover {
+          background: #d90000;
           transform: scale(1.03);
-          box-shadow: 0 6px 24px rgba(196,255,61,0.35);
+          box-shadow: 0 6px 24px rgba(255,31,31,0.30);
         }
         .resultados-title.visible {
           opacity: 1 !important;
@@ -238,7 +303,7 @@ export default function HowItWorks() {
           section#resultados { padding: 60px 0 !important; }
           section#resultados h2 {
             font-size: clamp(32px,8vw,48px) !important;
-            letter-spacing: -1.5px !important;
+            letter-spacing: -0.5px !important;
           }
           .resultados-cta {
             display: block !important;

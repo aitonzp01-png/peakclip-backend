@@ -74,25 +74,29 @@ export default function Footer() {
 
   return (
     <footer style={{
-      background: '#f5f5f0', borderTop: '1px solid rgba(0,0,0,0.06)',
+      background: '#f6f6f2', borderTop: '1px solid #e8e8e3',
       padding: '60px 80px 40px',
+      fontFamily: 'var(--font-body), Inter, sans-serif',
     }}>
       <div className="footer-grid" style={{
         display: 'grid',
+        gridTemplateColumns: '1.5fr repeat(3, 1fr)',
         gap: 40, marginBottom: 48,
       }}>
         {/* Brand column */}
         <div>
           <div style={{
-            fontWeight: 900, fontSize: 19, letterSpacing: '-1px',
+            fontFamily: 'var(--font-display), "Bebas Neue", sans-serif',
+            fontWeight: 400, fontSize: 22, letterSpacing: '0.5px',
             textTransform: 'uppercase', color: '#0f0f0f',
-            marginBottom: 16,
+            marginBottom: 16, display: 'inline-flex', alignItems: 'center', gap: 6,
           }}>
             PEAKCLIP
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ff1f1f' }} />
           </div>
           <p style={{
-            fontSize: 13, color: '#4a4a4a', lineHeight: 1.6,
-            maxWidth: 220, marginBottom: 20,
+            fontSize: 13, color: '#6b6b6b', lineHeight: 1.6,
+            maxWidth: 240, marginBottom: 20,
           }}>
             Turn your long content into viral clips with AI. The tool creators use to grow.
           </p>
@@ -104,10 +108,11 @@ export default function Footer() {
                 className="footer-social-icon"
                 style={{
                   width: 36, height: 36, borderRadius: '50%',
-                  background: 'rgba(0,0,0,0.06)',
+                  background: '#ffffff',
+                  border: '1px solid #e8e8e3',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#4a4a4a', textDecoration: 'none',
-                  transition: 'background 0.2s, color 0.2s',
+                  color: '#6b6b6b', textDecoration: 'none',
+                  transition: 'background 0.2s, color 0.2s, border-color 0.2s',
                 }}
               >
                 {social.svg}
@@ -131,7 +136,7 @@ export default function Footer() {
                 <a key={link.label} href={link.href}
                   className="footer-link-item"
                   style={{
-                    fontSize: 14, color: '#4a4a4a', textDecoration: 'none',
+                    fontSize: 14, color: '#6b6b6b', textDecoration: 'none',
                     padding: '5px 0', display: 'block',
                     transition: 'color 0.2s',
                   }}
@@ -146,25 +151,47 @@ export default function Footer() {
 
       {/* Bottom bar */}
       <div className="footer-bottom" style={{
-        borderTop: '1px solid rgba(0,0,0,0.06)',
+        borderTop: '1px solid #e8e8e3',
         paddingTop: 24, display: 'flex',
         justifyContent: 'space-between', alignItems: 'center',
+        flexWrap: 'wrap', gap: 12,
       }}>
-        <span style={{ fontSize: 12, color: '#4a4a4a' }}>
+        <span style={{ fontSize: 12, color: '#8a8a8a' }}>
           © 2025 PeakClip. All rights reserved.
         </span>
-        <span style={{ fontSize: 12, color: '#4a4a4a' }}>
-          Made with <span style={{ color: '#c4ff3d' }}>♥</span> for creators
+        <span style={{ fontSize: 12, color: '#8a8a8a' }}>
+          Made with <span style={{ color: '#ff1f1f' }}>♥</span> for creators
         </span>
       </div>
 
       <style>{`
         .footer-social-icon:hover {
-          background: #c4ff3d !important;
-          color: #0f0f0f !important;
+          background: #ff1f1f !important;
+          border-color: #ff1f1f !important;
+          color: #ffffff !important;
         }
         .footer-link-item:hover {
-          color: #0f0f0f !important;
+          color: #ff1f1f !important;
+        }
+        @media (max-width: 900px) {
+          footer { padding: 48px 40px 32px !important; }
+          .footer-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+          .footer-grid > div:first-child {
+            grid-column: 1 / -1;
+          }
+        }
+        @media (max-width: 640px) {
+          footer { padding: 40px 24px 32px !important; }
+          .footer-grid {
+            grid-template-columns: 1fr !important;
+            gap: 32px !important;
+          }
+          .footer-bottom {
+            flex-direction: column;
+            align-items: flex-start !important;
+          }
         }
       `}</style>
     </footer>
