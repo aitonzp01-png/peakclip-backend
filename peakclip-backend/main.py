@@ -1100,9 +1100,15 @@ def process_video_background(job_id: str, user_id: str, url: str):
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
         # Extract audio at low bitrate to stay under Whisper's 25MB limit
-        subprocess.run([
+        ffmpeg_result = subprocess.run([
             'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '24k', audio_path, '-y'
         ], capture_output=True, timeout=300)
+        if ffmpeg_result.returncode != 0:
+            stderr = (ffmpeg_result.stderr or b'').decode('utf-8', 'ignore')[-500:]
+            raise Exception(f"ffmpeg audio extraction failed: {stderr}")
+        if not os.path.exists(audio_path) or os.path.getsize(audio_path) < 1024:
+            raise Exception("Extracted audio file is missing or empty")
+        print(f"Job {job_id}: audio extracted ({os.path.getsize(audio_path)} bytes)")
 
         # Generate a thumbnail for the source video
         thumb_path = f"thumbnails/{job_id}.jpg"
@@ -1111,14 +1117,18 @@ def process_video_background(job_id: str, user_id: str, url: str):
 
         check_deadline("transcription")
         jobs_store[job_id] = {"status": "processing", "message": "Transcribing audio..."}
-        with open(audio_path, 'rb') as f:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=f,
-                response_format="verbose_json",
-                timestamp_granularities=["word", "segment"],
-                timeout=300,
-            )
+        try:
+            with open(audio_path, 'rb') as f:
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=f,
+                    response_format="verbose_json",
+                    timestamp_granularities=["word", "segment"],
+                    timeout=300,
+                )
+        except Exception as e:
+            print(f"Job {job_id}: Whisper transcription failed: {e}")
+            raise Exception(f"Transcription failed: {e}")
 
         words_data = []
         if hasattr(transcript, 'words') and transcript.words:
@@ -1716,9 +1726,15 @@ async def upload_video(
 
     jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
 
-    subprocess.run([
+    ffmpeg_result = subprocess.run([
         'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '24k', audio_path, '-y'
-    ], capture_output=True)
+    ], capture_output=True, timeout=300)
+    if ffmpeg_result.returncode != 0:
+        stderr = (ffmpeg_result.stderr or b'').decode('utf-8', 'ignore')[-500:]
+        raise Exception(f"ffmpeg audio extraction failed: {stderr}")
+    if not os.path.exists(audio_path) or os.path.getsize(audio_path) < 1024:
+        raise Exception("Extracted audio file is missing or empty")
+    print(f"UPLOAD {job_id}: audio extracted ({os.path.getsize(audio_path)} bytes)")
 
     thumb_path = f"thumbnails/{job_id}.jpg"
     generate_thumbnail(video_path, thumb_path)
@@ -1726,13 +1742,18 @@ async def upload_video(
 
     jobs_store[job_id] = {"status": "processing", "message": "Transcribing audio..."}
 
-    with open(audio_path, 'rb') as f:
-        transcript = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=f,
-            response_format="verbose_json",
-            timestamp_granularities=["word", "segment"]
-        )
+    try:
+        with open(audio_path, 'rb') as f:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+                response_format="verbose_json",
+                timestamp_granularities=["word", "segment"],
+                timeout=300,
+            )
+    except Exception as e:
+        print(f"UPLOAD {job_id}: Whisper transcription failed: {e}")
+        raise Exception(f"Transcription failed: {e}")
 
     words_data = []
     if hasattr(transcript, 'words') and transcript.words:
