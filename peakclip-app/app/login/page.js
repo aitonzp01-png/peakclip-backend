@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import AuthLayout from '../auth/AuthLayout';
 import { getSupabaseClient } from '../../lib/supabase';
 import '../auth/auth.css';
@@ -8,6 +9,8 @@ import '../auth/auth.css';
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [form, setForm] = useState({ email: '', password: '' });
+  const router = useRouter();
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -20,6 +23,31 @@ export default function Login() {
     setLoading(false);
   };
 
+  const handleEmailLogin = async (e) => {
+    e.preventDefault();
+    setMessage({ type: '', text: '' });
+
+    if (!form.email || !form.password) {
+      setMessage({ type: 'error', text: 'Introduce correo y contraseña.' });
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await getSupabaseClient().auth.signInWithPassword({
+      email: form.email,
+      password: form.password,
+    });
+
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+      setLoading(false);
+      return;
+    }
+
+    router.replace('/dashboard');
+    setLoading(false);
+  };
+
   return (
     <AuthLayout>
       <motion.div
@@ -28,7 +56,7 @@ export default function Login() {
         transition={{ duration: 0.4, ease: 'easeOut' }}
         className="auth-card"
       >
-        <h2 className="auth-title">Bienvenido de nuevo a PeakClip</h2>
+        <h2 className="auth-title">BIENVENIDO DE NUEVO</h2>
         <p className="auth-subtitle">Inicia sesión para acceder a tus clips.</p>
 
         <button onClick={handleGoogleLogin} disabled={loading} className="google-btn">
@@ -43,20 +71,31 @@ export default function Login() {
 
         <div className="auth-separator">
           <div className="line" />
-          <span className="text">o continúa con correo electrónico</span>
+          <span className="text">o inicia sesión con correo</span>
           <div className="line" />
         </div>
 
-        <div style={{ position: 'relative', marginBottom: 16 }}>
+        <form onSubmit={handleEmailLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <input
-            disabled
-            placeholder="Introduce tu dirección de correo electrónico"
+            type="email"
+            required
+            placeholder="Correo electrónico"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
             className="email-input"
           />
-          <span className="email-badge">Próximamente</span>
-        </div>
-
-        <button disabled className="email-btn">Continuar con correo electrónico</button>
+          <input
+            type="password"
+            required
+            placeholder="Contraseña"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            className="email-input"
+          />
+          <button type="submit" disabled={loading} className="email-btn active">
+            {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+          </button>
+        </form>
 
         <p className="auth-legal">
           Al continuar, aceptas los <a href="/terms">Términos de servicio</a> y la <a href="/privacy">Política de privacidad</a>.
