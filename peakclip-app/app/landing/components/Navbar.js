@@ -111,7 +111,7 @@ export default function Navbar() {
         >
           <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
             Start free
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="navbar-cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
           </span>
@@ -154,6 +154,18 @@ export default function Navbar() {
             transform: translateY(-1px);
             box-shadow: 0 6px 24px rgba(255,31,31,0.32);
             animation: none;
+          }
+          .navbar-cta-btn,
+          .navbar-cta-btn:visited,
+          .navbar-cta-btn:active {
+            color: #ffffff;
+          }
+          .navbar-cta-btn svg,
+          .navbar-cta-btn:visited svg,
+          .navbar-cta-btn:hover svg,
+          .navbar-cta-btn:active svg {
+            stroke: #ffffff;
+            color: #ffffff;
           }
           .navbar-cta-btn svg {
             transition: transform 0.25s ease;
