@@ -28,7 +28,7 @@ export default function Login() {
     setMessage({ type: '', text: '' });
 
     if (!form.email || !form.password) {
-      setMessage({ type: 'error', text: 'Introduce correo y contraseña.' });
+      setMessage({ type: 'error', text: 'Enter email and password.' });
       return;
     }
 
@@ -56,8 +56,8 @@ export default function Login() {
         transition={{ duration: 0.4, ease: 'easeOut' }}
         className="auth-card"
       >
-        <h2 className="auth-title">BIENVENIDO DE NUEVO</h2>
-        <p className="auth-subtitle">Inicia sesión para acceder a tus clips.</p>
+        <h2 className="auth-title">WELCOME BACK</h2>
+        <p className="auth-subtitle">Sign in to access your clips.</p>
 
         <button onClick={handleGoogleLogin} disabled={loading} className="google-btn">
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -66,12 +66,12 @@ export default function Login() {
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
-          Continuar con Google
+          Continue with Google
         </button>
 
         <div className="auth-separator">
           <div className="line" />
-          <span className="text">o inicia sesión con correo</span>
+          <span className="text">or sign in with email</span>
           <div className="line" />
         </div>
 
@@ -79,7 +79,7 @@ export default function Login() {
           <input
             type="email"
             required
-            placeholder="Correo electrónico"
+            placeholder="Email address"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             className="email-input"
@@ -87,22 +87,22 @@ export default function Login() {
           <input
             type="password"
             required
-            placeholder="Contraseña"
+            placeholder="Password"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             className="email-input"
           />
           <button type="submit" disabled={loading} className="email-btn active">
-            {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
 
         <p className="auth-legal">
-          Al continuar, aceptas los <a href="/terms">Términos de servicio</a> y la <a href="/privacy">Política de privacidad</a>.
+          By continuing, you agree to the <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a>.
         </p>
 
         <p className="auth-switch">
-          ¿No tienes cuenta? <a href="/register">Regístrate gratis</a>
+          Don't have an account? <a href="/register">Sign up free</a>
         </p>
 
         {message.text && (

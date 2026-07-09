@@ -43,15 +43,15 @@ export default function Register() {
     setMessage({ type: '', text: '' });
 
     if (!form.email || !form.password) {
-      setMessage({ type: 'error', text: 'Introduce correo y contraseña.' });
+      setMessage({ type: 'error', text: 'Enter email and password.' });
       return;
     }
     if (form.password.length < 6) {
-      setMessage({ type: 'error', text: 'La contraseña debe tener al menos 6 caracteres.' });
+      setMessage({ type: 'error', text: 'Password must be at least 6 characters.' });
       return;
     }
     if (form.password !== form.confirmPassword) {
-      setMessage({ type: 'error', text: 'Las contraseñas no coinciden.' });
+      setMessage({ type: 'error', text: 'Passwords do not match.' });
       return;
     }
 
@@ -99,8 +99,8 @@ export default function Register() {
         transition={{ duration: 0.4, ease: 'easeOut' }}
         className="auth-card"
       >
-        <h2 className="auth-title">CREA TU CUENTA</h2>
-        <p className="auth-subtitle">Regístrate gratis y empieza a crear clips virales.</p>
+        <h2 className="auth-title">CREATE YOUR ACCOUNT</h2>
+        <p className="auth-subtitle">Sign up free and start creating viral clips.</p>
 
         <button onClick={handleGoogleLogin} disabled={loading} className="google-btn">
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -109,12 +109,12 @@ export default function Register() {
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
-          Continuar con Google
+          Continue with Google
         </button>
 
         <div className="auth-separator">
           <div className="line" />
-          <span className="text">o regístrate con correo</span>
+          <span className="text">or sign up with email</span>
           <div className="line" />
         </div>
 
@@ -122,7 +122,7 @@ export default function Register() {
           <input
             type="email"
             required
-            placeholder="Correo electrónico"
+            placeholder="Email address"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             className="email-input"
@@ -131,7 +131,7 @@ export default function Register() {
             type="password"
             required
             minLength={6}
-            placeholder="Contraseña"
+            placeholder="Password"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             className="email-input"
@@ -140,22 +140,22 @@ export default function Register() {
             type="password"
             required
             minLength={6}
-            placeholder="Repite la contraseña"
+            placeholder="Repeat password"
             value={form.confirmPassword}
             onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
             className="email-input"
           />
           <button type="submit" disabled={loading} className="email-btn active">
-            {loading ? 'Creando cuenta...' : 'Crear cuenta gratis'}
+            {loading ? 'Creating account...' : 'Create free account'}
           </button>
         </form>
 
         <p className="auth-legal">
-          Al continuar, aceptas los <a href="/terms">Términos de servicio</a> y la <a href="/privacy">Política de privacidad</a>.
+          By continuing, you agree to the <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a>.
         </p>
 
         <p className="auth-switch">
-          ¿Ya tienes una cuenta? <a href="/login">Inicia sesión →</a>
+          Already have an account? <a href="/login">Sign in →</a>
         </p>
 
         {message.text && (
