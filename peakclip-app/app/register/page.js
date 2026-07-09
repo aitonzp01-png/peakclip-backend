@@ -23,7 +23,7 @@ export default function Register() {
   };
 
   return (
-    <AuthLayout skipRedirect={true}>
+    <AuthLayout>
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}

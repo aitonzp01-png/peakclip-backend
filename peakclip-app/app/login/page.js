@@ -1,7 +1,6 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useRouter } from 'next/navigation';
 import AuthLayout from '../auth/AuthLayout';
 import { getSupabaseClient } from '../../lib/supabase';
 import '../auth/auth.css';
@@ -9,7 +8,6 @@ import '../auth/auth.css';
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const router = useRouter();
 
   const handleGoogleLogin = async () => {
     setLoading(true);
