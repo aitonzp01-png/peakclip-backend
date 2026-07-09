@@ -4,8 +4,8 @@ import LazyShort from './LazyShort'
 
 const creators = [
   { initial: 'M', color: '#ff1f1f' },
-  { initial: 'P', color: '#0f0f0f' },
-  { initial: 'S', color: '#6b6b6b' },
+  { initial: 'S', color: '#0f0f0f' },
+  { initial: 'D', color: '#6b6b6b' },
 ]
 
 export default function Hero() {
@@ -160,13 +160,13 @@ export default function Hero() {
               background: '#111',
             }}>
               <LazyShort
-                videoId="NIUqjLJ_2XY"
-                title="I spent 7 days in..."
+                videoId="DvkTX-AquQo"
+                title="Impossible 0.00001% Odds!"
                 channel="MrBeast"
                 initial="M"
                 avatarColor="#ff1f1f"
-                views="12M"
-                duration="0:32"
+                views="15M"
+                duration="0:45"
                 gradient="linear-gradient(160deg, #ff9a9e 0%, #fecfef 100%)"
                 active
                 style={{ width: '100%', height: '100%', borderRadius: 28 }}
