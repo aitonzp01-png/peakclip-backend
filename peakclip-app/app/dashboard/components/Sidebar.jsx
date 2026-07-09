@@ -33,10 +33,10 @@ export default function Sidebar({
       <aside className={`db-sidebar ${sidebarOpen ? 'open' : ''}`}>
         {/* LOGO */}
         <a href="/dashboard" onClick={(e) => handleTabClick('generate', e)} className="db-logo">
-          PEAK<span>CLIP</span>
+          PEAK<span>CLIP</span><span className="db-logo-dot" />
         </a>
 
-        {/* BADGE DE PLAN */}
+        {/* PLAN BADGE */}
         <div className="db-plan-badge">
           {planFormatted}
           {plan?.toLowerCase() === 'free' && (
@@ -46,8 +46,8 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* SECCIÓN CREAR */}
-        <div className="db-section-label">CREAR</div>
+        {/* CREATE SECTION */}
+        <div className="db-section-label">CREATE</div>
         
         <button
           onClick={(e) => handleTabClick('generate', e)}
@@ -57,7 +57,7 @@ export default function Sidebar({
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
             <polyline points="9 22 9 12 15 12 15 22" />
           </svg>
-          Inicio
+          Home
         </button>
 
         <button
@@ -69,7 +69,7 @@ export default function Sidebar({
             <line x1="12" y1="8" x2="12" y2="16" />
             <line x1="8" y1="12" x2="16" y2="12" />
           </svg>
-          Nueva campaña
+          New campaign
         </button>
 
         <button
@@ -80,11 +80,11 @@ export default function Sidebar({
             <rect x="2" y="2" width="20" height="20" rx="3" />
             <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none" />
           </svg>
-          Mis clips
+          My clips
         </button>
 
-        {/* SECCIÓN PUBLICAR */}
-        <div className="db-section-label">PUBLICAR</div>
+        {/* PUBLISH SECTION */}
+        <div className="db-section-label">PUBLISH</div>
 
         <button
           onClick={(e) => handleTabClick('calendar', e)}
@@ -96,8 +96,8 @@ export default function Sidebar({
             <line x1="8" y1="2" x2="8" y2="6" />
             <line x1="3" y1="10" x2="21" y2="10" />
           </svg>
-          Calendario
-          <span className="db-nav-badge">Próx.</span>
+          Calendar
+          <span className="db-nav-badge">Soon</span>
         </button>
 
         <button
@@ -109,8 +109,8 @@ export default function Sidebar({
             <line x1="12" y1="20" x2="12" y2="4" />
             <line x1="6" y1="20" x2="6" y2="14" />
           </svg>
-          Analíticas
-          <span className="db-nav-badge">Próx.</span>
+          Analytics
+          <span className="db-nav-badge">Soon</span>
         </button>
 
         <button
@@ -124,10 +124,10 @@ export default function Sidebar({
             <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
             <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
           </svg>
-          Redes sociales
+          Social accounts
         </button>
 
-        {/* PARTE INFERIOR */}
+        {/* FOOTER */}
         <div className="db-sidebar-footer">
           <div className="db-divider" />
           
@@ -140,10 +140,10 @@ export default function Sidebar({
           </div>
 
           <button onClick={(e) => handleTabClick('upgrade', e)} className="db-footer-link">
-            Suscripción
+            Subscription
           </button>
           <button onClick={handleLogout} className="db-footer-link logout">
-            Cerrar sesión
+            Log out
           </button>
         </div>
       </aside>
