@@ -146,10 +146,14 @@ export default function Navbar() {
           }
           .navbar-link-item:hover { color: #0f0f0f !important; }
           .navbar-link-item:hover::after { transform: scaleX(1); }
+          .navbar-cta-btn {
+            animation: cta-pulse 2.4s ease-in-out infinite;
+          }
           .navbar-cta-btn:hover {
             background: #d90000;
             transform: translateY(-1px);
-            box-shadow: 0 4px 18px rgba(255,31,31,0.28);
+            box-shadow: 0 6px 24px rgba(255,31,31,0.32);
+            animation: none;
           }
           .navbar-cta-btn svg {
             transition: transform 0.25s ease;
@@ -164,13 +168,17 @@ export default function Navbar() {
             left: -100%;
             width: 60%;
             height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
             transform: skewX(-20deg);
             transition: left 0.5s ease;
           }
           .navbar-cta-btn:hover::before {
             left: 140%;
             transition: left 0.6s ease;
+          }
+          @keyframes cta-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255,31,31,0.22); }
+            50% { box-shadow: 0 0 0 8px rgba(255,31,31,0); }
           }
           .navbar-hamburger {
             display: none;

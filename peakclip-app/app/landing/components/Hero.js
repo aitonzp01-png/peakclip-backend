@@ -167,7 +167,7 @@ export default function Hero() {
                 avatarColor="#ff1f1f"
                 views="15M"
                 duration="0:45"
-                gradient="linear-gradient(160deg, #ff9a9e 0%, #fecfef 100%)"
+                gradient="linear-gradient(160deg, #ffcece 0%, #fff0f0 100%)"
                 active
                 style={{ width: '100%', height: '100%', borderRadius: 28 }}
               />
