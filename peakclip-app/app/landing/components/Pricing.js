@@ -306,13 +306,6 @@ export default function Pricing() {
           })}
         </div>
 
-        {/* Trial note */}
-        <p style={{
-          textAlign: 'center', fontSize: 13, color: '#6b6b6b', maxWidth: 480,
-          margin: '0 auto', lineHeight: 1.6,
-        }}>
-          All plans include a 14-day free trial. No credit card required.
-        </p>
       </div>
 
       <style>{`
