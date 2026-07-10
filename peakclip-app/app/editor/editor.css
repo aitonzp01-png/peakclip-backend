@@ -560,6 +560,49 @@ html, body {
     object-fit: contain;
     border-radius: 12px;
   }
+  .editor-mobile-video-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 10px;
+    padding: 24px;
+    max-width: 320px;
+  }
+  .editor-mobile-error-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--cream-text-primary);
+    margin: 0;
+  }
+  .editor-mobile-error-text {
+    font-size: 13px;
+    color: var(--cream-text-secondary);
+    margin: 0;
+    line-height: 1.5;
+  }
+  .editor-mobile-error-link {
+    font-size: 12px;
+    color: var(--cream-accent);
+    text-decoration: underline;
+    word-break: break-all;
+  }
+  .editor-mobile-error-retry {
+    margin-top: 6px;
+    background: var(--cream-accent);
+    color: var(--cream-accent-btn-color);
+    border: none;
+    border-radius: 100px;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .editor-mobile-btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
   .editor-mobile-meta {
     display: flex;
     justify-content: space-between;

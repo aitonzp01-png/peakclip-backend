@@ -66,6 +66,8 @@ export default function EditorPage() {
   const [clipTitle, setClipTitle] = useState('New redesigned clip')
   const [clipDate, setClipDate] = useState('')
   const [videoSrc, setVideoSrc] = useState(null)
+  const [displayVideoSrc, setDisplayVideoSrc] = useState(null)
+  const [videoError, setVideoError] = useState(null)
   const [duration, setDuration] = useState(60)
   const [currentTime, setCurrentTime] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -197,6 +199,18 @@ export default function EditorPage() {
     const date = new Date(seconds * 1000)
     return date.toISOString().substr(14, 5)
   }
+
+  const normalizeVideoUrl = (url) => {
+    if (!url) return url
+    // Some stored URLs have a duplicated bucket folder segment (/clips/clips/...)
+    return url.replace(/\/storage\/v1\/object\/public\/clips\/clips\//g, '/storage/v1/object/public/clips/')
+  }
+
+  // Sync normalized video URL used by the player
+  useEffect(() => {
+    setDisplayVideoSrc(normalizeVideoUrl(videoSrc))
+    setVideoError(null)
+  }, [videoSrc])
 
   // --- HTML5 SPEECH SYNTHESIS FOR DUBBING ---
   useEffect(() => {
@@ -1390,7 +1404,7 @@ export default function EditorPage() {
                   cursor: 'pointer'
                 }}
               >
-                {faceTrackingEnabled ? 'ON' : 'DESON'}
+                {faceTrackingEnabled ? 'ON' : 'OFF'}
               </button>
             </div>
           </div>
@@ -1407,7 +1421,7 @@ export default function EditorPage() {
             >
               <video
                 ref={videoRef}
-                src={videoSrc}
+                src={displayVideoSrc}
                 loop
                 style={{
                   width: '100%',
@@ -2051,13 +2065,51 @@ export default function EditorPage() {
       </header>
 
       <div className="editor-mobile-video-wrap">
-        <video
-          src={videoSrc}
-          controls
-          playsInline
-          preload="metadata"
-          className="editor-mobile-video"
-        />
+        {videoError ? (
+          <div className="editor-mobile-video-error">
+            <p className="editor-mobile-error-title">Couldn&apos;t load video</p>
+            <p className="editor-mobile-error-text">
+              The clip file isn&apos;t reachable right now. This usually happens when the upload to storage failed.
+            </p>
+            {displayVideoSrc && (
+              <a
+                href={displayVideoSrc}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="editor-mobile-error-link"
+              >
+                Open original file
+              </a>
+            )}
+            <button
+              className="editor-mobile-error-retry"
+              onClick={() => {
+                setVideoError(null)
+                setDisplayVideoSrc(normalizeVideoUrl(videoSrc))
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <video
+            src={displayVideoSrc}
+            controls
+            playsInline
+            preload="metadata"
+            className="editor-mobile-video"
+            onError={(e) => {
+              const originalSrc = e?.currentTarget?.src || displayVideoSrc
+              const normalizedSrc = normalizeVideoUrl(originalSrc)
+              if (normalizedSrc !== originalSrc && !videoError) {
+                setDisplayVideoSrc(normalizedSrc)
+              } else {
+                setVideoError(true)
+              }
+            }}
+            onLoadedMetadata={() => setVideoError(null)}
+          />
+        )}
       </div>
 
       <div className="editor-mobile-meta">
@@ -2075,6 +2127,7 @@ export default function EditorPage() {
         <button
           className="editor-mobile-btn-primary"
           onClick={() => setShowExportModal(true)}
+          disabled={videoError}
         >
           <Download size={18} strokeWidth={1.5} />
           Export
