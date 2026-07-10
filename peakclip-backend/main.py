@@ -939,22 +939,22 @@ def process_video_background(job_id: str, user_id: str, url: str):
 
         # Retry download with different strategies
         strategies = [
+            {},
+            {'player_client': ['web']},
+            {'player_client': ['android']},
+            {'player_client': ['ios']},
             {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['web_embedded'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['android_vr'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['tv'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['mweb'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['ios'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['android'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['web_creator'], 'player_skip': ['webpage', 'configs']},
-            {'player_client': ['android', 'web'], 'player_skip': ['webpage', 'configs', 'js']},
-            {'player_client': ['web'], 'player_skip': ['webpage', 'configs']},
+            {'player_client': ['web_embedded']},
+            {'player_client': ['android_vr']},
+            {'player_client': ['mweb']},
+            {'player_client': ['web_creator']},
+            {'player_client': ['android', 'web']},
             {'player_client': ['tv_embedded'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
             {'player_client': ['web_embedded'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
             {'player_client': ['android'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
             {'player_client': ['ios'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
             {'player_client': ['tv'], 'player_skip': ['webpage', 'configs'], 'include_incomplete_formats': True},
-            {},
+            {'player_client': ['web'], 'include_incomplete_formats': True},
         ]
         user_agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
