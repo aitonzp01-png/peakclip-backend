@@ -38,6 +38,7 @@ export default function Dashboard() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState(0);
   const [jobId, setJobId] = useState(null);
+  const [processingError, setProcessingError] = useState(null);
   const [shakeInput, setShakeInput] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -150,9 +151,8 @@ export default function Dashboard() {
           }
         } else if (data.status === 'error') {
           clearInterval(interval);
-          setIsProcessing(false);
+          setProcessingError(data.message || 'Error processing video');
           setJobId(null);
-          setToast({ type: 'error', text: data.message || 'Error processing video' });
         }
       } catch (err) {
         console.error(err);
@@ -635,44 +635,71 @@ export default function Dashboard() {
         {/* PROCESSING WINDOW OVERLAY VIEW */}
         {isProcessing ? (
           <div className="db-processing-view">
-            <div className="db-processing-spinner-container">
-              <div className="db-spinner-bg" />
-              <div className="db-spinner-fg" />
-              <div className="db-spinner-icon">
-                {getStepIcon(step)}
-              </div>
-            </div>
-            
-            <h2 className="db-step-title">{stepsDetails[step]?.label}</h2>
-            <p className="db-step-subtitle">This may take a few minutes...</p>
-
-            {/* Progress bar */}
-            <div className="db-progress-container">
-              <div className="db-progress-text-row">
-                <span className="db-progress-step">Step {step + 1} of 6</span>
-                <span className="db-progress-percent">{Math.round(((step + 1) / 6) * 100)}%</span>
-              </div>
-              <div className="db-progress-track">
-                <div className="db-progress-fill" style={{ width: `${((step + 1) / 6) * 100}%` }} />
-              </div>
-            </div>
-
-            {/* List of 6 steps */}
-            <div className="db-steps-list">
-              {stepsDetails.map((s, index) => (
-                <div
-                  key={index}
-                  className={`db-step-item ${
-                    index < step ? 'completed' : index === step ? 'current' : 'pending'
-                  }`}
-                >
-                  <span style={{ fontSize: '13px', display: 'flex', alignItems: 'center' }}>
-                    {index < step ? '✓' : index === step ? '▶' : '○'}
-                  </span>
-                  <span>{s.label}</span>
+            {processingError ? (
+              <>
+                <div className="db-processing-spinner-container" style={{ opacity: 0.3 }}>
+                  <div className="db-spinner-bg" />
+                  <div className="db-spinner-fg" style={{ animation: 'none', borderTopColor: 'var(--db-error, #e44)' }} />
+                  <div className="db-spinner-icon" style={{ color: 'var(--db-error, #e44)' }}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <h2 className="db-step-title" style={{ color: 'var(--db-error, #e44)' }}>Something went wrong</h2>
+                <p className="db-step-subtitle">{processingError}</p>
+                <button
+                  onClick={() => { setIsProcessing(false); setProcessingError(null); }}
+                  style={{
+                    marginTop: '24px', backgroundColor: 'var(--db-btn-primary-bg)', color: 'var(--db-btn-primary-color)',
+                    border: 'none', borderRadius: '10px', padding: '12px 32px', cursor: 'pointer', fontWeight: '700', fontSize: '14px'
+                  }}
+                >
+                  Back to dashboard
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="db-processing-spinner-container">
+                  <div className="db-spinner-bg" />
+                  <div className="db-spinner-fg" />
+                  <div className="db-spinner-icon">
+                    {getStepIcon(step)}
+                  </div>
+                </div>
+                
+                <h2 className="db-step-title">{stepsDetails[step]?.label}</h2>
+                <p className="db-step-subtitle">This may take a few minutes...</p>
+
+                {/* Progress bar */}
+                <div className="db-progress-container">
+                  <div className="db-progress-text-row">
+                    <span className="db-progress-step">Step {step + 1} of 6</span>
+                    <span className="db-progress-percent">{Math.round(((step + 1) / 6) * 100)}%</span>
+                  </div>
+                  <div className="db-progress-track">
+                    <div className="db-progress-fill" style={{ width: `${((step + 1) / 6) * 100}%` }} />
+                  </div>
+                </div>
+
+                {/* List of 6 steps */}
+                <div className="db-steps-list">
+                  {stepsDetails.map((s, index) => (
+                    <div
+                      key={index}
+                      className={`db-step-item ${
+                        index < step ? 'completed' : index === step ? 'current' : 'pending'
+                      }`}
+                    >
+                      <span style={{ fontSize: '13px', display: 'flex', alignItems: 'center' }}>
+                        {index < step ? '✓' : index === step ? '▶' : '○'}
+                      </span>
+                      <span>{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <>

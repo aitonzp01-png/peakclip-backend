@@ -1179,7 +1179,13 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 if groq_client:
                     transcript = transcribe_with(groq_client, "whisper-large-v3-turbo")
         if transcript is None:
-            raise Exception("All transcription methods failed. Set OPENAI_API_KEY or GROQ_API_KEY.")
+            msg = "Transcription failed: "
+            if not groq_client:
+                msg += "OpenAI API quota exceeded and no GROQ_API_KEY configured. "
+                msg += "To fix: add GROQ_API_KEY (free at console.groq.com) in Railway Dashboard → Variables."
+            else:
+                msg += "All providers failed (OpenAI + Groq). Check your API keys and account credits."
+            raise Exception(msg)
 
         words_data = []
         if hasattr(transcript, 'words') and transcript.words:
