@@ -1088,6 +1088,12 @@ def process_video_background(job_id: str, user_id: str, url: str):
                             time.sleep(2)
                             continue
                 if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small", "proxy", "tunnel connection"]):
+                    if attempt >= 3 and proxy_url and not proxy_disabled and not has_oauth:
+                        print(f"Proxy failing repeatedly ({err_lower[:80]}). Disabling proxy to try direct connection.")
+                        proxy_disabled = True
+                        if attempt < max_attempts - 1:
+                            time.sleep(2)
+                            continue
                     if attempt < max_attempts - 1:
                         wait = min(3 + attempt, 15)
                         print(f"YouTube issue (attempt {attempt+1}/{max_attempts}): {err_lower[:80]}, waiting {wait}s...")
