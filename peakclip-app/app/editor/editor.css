@@ -1,32 +1,32 @@
 /* editor.css – Cream palette styling for the video editor */
 
-/* Inject palette variables — PeakClip Cream Palette */
+/* Inject palette variables — PeakClip Red Palette */
 :root {
-  --cream-bg: #f0f0eb;
+  --cream-bg: #f6f6f2;
   --cream-panel: #ffffff;
-  --cream-panel-border: #e5e5e0;
-  --cream-surface: #f8f8f5;
-  --cream-surface-border: #e5e5e0;
-  --cream-hover: #f0f0f0;
-  --cream-text-primary: #0a0a0a;
-  --cream-text-secondary: #666666;
-  --cream-placeholder: #999999;
-  --cream-accent: #c8ff00;
-  --cream-primary-btn-bg: #0a0a0a;
+  --cream-panel-border: #e8e8e3;
+  --cream-surface: #fafafa;
+  --cream-surface-border: #e8e8e3;
+  --cream-hover: #f0f0ea;
+  --cream-text-primary: #0f0f0f;
+  --cream-text-secondary: #6b6b6b;
+  --cream-placeholder: #8a8a8a;
+  --cream-accent: #ff1f1f;
+  --cream-primary-btn-bg: #0f0f0f;
   --cream-primary-btn-color: #ffffff;
-  --cream-accent-btn-bg: #c8ff00;
-  --cream-accent-btn-color: #0a0a0a;
-  --cream-focus-border: #0a0a0a;
-  --cream-focus-detail: #c8ff00;
+  --cream-accent-btn-bg: #ff1f1f;
+  --cream-accent-btn-color: #ffffff;
+  --cream-focus-border: #0f0f0f;
+  --cream-focus-detail: #ff1f1f;
   --cream-success: #22c55e;
   --cream-error: #ef4444;
-  --cream-tl-bg: #f8f8f5;
-  --cream-tl-border: #e5e5e0;
-  --cream-waveform: rgba(200,255,0,0.7);
-  --cream-playhead: #c8ff00;
-  --cream-bbox: #c8ff00;
-  --cream-badge-new-bg: #c8ff00;
-  --cream-badge-new-text: #0a0a0a;
+  --cream-tl-bg: #fafafa;
+  --cream-tl-border: #e8e8e3;
+  --cream-waveform: rgba(255,31,31,0.6);
+  --cream-playhead: #ff1f1f;
+  --cream-bbox: #ff1f1f;
+  --cream-badge-new-bg: #ff1f1f;
+  --cream-badge-new-text: #ffffff;
   --cream-zinc-50: #fafafa;
   --cream-zinc-100: #f4f4f5;
   --cream-zinc-200: #e4e4e7;
@@ -35,6 +35,10 @@
   --cream-zinc-600: #52525b;
   --cream-zinc-700: #3f3f46;
   --cream-zinc-800: #27272a;
+}
+
+body {
+  font-family: var(--font-body), 'Inter', sans-serif;
 }
 
 /* Global editor layout */
@@ -123,7 +127,7 @@
 
 /* Credits badge */
 .editor-credits-badge {
-  background: rgba(196,255,61,0.15);
+  background: color-mix(in srgb, var(--cream-accent) 15%, transparent);
   color: var(--cream-text-primary);
   font-size: 13px;
   font-weight: 700;
@@ -178,8 +182,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(196,255,61,0.15);
-  border: 1px solid rgba(196,255,61,0.3);
+  background: color-mix(in srgb, var(--cream-accent) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cream-accent) 30%, transparent);
   color: var(--cream-text-primary);
   font-size: 11px;
   font-weight: 600;
@@ -187,7 +191,7 @@
   padding: 4px 8px;
   cursor: pointer;
 }
-.editor-toggle-clean.active { background: var(--cream-accent); color: var(--cream-text-primary); }
+.editor-toggle-clean.active { background: var(--cream-accent); color: var(--cream-accent-btn-color); }
 
 /* Transcript words */
 .editor-word {
@@ -202,7 +206,7 @@
 .editor-word:hover { background: var(--cream-hover); }
 .editor-word.active {
   background: var(--cream-accent);
-  color: var(--cream-text-primary);
+  color: var(--cream-accent-btn-color);
   font-weight: 700;
 }
 .editor-word.deleted {
@@ -492,14 +496,18 @@
     height: 100vh;
     padding: 24px;
     text-align: center;
-    background: var(--cream-bg);
+    background: #f6f6f2;
     color: var(--cream-text-primary);
     gap: 16px;
+  }
+  .editor-mobile-message svg {
+    color: #ff1f1f;
   }
   .editor-mobile-message h2 {
     font-size: 22px;
     font-weight: 800;
     max-width: 320px;
+    color: var(--cream-text-primary);
   }
   .editor-mobile-message p {
     font-size: 14px;
@@ -508,13 +516,17 @@
     line-height: 1.5;
   }
   .editor-mobile-btn {
-    background: var(--cream-primary-btn-bg);
-    color: var(--cream-primary-btn-color);
+    background: #ff1f1f;
+    color: #ffffff;
     border: none;
     border-radius: 100px;
     padding: 12px 24px;
     font-weight: 700;
     cursor: pointer;
     margin-top: 8px;
+    transition: background 0.2s;
+  }
+  .editor-mobile-btn:hover {
+    background: #d90000;
   }
 }

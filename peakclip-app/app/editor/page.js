@@ -29,20 +29,20 @@ const FONTS = [
 
 const SUBTITLE_PRESETS = [
   { id: 'none', name: 'No captions', isNone: true },
-  { id: 'karaoke', name: 'Karaoke', color: '#ffffff', highlightColor: '#c8ff00', fontWeight: '800' },
-  { id: 'beasty', name: 'Beasty', color: '#0a0a0a', backgroundColor: '#EAB308', backgroundOpacity: 100, fontWeight: '900', textTransform: 'uppercase' },
+  { id: 'karaoke', name: 'Karaoke', color: '#ffffff', highlightColor: '#ff1f1f', fontWeight: '800' },
+  { id: 'beasty', name: 'Beasty', color: '#0a0a0a', backgroundColor: '#ff1f1f', backgroundOpacity: 100, fontWeight: '900', textTransform: 'uppercase' },
   { id: 'deepdiver', name: 'Deep Diver', color: '#ffffff', backgroundColor: 'rgba(24,24,27,0.7)', backgroundOpacity: 70, fontWeight: '600' },
-  { id: 'youshaei', name: 'Youshaei', color: '#EAB308', fontWeight: '800', fontStyle: 'italic', textTransform: 'uppercase' },
+  { id: 'youshaei', name: 'Youshaei', color: '#ff1f1f', fontWeight: '800', fontStyle: 'italic', textTransform: 'uppercase' },
   { id: 'podp', name: 'Pod P', color: '#ffffff', fontWeight: '700', lineHeight: 1.4 },
   { id: 'mozi', name: 'Mozi', color: '#ffffff', stroke: true, strokeColor: '#0a0a0a', strokeWidth: 3, fontWeight: '800' },
-  { id: 'popline', name: 'Popline', color: '#0a0a0a', backgroundColor: '#EAB308', backgroundOpacity: 100, fontWeight: '800', textTransform: 'uppercase' },
-  { id: 'typewriter', name: 'Typewriter 1-by-1', color: '#EAB308', highlightColor: '#ffffff', fontWeight: '900', textTransform: 'uppercase', stroke: true, strokeColor: '#0a0a0a', strokeWidth: 5 }
+  { id: 'popline', name: 'Popline', color: '#0a0a0a', backgroundColor: '#ff1f1f', backgroundOpacity: 100, fontWeight: '800', textTransform: 'uppercase' },
+  { id: 'typewriter', name: 'Typewriter 1-by-1', color: '#ff1f1f', highlightColor: '#ff1f1f', fontWeight: '900', textTransform: 'uppercase', stroke: true, strokeColor: '#0a0a0a', strokeWidth: 5 }
 ]
 
 const VIRAL_HOOKS = [
-  { title: 'El secreto de OpusClip', text: 'El secreto de OpusClip revelado en menos de un minuto...' },
-  { title: 'Evita este gran error', text: 'Evita este gran error al editar tus clips para redes...' },
-  { title: '3 trucos de retención', text: '3 trucos de retención rápida que los creadores ignoran...' }
+  { title: 'The OpusClip secret', text: 'The OpusClip secret revealed in less than a minute...' },
+  { title: 'Avoid this big mistake', text: 'Avoid this big mistake when editing your social clips...' },
+  { title: '3 retention tricks', text: '3 quick retention tricks creators ignore...' }
 ]
 
 export default function EditorPage() {
@@ -63,7 +63,7 @@ export default function EditorPage() {
 
   // Clip details
   const [clipId, setClipId] = useState(null)
-  const [clipTitle, setClipTitle] = useState('Nuevo Clip Rediseñado')
+  const [clipTitle, setClipTitle] = useState('New redesigned clip')
   const [videoSrc, setVideoSrc] = useState(null)
   const [duration, setDuration] = useState(60)
   const [currentTime, setCurrentTime] = useState(0)
@@ -125,7 +125,7 @@ export default function EditorPage() {
     shadowOffsetX: 2,
     shadowOffsetY: 2,
     karaokeHighlight: true,
-    highlightColor: '#c8ff00',
+    highlightColor: '#ff1f1f',
     fontStyle: 'normal'
   })
 
@@ -135,7 +135,7 @@ export default function EditorPage() {
   const [faceTrackingZoom, setFaceTrackingZoom] = useState(120)
   const [showFaceBox, setShowFaceBox] = useState(true)
   const [modelsLoaded, setModelsLoaded] = useState(false)
-  const [faceState, setFaceState] = useState('BUSCANDO...')
+  const [faceState, setFaceState] = useState('SEARCHING...')
 
   // LERP Coordinates
   const cropX = useRef(0)
@@ -143,7 +143,7 @@ export default function EditorPage() {
 
   // Timeline Tracks Items
   const [timelineItems, setTimelineItems] = useState([
-    { id: 'vid-main', track: 'video', start: 0, duration: 39, title: 'Video original.mp4', color: '#9ca3af', type: 'video' }
+    { id: 'vid-main', track: 'video', start: 0, duration: 39, title: 'Original video.mp4', color: '#9ca3af', type: 'video' }
   ])
   const [selectedTimelineItemId, setSelectedTimelineItemId] = useState('vid-main')
   const [draggingTimelineItem, setDraggingTimelineItem] = useState(null)
@@ -169,11 +169,11 @@ export default function EditorPage() {
   const [brollSearch, setBrollSearch] = useState('')
   const [brollResults, setBrollResults] = useState([
     { id: 'br-1', title: 'B-Roll Cafe.mp4', url: 'https://images.pexels.com/photos/7095/people-coffee-notes-tea.jpg?auto=compress&cs=tinysrgb&w=150' },
-    { id: 'br-2', title: 'B-Roll Oficina.mp4', url: 'https://images.pexels.com/photos/3183197/pexels-photo-3183197.jpeg?auto=compress&cs=tinysrgb&w=150' }
+    { id: 'br-2', title: 'B-Roll Office.mp4', url: 'https://images.pexels.com/photos/3183197/pexels-photo-3183197.jpeg?auto=compress&cs=tinysrgb&w=150' }
   ])
 
   // Brand Template settings
-  const [brandColorPrimary, setBrandColorPrimary] = useState('#EAB308')
+  const [brandColorPrimary, setBrandColorPrimary] = useState('#ff1f1f')
   const [brandColorSecondary, setBrandColorSecondary] = useState('#18181b')
   const [brandLogoPosition, setBrandLogoPosition] = useState('bottom-right')
 
@@ -360,10 +360,10 @@ export default function EditorPage() {
       setLanguageMode(lang)
       if (lang === 'translated') {
         setActiveTranscript(transcriptES)
-        triggerToast('success', 'Traducción y doblaje al Español completados')
+        triggerToast('success', 'Spanish translation and dubbing completed')
       } else {
         setActiveTranscript(transcriptEN)
-        triggerToast('success', 'Audio original en Inglés activado')
+        triggerToast('success', 'Original English audio enabled')
       }
       setTranslatingState(false)
       setTranslatingProgress(0)
@@ -404,11 +404,11 @@ export default function EditorPage() {
         if (error) throw error
       }
       setSaveSuccess(true)
-      triggerToast('success', '¡Proyecto guardado en la nube!')
+      triggerToast('success', 'Project saved to the cloud!')
       setTimeout(() => setSaveSuccess(false), 2000)
     } catch (e) {
       console.error(e)
-      triggerToast('error', 'Error al guardar los cambios')
+      triggerToast('error', 'Error saving changes')
     } finally {
       setSaving(false)
     }
@@ -416,7 +416,7 @@ export default function EditorPage() {
 
   const triggerExport = async () => {
     setShowExportModal(false)
-    triggerToast('success', 'Exportación de video iniciada.')
+    triggerToast('success', 'Video export started.')
   }
 
   // --- UNDO / REDO ---
@@ -429,7 +429,7 @@ export default function EditorPage() {
       setSubtitleStyle(state.subtitleStyle)
       setActiveTranscript(state.transcript)
       setTextOverlays(state.textOverlays)
-      triggerToast('success', 'Deshacer realizado')
+      triggerToast('success', 'Undo completed')
     }
   }
 
@@ -442,7 +442,7 @@ export default function EditorPage() {
       setSubtitleStyle(state.subtitleStyle)
       setActiveTranscript(state.transcript)
       setTextOverlays(state.textOverlays)
-      triggerToast('success', 'Rehacer realizado')
+      triggerToast('success', 'Redo completed')
     }
   }
 
@@ -484,7 +484,7 @@ export default function EditorPage() {
       ctx.lineJoin = 'round'
       ctx.strokeText(wordText, textX, baseY)
 
-      ctx.fillStyle = '#c8ff00'
+      ctx.fillStyle = '#ff1f1f'
       ctx.fillText(wordText, textX, baseY)
       ctx.restore()
       return
@@ -530,7 +530,7 @@ export default function EditorPage() {
       if (selectedPresetId === 'beasty') {
         color = ww.isActive ? '#000000' : '#ffffff'
       } else if (selectedPresetId === 'youshaei') {
-        color = ww.isActive ? '#c8ff00' : '#ffffff'
+        color = ww.isActive ? '#ff1f1f' : '#ffffff'
       } else if (selectedPresetId === 'popline') {
         color = ww.isActive ? '#000000' : '#ffffff'
         stroke = true
@@ -547,7 +547,7 @@ export default function EditorPage() {
         strokeColor = 'rgba(0,0,0,0.5)'
         strokeWidth = 2
       } else if (selectedPresetId === 'karaoke') {
-        color = ww.isActive ? '#c8ff00' : '#ffffff'
+        color = ww.isActive ? '#ff1f1f' : '#ffffff'
         stroke = ww.isActive
         strokeColor = '#000000'
         strokeWidth = 3
@@ -601,7 +601,7 @@ export default function EditorPage() {
         .withFaceLandmarks()
 
       if (detection) {
-        setFaceState('SEGUIMIENTO ACTIVO')
+        setFaceState('TRACKING ACTIVE')
         const { box } = detection.detection
         const targetX = box.x + box.width / 2
         const targetY = box.y + box.height / 2
@@ -613,15 +613,15 @@ export default function EditorPage() {
         cropY.current = lerpVal(cropY.current, targetY, Math.max(0.01, lerpFactorY))
 
         if (showFaceBox) {
-          ctx.strokeStyle = '#EAB308'
+          ctx.strokeStyle = '#ff1f1f'
           ctx.lineWidth = 3
           ctx.strokeRect(box.x, box.y, box.width, box.height)
         }
       } else {
-        setFaceState('BUSCANDO...')
+        setFaceState('SEARCHING...')
       }
     } else {
-      setFaceState('SEGUIMIENTO ACTIVO')
+      setFaceState('TRACKING ACTIVE')
       const targetX = videoRef.current.videoWidth / 2 + Math.sin(currentTime) * 40
       const targetY = videoRef.current.videoHeight / 2 - 20
       cropX.current = lerpVal(cropX.current, targetX, 0.05)
@@ -629,7 +629,7 @@ export default function EditorPage() {
 
       if (showFaceBox) {
         const box = { x: cropX.current - 80, y: cropY.current - 100, width: 160, height: 180 }
-        ctx.strokeStyle = '#EAB308'
+        ctx.strokeStyle = '#ff1f1f'
         ctx.lineWidth = 2
         ctx.strokeRect(box.x, box.y, box.width, box.height)
       }
@@ -660,7 +660,7 @@ export default function EditorPage() {
       if (!canvas) return
       const ctx = canvas.getContext('2d')
       ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.fillStyle = 'rgba(234, 179, 8, 0.7)'
+      ctx.fillStyle = 'rgba(255, 31, 31, 0.7)'
       
       const barCount = 120
       const barWidth = 3
@@ -732,11 +732,11 @@ export default function EditorPage() {
   const handleSplitClip = () => {
     const activeItem = timelineItems.find(x => x.id === selectedTimelineItemId)
     if (!activeItem) {
-      triggerToast('error', 'Selecciona una pista para dividir')
+      triggerToast('error', 'Select a track to split')
       return
     }
     if (currentTime < activeItem.start || currentTime > activeItem.start + activeItem.duration) {
-      triggerToast('error', 'Coloca la aguja roja dentro de la pista elegida')
+      triggerToast('error', 'Place the red playhead inside the chosen track')
       return
     }
 
@@ -744,7 +744,7 @@ export default function EditorPage() {
     const secondDuration = (activeItem.start + activeItem.duration) - currentTime
 
     if (firstDuration < 1 || secondDuration < 1) {
-      triggerToast('error', 'Los fragmentos deben durar al menos 1 segundo')
+      triggerToast('error', 'Clips must be at least 1 second long')
       return
     }
 
@@ -753,24 +753,24 @@ export default function EditorPage() {
       id: `${activeItem.id}-split-${Date.now()}`,
       start: currentTime,
       duration: secondDuration,
-      title: `${activeItem.title} (Parte 2)`
+      title: `${activeItem.title} (Part 2)`
     }
 
     setTimelineItems(prev => [
       ...prev.map(x => x.id === activeItem.id ? { ...x, duration: firstDuration } : x),
       newItem
     ])
-    triggerToast('success', 'Clip dividido')
+    triggerToast('success', 'Clip split')
   }
 
   const handleDeleteSelectedTimelineItem = () => {
     if (selectedTimelineItemId === 'vid-main') {
-      triggerToast('error', 'No puedes eliminar la pista de video original')
+      triggerToast('error', 'You can\'t delete the original video track')
       return
     }
     setTimelineItems(prev => prev.filter(x => x.id !== selectedTimelineItemId))
     setSelectedTimelineItemId('vid-main')
-    triggerToast('success', 'Elemento eliminado')
+    triggerToast('success', 'Item deleted')
   }
 
   const applyPreset = (preset) => {
@@ -788,7 +788,7 @@ export default function EditorPage() {
       strokeWidth: preset.strokeWidth || 2,
       fontStyle: preset.fontStyle || 'normal',
       karaokeHighlight: preset.karaokeHighlight || false,
-      highlightColor: preset.highlightColor || '#EAB308'
+      highlightColor: preset.highlightColor || '#ff1f1f'
     }
     setSubtitleStyle(nextStyle)
     saveToHistory({ subtitleStyle: nextStyle })
@@ -837,7 +837,7 @@ export default function EditorPage() {
     link.href = url
     link.download = `${clipTitle}_subtitles.srt`
     link.click()
-    triggerToast('success', 'Subtítulos descargados en formato SRT')
+    triggerToast('success', 'Subtitles downloaded in SRT format')
   }
 
   const handleImportSrt = () => {
@@ -876,7 +876,7 @@ export default function EditorPage() {
 
     if (parsedWords.length > 0) {
       setActiveTranscript(parsedWords)
-      triggerToast('success', `Importadas ${parsedWords.length} palabras del SRT`)
+      triggerToast('success', `Imported ${parsedWords.length} words from SRT`)
     }
     setShowSrtModal(false)
   }
@@ -965,7 +965,7 @@ export default function EditorPage() {
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
         <div style={{ width: '40px', height: '40px', border: '3px solid color-mix(in srgb, var(--cream-accent) 20%, transparent)', borderTopColor: 'var(--cream-accent)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-        <span style={{ fontSize: '14px', color: 'var(--cream-text-secondary)' }}>Iniciando editor de OpusClip...</span>
+        <span style={{ fontSize: '14px', color: 'var(--cream-text-secondary)' }}>Starting OpusClip editor...</span>
       </div>
     </div>
   ) : (
@@ -1063,7 +1063,7 @@ export default function EditorPage() {
             padding: '2px 6px',
             fontWeight: '600'
           }}>
-            Proyecto
+            Project
           </span>
         </div>
 
@@ -1110,7 +1110,7 @@ export default function EditorPage() {
               gap: '4px'
             }}
           >
-            Traducido (ES)
+            Translated (ES)
             <span style={{
               fontSize: '8px',
               backgroundColor: '#0a0a0a',
@@ -1118,7 +1118,7 @@ export default function EditorPage() {
               padding: '1px 4px',
               borderRadius: '4px',
               fontWeight: '800'
-            }}>VOZ IA</span>
+            }}>AI VOICE</span>
           </button>
         </div>
 
@@ -1166,7 +1166,7 @@ export default function EditorPage() {
           >
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Save size={14} strokeWidth={1.5} />
-              {saving ? 'Guardando...' : saveSuccess ? 'Guardado ✓' : 'Guardar'}
+              {saving ? 'Saving...' : saveSuccess ? 'Saved ✓' : 'Save'}
             </span>
           </button>
 
@@ -1185,7 +1185,7 @@ export default function EditorPage() {
           >
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Download size={14} strokeWidth={1.5} />
-              Exportar
+              Export
             </span>
           </button>
         </div>
@@ -1217,7 +1217,7 @@ export default function EditorPage() {
                 }}
               >
                 <Wand2 size={16} strokeWidth={1.5} />
-                Limpieza de audio
+                Audio cleanup
               </button>
 
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -1228,7 +1228,7 @@ export default function EditorPage() {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Buscar en transcripción..."
+                  placeholder="Search transcript..."
                   style={{
                     width: '100%',
                     backgroundColor: 'var(--cream-surface)',
@@ -1258,11 +1258,11 @@ export default function EditorPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
                 <button onClick={() => setShowSrtModal(true)} style={{ background: 'none', border: 'none', color: 'var(--cream-accent)', cursor: 'pointer', textDecoration: 'underline' }}>
                   <Upload size={12} strokeWidth={1.5} style={{ marginRight: '4px' }} />
-                  Importar SRT
+                  Import SRT
                 </button>
                 <button onClick={handleDownloadSrt} style={{ background: 'none', border: 'none', color: 'var(--cream-accent)', cursor: 'pointer', textDecoration: 'underline' }}>
                   <Download size={12} strokeWidth={1.5} style={{ marginRight: '4px' }} />
-                  Descargar SRT
+                  Download SRT
                 </button>
               </div>
             </div>
@@ -1303,7 +1303,7 @@ export default function EditorPage() {
                       onContextMenu={(e) => {
                         e.preventDefault()
                         toggleWordFavorite(w.id)
-                        triggerToast('success', 'Favorito alternado')
+                        triggerToast('success', 'Favorite toggled')
                       }}
                       style={{
                         fontSize: '13px',
@@ -1354,25 +1354,25 @@ export default function EditorPage() {
                 }}
               >
                 <option value="9:16">Vertical 9:16</option>
-                <option value="1:1">Cuadrado 1:1</option>
-                <option value="16:9">Horizontal 16:9</option>
-                <option value="4:5">Retrato 4:5</option>
+                <option value="1:1">Square 1:1</option>
+                <option value="16:9">Landscape 16:9</option>
+                <option value="4:5">Portrait 4:5</option>
               </select>
 
               <span
                 onClick={() => setLayoutMode(layoutMode === 'ajustar' ? 'rellenar' : 'ajustar')}
                 style={{ fontSize: '12px', color: 'var(--cream-text-secondary)', cursor: 'pointer' }}
               >
-                Diseño: <span style={{ textDecoration: 'underline' }}>{layoutMode === 'ajustar' ? 'Ajustar' : 'Rellenar'}</span>
+                Layout: <span style={{ textDecoration: 'underline' }}>{layoutMode === 'ajustar' ? 'Fit' : 'Fill'}</span>
               </span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '11px', color: 'var(--cream-text-secondary)' }}>Seguimiento Face:</span>
+              <span style={{ fontSize: '11px', color: 'var(--cream-text-secondary)' }}>Face tracking:</span>
               <button
                 onClick={() => setFaceTrackingEnabled(!faceTrackingEnabled)}
                 style={{
-                  backgroundColor: faceTrackingEnabled ? '#22c55e' : 'var(--cream-surface)',
+                  backgroundColor: faceTrackingEnabled ? '#ff1f1f' : 'var(--cream-surface)',
                   color: faceTrackingEnabled ? '#0a0a0a' : 'var(--cream-text-secondary)',
                   border: 'none',
                   borderRadius: '100px',
@@ -1382,7 +1382,7 @@ export default function EditorPage() {
                   cursor: 'pointer'
                 }}
               >
-                {faceTrackingEnabled ? 'ACTIVADO' : 'DESACTIVADO'}
+                {faceTrackingEnabled ? 'ON' : 'DESON'}
               </button>
             </div>
           </div>
@@ -1491,16 +1491,16 @@ export default function EditorPage() {
             borderRight: rightPanelOpen ? '1px solid var(--cream-panel-border)' : 'none'
           }}>
             {[
-              { id: 'presets', label: 'Estilos', icon: <Palette size={18} strokeWidth={1.5} /> },
-              { id: 'subtitles', label: 'Subtítulos', icon: <Captions size={18} strokeWidth={1.5} /> },
-              { id: 'ai', label: 'IA Tools', icon: <Wand2 size={18} strokeWidth={1.5} /> },
-              { id: 'multimedia', label: 'Multi', icon: <Layers size={18} strokeWidth={1.5} /> },
-              { id: 'brand', label: 'Marca', icon: <Tag size={18} strokeWidth={1.5} /> },
+              { id: 'presets', label: 'Styles', icon: <Palette size={18} strokeWidth={1.5} /> },
+              { id: 'subtitles', label: 'Subtitles', icon: <Captions size={18} strokeWidth={1.5} /> },
+              { id: 'ai', label: 'AI Tools', icon: <Wand2 size={18} strokeWidth={1.5} /> },
+              { id: 'multimedia', label: 'Media', icon: <Layers size={18} strokeWidth={1.5} /> },
+              { id: 'brand', label: 'Brand', icon: <Tag size={18} strokeWidth={1.5} /> },
               { id: 'broll', label: 'B-Roll', icon: <Film size={18} strokeWidth={1.5} /> },
-              { id: 'transitions', label: 'Trans', icon: <Shuffle size={18} strokeWidth={1.5} /> },
-              { id: 'text', label: 'Texto', icon: <AlignLeft size={18} strokeWidth={1.5} /> },
+              { id: 'transitions', label: 'Transitions', icon: <Shuffle size={18} strokeWidth={1.5} /> },
+              { id: 'text', label: 'Text', icon: <AlignLeft size={18} strokeWidth={1.5} /> },
               { id: 'audio', label: 'Audio', icon: <Music size={18} strokeWidth={1.5} /> },
-              { id: 'hook', label: 'Gancho', icon: <Anchor size={18} strokeWidth={1.5} /> }
+              { id: 'hook', label: 'Hook', icon: <Anchor size={18} strokeWidth={1.5} /> }
             ].map(tab => {
               const isActive = rightPanelOpen && activeRightTab === tab.id
               return (
@@ -1541,7 +1541,7 @@ export default function EditorPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div>
                     <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '10px', color: 'var(--cream-text-primary)' }}>
-                      Estilos Shorts Virales
+                      Viral Shorts Styles
                     </h3>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                       {SUBTITLE_PRESETS.map(preset => {
@@ -1559,38 +1559,38 @@ export default function EditorPage() {
                   </div>
 
                   <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '12px' }}>
-                    <h4 style={{ fontSize: '13px', fontWeight: '800', marginBottom: '10px' }}>Tipografía</h4>
+                    <h4 style={{ fontSize: '13px', fontWeight: '800', marginBottom: '10px' }}>Typography</h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Fuente</label>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Font</label>
                         <select value={subtitleStyle.fontFamily} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, fontFamily: e.target.value })} style={{ width: '100%', backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', borderRadius: '6px', padding: '6px', fontSize: '12px', color: 'var(--cream-text-primary)' }}>
                           {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Tamaño ({subtitleStyle.fontSize}px)</label>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Size ({subtitleStyle.fontSize}px)</label>
                         <input type="range" min="12" max="60" value={subtitleStyle.fontSize} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, fontSize: parseInt(e.target.value) })} style={{ width: '100%' }} />
                       </div>
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Color del texto</label>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Text color</label>
                         <input type="color" value={subtitleStyle.color} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, color: e.target.value })} style={{ width: '100%', height: '30px', border: 'none', cursor: 'pointer' }} />
                       </div>
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Posición vertical ({subtitleStyle.positionY}%)</label>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Vertical position ({subtitleStyle.positionY}%)</label>
                         <input type="range" min="10" max="90" value={subtitleStyle.positionY} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, positionY: parseInt(e.target.value) })} style={{ width: '100%' }} />
                       </div>
                     </div>
                   </div>
 
                   <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '12px' }}>
-                    <h4 style={{ fontSize: '13px', fontWeight: '800', marginBottom: '10px' }}>Efectos</h4>
+                    <h4 style={{ fontSize: '13px', fontWeight: '800', marginBottom: '10px' }}>Effects</h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Grosor del Borde ({subtitleStyle.strokeWidth}px)</label>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Stroke width ({subtitleStyle.strokeWidth}px)</label>
                         <input type="range" min="0" max="8" value={subtitleStyle.strokeWidth} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, strokeWidth: parseInt(e.target.value), stroke: parseInt(e.target.value) > 0 })} style={{ width: '100%' }} />
                       </div>
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Color del Contorno</label>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Outline color</label>
                         <input type="color" value={subtitleStyle.strokeColor} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, strokeColor: e.target.value })} style={{ width: '100%', height: '30px', border: 'none', cursor: 'pointer' }} />
                       </div>
                     </div>
@@ -1601,7 +1601,7 @@ export default function EditorPage() {
               {/* Subtítulos */}
               {activeRightTab === 'subtitles' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Editor Manual</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Subtitle editor</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '350px', overflowY: 'auto' }}>
                     {activeTranscript.map(w => (
                       <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--cream-surface)', padding: '6px', borderRadius: '6px' }}>
@@ -1620,12 +1620,12 @@ export default function EditorPage() {
               {/* IA Tools */}
               {activeRightTab === 'ai' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Mejorar con IA</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Enhance with AI</h3>
                   {[
-                    { label: 'Mejorar audio con IA', fn: () => { setAudioCleanActive(true); triggerToast('success', 'Audio filtrado') } },
-                    { label: 'Traducir automáticamente', fn: () => handleLanguageChange('translated') },
-                    { label: 'Detectar momentos virales', fn: () => triggerToast('success', '3 Momentos virales identificados!') },
-                    { label: 'Generar gancho con IA', fn: () => triggerToast('success', 'Gancho creado') }
+                    { label: 'Enhance audio with AI', fn: () => { setAudioCleanActive(true); triggerToast('success', 'Audio filtered') } },
+                    { label: 'Translate automatically', fn: () => handleLanguageChange('translated') },
+                    { label: 'Detect viral moments', fn: () => triggerToast('success', '3 viral moments identified!') },
+                    { label: 'Generate hook with AI', fn: () => triggerToast('success', 'Hook created') }
                   ].map((btn, idx) => (
                     <button
                       key={idx} onClick={btn.fn}
@@ -1640,9 +1640,9 @@ export default function EditorPage() {
               {/* Multimedia */}
               {activeRightTab === 'multimedia' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Archivos</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Files</h3>
                   <div style={{ padding: '20px', border: '2.5px dashed var(--cream-panel-border)', borderRadius: '8px', textAlign: 'center', fontSize: '11px', color: 'var(--cream-text-secondary)' }}>
-                    Arrastra aquí tus archivos multimedia
+                    Drop your media files here
                   </div>
                 </div>
               )}
@@ -1650,9 +1650,9 @@ export default function EditorPage() {
               {/* Marca */}
               {activeRightTab === 'brand' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Plantilla de Marca</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Brand Template</h3>
                   <div>
-                    <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Color de Logo Principal</label>
+                    <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Primary logo color</label>
                     <input
                       type="color" value={brandColorPrimary}
                       onChange={(e) => setBrandColorPrimary(e.target.value)}
@@ -1665,9 +1665,9 @@ export default function EditorPage() {
               {/* B-Roll */}
               {activeRightTab === 'broll' && (
                 <div>
-                  <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '10px' }}>Recortes de B-Roll</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '10px' }}>B-Roll clips</h3>
                   <input
-                    type="text" placeholder="Buscar en Pexels..."
+                    type="text" placeholder="Search Pexels..."
                     value={brollSearch} onChange={(e) => setBrollSearch(e.target.value)}
                     style={{ width: '100%', backgroundColor: 'var(--cream-surface)', border: 'none', color: 'var(--cream-text-primary)', borderRadius: '6px', padding: '8px', fontSize: '12px', marginBottom: '10px' }}
                   />
@@ -1685,7 +1685,7 @@ export default function EditorPage() {
                             color: '#166534',
                             type: 'broll'
                           }])
-                          triggerToast('success', 'B-Roll añadido al timeline')
+                          triggerToast('success', 'B-Roll added to timeline')
                         }}
                         style={{ display: 'flex', gap: '8px', backgroundColor: 'var(--cream-surface)', padding: '6px', borderRadius: '6px', cursor: 'pointer' }}
                       >
@@ -1700,10 +1700,10 @@ export default function EditorPage() {
               {/* Transiciones */}
               {activeRightTab === 'transitions' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Efectos de Transición</h3>
-                  {['Zoom suave', 'Disolvencia', 'Deslizar'].map(t => (
+                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Transition effects</h3>
+                  {['Smooth zoom', 'Dissolve', 'Slide'].map(t => (
                     <button
-                      key={t} onClick={() => triggerToast('success', `Transición: ${t}`)}
+                      key={t} onClick={() => triggerToast('success', `Transition: ${t}`)}
                       style={{ backgroundColor: 'var(--cream-surface)', color: 'var(--cream-text-primary)', border: '1px solid var(--cream-panel-border)', padding: '10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
                     >
                       {t}
@@ -1715,17 +1715,17 @@ export default function EditorPage() {
               {/* Texto */}
               {activeRightTab === 'text' && (
                 <div>
-                  <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '10px' }}>Capas de Texto</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '10px' }}>Text layers</h3>
                   <button
                     onClick={() => {
-                      const txt = prompt('Contenido del texto:')
+                      const txt = prompt('Text content:')
                       if (txt) {
                         setTextOverlays([...textOverlays, { id: `text-${Date.now()}`, text: txt, x: 50, y: 50, fontSize: 24 }])
                       }
                     }}
                     style={{ width: '100%', backgroundColor: 'var(--cream-accent)', color: 'var(--cream-accent-btn-color)', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: '800', fontSize: '12px', cursor: 'pointer' }}
                   >
-                    + Añadir Texto
+                    + Add Text
                   </button>
                 </div>
               )}
@@ -1733,9 +1733,9 @@ export default function EditorPage() {
               {/* Audio */}
               {activeRightTab === 'audio' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Sonidos</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Sounds</h3>
                   <div>
-                    <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Volumen de Fondo ({musicVolume}%)</label>
+                    <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Background volume ({musicVolume}%)</label>
                     <input
                       type="range" min="0" max="100"
                       value={musicVolume} onChange={(e) => setMusicVolume(parseInt(e.target.value))}
@@ -1748,18 +1748,18 @@ export default function EditorPage() {
               {/* Gancho */}
               {activeRightTab === 'hook' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Ganchos virales</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Viral hooks</h3>
                   {VIRAL_HOOKS.map((hook, idx) => (
                     <div key={idx} style={{ backgroundColor: 'var(--cream-surface)', padding: '10px', borderRadius: '6px' }}>
                       <div style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px' }}>{hook.title}</div>
                       <button
                         onClick={() => {
                           setTextOverlays([...textOverlays, { id: `hook-${Date.now()}`, text: hook.text, x: 50, y: 30, fontSize: 24 }])
-                          triggerToast('success', 'Gancho insertado')
+                          triggerToast('success', 'Hook inserted')
                         }}
                         style={{ backgroundColor: 'var(--cream-accent)', color: 'var(--cream-accent-btn-color)', border: 'none', borderRadius: '4px', padding: '3px 8px', fontSize: '10px', fontWeight: '800', cursor: 'pointer' }}
                       >
-                        Aplicar al inicio
+                        Apply at start
                       </button>
                     </div>
                   ))}
@@ -1795,11 +1795,11 @@ export default function EditorPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button onClick={handleSplitClip} style={{ background: 'var(--cream-surface)', color: 'var(--cream-text-primary)', border: '1px solid var(--cream-panel-border)', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <Scissors size={14} strokeWidth={1.5} />
-              Dividir
+              Split
             </button>
             <button onClick={handleDeleteSelectedTimelineItem} style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <Trash2 size={14} strokeWidth={1.5} />
-              Eliminar
+              Delete
             </button>
           </div>
 
@@ -1836,11 +1836,11 @@ export default function EditorPage() {
 
           {['video', 'text', 'audio'].map(track => (
             <div key={track} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '10px', fontWeight: '800', color: 'var(--cream-text-secondary)', width: '50px', textTransform: 'uppercase', textAlign: 'right' }}>{track === 'video' ? 'Video' : track === 'text' ? 'Texto' : 'Audio'}</span>
+              <span style={{ fontSize: '10px', fontWeight: '800', color: 'var(--cream-text-secondary)', width: '50px', textTransform: 'uppercase', textAlign: 'right' }}>{track === 'video' ? 'Video' : track === 'text' ? 'Text' : 'Audio'}</span>
               <div style={{ flex: 1, height: '36px', backgroundColor: 'var(--cream-panel)', border: '1px solid var(--cream-panel-border)', borderRadius: '8px', position: 'relative', overflow: 'hidden' }}>
                 {timelineItems.filter(x => x.track === track).length === 0 && (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: 'var(--cream-placeholder)' }}>
-                    {track === 'video' ? 'Arrastra un video aquí' : track === 'text' ? 'Añade texto desde el panel' : 'Agrega música desde Audio'}
+                    {track === 'video' ? 'Drag a video here' : track === 'text' ? 'Add text from the panel' : 'Add music from Audio'}
                   </div>
                 )}
                 {timelineItems.filter(x => x.track === track).map((item) => {
@@ -1885,8 +1885,8 @@ export default function EditorPage() {
             marginBottom: '20px'
           }} />
           <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-          <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '8px' }}>Sincronizando Doblaje de Voz con IA</h3>
-          <p style={{ fontSize: '13px', color: 'var(--cream-text-secondary)' }}>Traduciendo transcripción: {translatingProgress}%</p>
+          <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '8px' }}>Syncing AI Voice Dubbing</h3>
+          <p style={{ fontSize: '13px', color: 'var(--cream-text-secondary)' }}>Translating transcript: {translatingProgress}%</p>
         </div>
       )}
 
@@ -1911,12 +1911,12 @@ export default function EditorPage() {
             padding: '28px',
             boxShadow: '0 24px 60px rgba(0,0,0,0.5)'
           }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '900', marginBottom: '8px', color: 'var(--cream-text-primary)' }}>Importar archivo SRT</h3>
-            <p style={{ fontSize: '12px', color: 'var(--cream-text-secondary)', marginBottom: '14px' }}>Pega el contenido del archivo SRT para cargar las palabras y tiempos.</p>
+            <h3 style={{ fontSize: '16px', fontWeight: '900', marginBottom: '8px', color: 'var(--cream-text-primary)' }}>Import SRT file</h3>
+            <p style={{ fontSize: '12px', color: 'var(--cream-text-secondary)', marginBottom: '14px' }}>Paste the SRT file content to load the words and timings.</p>
             <textarea
               value={srtInputText}
               onChange={(e) => setSrtInputText(e.target.value)}
-              placeholder={`1\n00:00:01,000 --> 00:00:04,500\nHola a todos hoy vamos a ver...`}
+              placeholder={`1\n00:00:01,000 --> 00:00:04,500\nHello everyone today we are going to see...`}
               style={{
                 width: '100%',
                 height: '180px',
@@ -1932,8 +1932,8 @@ export default function EditorPage() {
               }}
             />
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setShowSrtModal(false)} style={{ flex: 1, backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', color: 'var(--cream-text-primary)', borderRadius: '10px', padding: '12px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>Cancelar</button>
-              <button onClick={handleImportSrt} style={{ flex: 1, backgroundColor: 'var(--cream-accent)', color: 'var(--cream-accent-btn-color)', border: 'none', borderRadius: '10px', padding: '12px', fontWeight: '850', cursor: 'pointer', fontSize: '12px' }}>Importar</button>
+              <button onClick={() => setShowSrtModal(false)} style={{ flex: 1, backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', color: 'var(--cream-text-primary)', borderRadius: '10px', padding: '12px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>Cancel</button>
+              <button onClick={handleImportSrt} style={{ flex: 1, backgroundColor: 'var(--cream-accent)', color: 'var(--cream-accent-btn-color)', border: 'none', borderRadius: '10px', padding: '12px', fontWeight: '850', cursor: 'pointer', fontSize: '12px' }}>Import</button>
             </div>
           </div>
         </div>
@@ -1960,11 +1960,11 @@ export default function EditorPage() {
             padding: '32px',
             boxShadow: '0 24px 60px rgba(0,0,0,0.5)'
           }}>
-            <h3 style={{ fontWeight: '900', fontSize: '20px', color: 'var(--cream-text-primary)', marginBottom: '4px' }}>Exportar clip</h3>
-            <p style={{ fontSize: '14px', color: 'var(--cream-text-secondary)', marginBottom: '24px' }}>Elige el formato y calidad.</p>
+            <h3 style={{ fontWeight: '900', fontSize: '20px', color: 'var(--cream-text-primary)', marginBottom: '4px' }}>Export clip</h3>
+            <p style={{ fontSize: '14px', color: 'var(--cream-text-secondary)', marginBottom: '24px' }}>Choose format and quality.</p>
             
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '10px', fontWeight: '700', color: 'var(--cream-text-secondary)', display: 'block', marginBottom: '6px' }}>Calidad</label>
+              <label style={{ fontSize: '10px', fontWeight: '700', color: 'var(--cream-text-secondary)', display: 'block', marginBottom: '6px' }}>Quality</label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                 {['720p', '1080p', '4K'].map(res => (
                   <button
@@ -1987,8 +1987,8 @@ export default function EditorPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '8px', marginTop: '24px' }}>
-              <button onClick={() => setShowExportModal(false)} style={{ flex: 1, backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', color: 'var(--cream-text-secondary)', borderRadius: '12px', padding: '14px', cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={triggerExport} style={{ flex: 1, backgroundColor: 'var(--cream-accent)', color: 'var(--cream-accent-btn-color)', border: 'none', borderRadius: '12px', padding: '14px', fontWeight: '900', cursor: 'pointer' }}>Exportar</button>
+              <button onClick={() => setShowExportModal(false)} style={{ flex: 1, backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', color: 'var(--cream-text-secondary)', borderRadius: '12px', padding: '14px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={triggerExport} style={{ flex: 1, backgroundColor: 'var(--cream-accent)', color: 'var(--cream-accent-btn-color)', border: 'none', borderRadius: '12px', padding: '14px', fontWeight: '900', cursor: 'pointer' }}>Export</button>
             </div>
           </div>
         </div>
@@ -2017,13 +2017,13 @@ export default function EditorPage() {
     {/* --- MOBILE FALLBACK --- */}
     <div className="editor-mobile-message">
       <Monitor size={48} strokeWidth={1.5} color="var(--cream-accent)" />
-      <h2>Editor optimizado para escritorio</h2>
-      <p>PeakClip funciona mejor en pantallas grandes. Ábrelo en un ordenador para editar, sincronizar subtítulos y exportar clips sin límites.</p>
+      <h2>Desktop-optimized editor</h2>
+      <p>PeakClip works best on large screens. Open it on a computer to edit, sync subtitles, and export clips without limits.</p>
       <button
         className="editor-mobile-btn"
         onClick={() => router.push('/dashboard')}
       >
-        Volver al dashboard
+        Back to dashboard
       </button>
     </div>
     </>
