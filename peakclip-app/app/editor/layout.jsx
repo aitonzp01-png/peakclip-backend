@@ -3,10 +3,7 @@ import '../editor/editor.css'; // import the cream palette styles
 
 export default function EditorLayout({ children }) {
   // This layout is applied only to /editor routes.
-  // It adds the .editor-layout class to the root container.
-  return (
-    <div className="editor-layout">
-      {children}
-    </div>
-  );
+  // The page itself renders .editor-layout (desktop) and .editor-mobile-layout,
+  // so this wrapper must stay neutral to avoid hiding children on mobile.
+  return <>{children}</>;
 }
