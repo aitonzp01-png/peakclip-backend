@@ -1002,6 +1002,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
         for attempt in range(max_attempts):
             check_deadline("download")
             cfg = strategies[attempt % len(strategies)]
+            jobs_store[job_id] = {"status": "processing", "message": f"Downloading video (attempt {attempt+1}/{max_attempts})..."}
             ua = user_agents[attempt % len(user_agents)]
             fmt = format_fallbacks[attempt % len(format_fallbacks)]
             imp = impersonate_profiles[attempt % len(impersonate_profiles)]
@@ -1063,7 +1064,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         [sys.executable, ytdlp_script, json.dumps(sub_opts)],
                         capture_output=True,
                         text=True,
-                        timeout=90,
+                        timeout=30,
                     )
                     if result.returncode != 0:
                         stderr_tail = (result.stderr or '')[-500:]
@@ -1071,14 +1072,14 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         raise Exception(f"yt-dlp exited {result.returncode}: {stderr_tail}")
                 except subprocess.TimeoutExpired as e:
                     stderr_tail = (e.stderr or '')[-300:] if hasattr(e, 'stderr') else ''
-                    print(f"yt-dlp attempt {attempt+1} timed out (30s). stderr: {stderr_tail}")
-                    raise TimeoutError(f"Download attempt {attempt+1} timed out after 30s")
+                    print(f"yt-dlp attempt {attempt+1} timed out. stderr: {stderr_tail}")
+                    raise TimeoutError(f"Download attempt {attempt+1} timed out")
                 if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
                     raise Exception("File not downloaded or too small")
                 last_err = None
                 break
             except TimeoutError:
-                last_err = TimeoutError(f"Download attempt {attempt+1} timed out after 30s")
+                last_err = TimeoutError(f"Download attempt {attempt+1} timed out")
                 print(f"Download attempt {attempt+1}/{max_attempts} timed out")
                 if attempt < max_attempts - 1:
                     time.sleep(min(2 + attempt, 10))
@@ -1154,38 +1155,45 @@ def process_video_background(job_id: str, user_id: str, url: str):
 
         check_deadline("transcription")
         jobs_store[job_id] = {"status": "processing", "message": "Transcribing audio..."}
-        def transcribe_with(client_obj, model):
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+        def call_transcribe(client_obj, model):
             with open(audio_path, 'rb') as f:
                 return client_obj.audio.transcriptions.create(
-                    model=model,
-                    file=f,
+                    model=model, file=f,
                     response_format="verbose_json",
                     timestamp_granularities=["word", "segment"],
-                    timeout=300,
                 )
+        def run_with_timeout(client_obj, model, timeout_sec):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(call_transcribe, client_obj, model)
+                return fut.result(timeout=timeout_sec)
         transcript = None
+        # Try OpenAI first (hard timeout 30s)
         try:
-            transcript = transcribe_with(client, "whisper-1")
-        except Exception as e:
-            err_msg = str(e).lower()
-            if "insufficient_quota" in err_msg or "429" in err_msg or "exceeded" in err_msg:
-                print(f"Job {job_id}: OpenAI quota exceeded, trying Groq...")
-                if groq_client:
-                    transcript = transcribe_with(groq_client, "whisper-large-v3-turbo")
-                else:
-                    print(f"Job {job_id}: No GROQ_API_KEY configured, cannot fallback.")
-            else:
-                print(f"Job {job_id}: OpenAI Whisper error: {e}, trying Groq...")
-                if groq_client:
-                    transcript = transcribe_with(groq_client, "whisper-large-v3-turbo")
+            transcript = run_with_timeout(client, "whisper-1", 30)
+        except FuturesTimeout:
+            print(f"Job {job_id}: OpenAI Whisper timed out after 30s")
+        except Exception as oai_err:
+            print(f"Job {job_id}: OpenAI Whisper error (attempting Groq fallback): {str(oai_err)[:120]}")
+        # If OpenAI failed, try Groq fallback
+        if transcript is None and groq_client:
+            try:
+                jobs_store[job_id] = {"status": "processing", "message": "Transcribing with Groq (OpenAI quota/timed out)..."}
+                transcript = run_with_timeout(groq_client, "whisper-large-v3-turbo", 60)
+            except FuturesTimeout:
+                print(f"Job {job_id}: Groq fallback timed out after 60s")
+            except Exception as groq_err:
+                print(f"Job {job_id}: Groq fallback also failed: {str(groq_err)[:120]}")
         if transcript is None:
-            msg = "Transcription failed: "
-            if not groq_client:
-                msg += "OpenAI API quota exceeded and no GROQ_API_KEY configured. "
-                msg += "To fix: add GROQ_API_KEY (free at console.groq.com) in Railway Dashboard → Variables."
+            msgs = []
+            if not Groq:
+                msgs.append("Groq library not installed on server")
+            elif not groq_client:
+                msgs.append("OpenAI quota/timed out and no GROQ_API_KEY configured")
             else:
-                msg += "All providers failed (OpenAI + Groq). Check your API keys and account credits."
-            raise Exception(msg)
+                msgs.append("OpenAI and Groq both failed or timed out")
+            msgs.append("To fix: set GROQ_API_KEY in Railway Dashboard (free at console.groq.com)")
+            raise Exception(". ".join(msgs))
 
         words_data = []
         if hasattr(transcript, 'words') and transcript.words:
@@ -1236,11 +1244,15 @@ Return JSON with this exact format:
             err_msg = str(e).lower()
             if ("insufficient_quota" in err_msg or "429" in err_msg or "exceeded" in err_msg) and groq_client:
                 print(f"Job {job_id}: OpenAI quota exceeded for analysis, using Groq...")
-                response = groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    response_format={"type": "json_object"},
-                    timeout=120, messages=analysis_body,
-                )
+                try:
+                    response = groq_client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        response_format={"type": "json_object"},
+                        timeout=60, messages=analysis_body,
+                    )
+                except Exception as groq_ai_err:
+                    print(f"Job {job_id}: Groq analysis also failed: {groq_ai_err}")
+                    response = None
             else:
                 print(f"Job {job_id}: AI analysis error: {e}")
                 # Fallback: return preview generated viral moments
