@@ -9,6 +9,10 @@ from pydantic import BaseModel
 from supabase import create_client
 import yt_dlp
 import openai
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
 import subprocess
 import os
 import uuid
@@ -369,6 +373,8 @@ supabase = create_client(
 )
 
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+groq_api_key = os.getenv("GROQ_API_KEY")
+groq_client = Groq(api_key=groq_api_key) if groq_api_key and Groq else None
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_PRICE_CREATOR = os.getenv("STRIPE_PRICE_CREATOR", "price_creator")
 STRIPE_PRICE_PRO = os.getenv("STRIPE_PRICE_PRO", "price_pro")
@@ -1148,18 +1154,32 @@ def process_video_background(job_id: str, user_id: str, url: str):
 
         check_deadline("transcription")
         jobs_store[job_id] = {"status": "processing", "message": "Transcribing audio..."}
-        try:
+        def transcribe_with(client_obj, model):
             with open(audio_path, 'rb') as f:
-                transcript = client.audio.transcriptions.create(
-                    model="whisper-1",
+                return client_obj.audio.transcriptions.create(
+                    model=model,
                     file=f,
                     response_format="verbose_json",
                     timestamp_granularities=["word", "segment"],
                     timeout=300,
                 )
+        transcript = None
+        try:
+            transcript = transcribe_with(client, "whisper-1")
         except Exception as e:
-            print(f"Job {job_id}: Whisper transcription failed: {e}")
-            raise Exception(f"Transcription failed: {e}")
+            err_msg = str(e).lower()
+            if "insufficient_quota" in err_msg or "429" in err_msg or "exceeded" in err_msg:
+                print(f"Job {job_id}: OpenAI quota exceeded, trying Groq...")
+                if groq_client:
+                    transcript = transcribe_with(groq_client, "whisper-large-v3-turbo")
+                else:
+                    print(f"Job {job_id}: No GROQ_API_KEY configured, cannot fallback.")
+            else:
+                print(f"Job {job_id}: OpenAI Whisper error: {e}, trying Groq...")
+                if groq_client:
+                    transcript = transcribe_with(groq_client, "whisper-large-v3-turbo")
+        if transcript is None:
+            raise Exception("All transcription methods failed. Set OPENAI_API_KEY or GROQ_API_KEY.")
 
         words_data = []
         if hasattr(transcript, 'words') and transcript.words:
@@ -1177,42 +1197,65 @@ def process_video_background(job_id: str, user_id: str, url: str):
 
         check_deadline("ai-analysis")
         jobs_store[job_id] = {"status": "processing", "message": "Analyzing viral moments with AI..."}
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            response_format={"type": "json_object"},
-            timeout=120,
-            messages=[{
-                "role": "system",
-                "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
-            }, {
-                "role": "user",
-                "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
+        analysis_body = [{
+            "role": "system",
+            "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
+        }, {
+            "role": "user",
+            "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
-    Transcript:
-    {segments_text}
+Transcript:
+{segments_text}
 
-    RULES:
-    - Each clip MUST be 30-60 seconds long (ideal for shorts).
-    - Prioritize: strong hooks in first 3s, emotional peaks, surprising twists, humor, high-energy moments, or controversy.
-    - Classify mood as: epic, hype, chill, funny, emotional, suspense.
-    - Include a hook_score from 1-10 ranking virality potential.
+RULES:
+- Each clip MUST be 30-60 seconds long (ideal for shorts).
+- Prioritize: strong hooks in first 3s, emotional peaks, surprising twists, humor, high-energy moments, or controversy.
+- Classify mood as: epic, hype, chill, funny, emotional, suspense.
+- Include a hook_score from 1-10 ranking virality potential.
 
-    Return JSON with this exact format:
-    {{"clips": [
-      {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype", "hook_score": 9}},
-      {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
-      {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
-    ]}}"""
-            }]
-        )
-
-        raw = response.choices[0].message.content.strip()
+Return JSON with this exact format:
+{{"clips": [
+  {{"start": 10.5, "end": 40.2, "title": "Clip title", "reason": "Why viral", "mood": "hype", "hook_score": 9}},
+  {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
+  {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
+]}}"""
+        }]
+        response = None
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o", response_format={"type": "json_object"},
+                timeout=120, messages=analysis_body,
+            )
+        except Exception as e:
+            err_msg = str(e).lower()
+            if ("insufficient_quota" in err_msg or "429" in err_msg or "exceeded" in err_msg) and groq_client:
+                print(f"Job {job_id}: OpenAI quota exceeded for analysis, using Groq...")
+                response = groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    response_format={"type": "json_object"},
+                    timeout=120, messages=analysis_body,
+                )
+            else:
+                print(f"Job {job_id}: AI analysis error: {e}")
+                # Fallback: return preview generated viral moments
+                response = None
+        if response and response.choices:
+            raw = response.choices[0].message.content.strip()
+        else:
+            raw = None
         # Strip markdown code fences if present
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[-1].rsplit("\n", 1)[0]
-            if raw.endswith("```"):
-                raw = raw[:-3]
-        clips_data = json.loads(raw)
+        if raw:
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[-1].rsplit("\n", 1)[0]
+                if raw.endswith("```"):
+                    raw = raw[:-3]
+        if raw:
+            try:
+                clips_data = json.loads(raw)
+            except json.JSONDecodeError:
+                clips_data = {"clips": []}
+        else:
+            clips_data = {"clips": []}
 
         # Sort clips by hook_score descending (best viral moment first)
         clips_data["clips"].sort(key=lambda c: c.get("hook_score", 5), reverse=True)

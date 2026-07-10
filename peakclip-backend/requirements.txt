@@ -48,4 +48,5 @@ yt-dlp[default]>=2026.6.0
 bgutil-ytdlp-pot-provider
 playwright
 opencv-python-headless==4.10.0.84
+groq>=0.20.0
 
