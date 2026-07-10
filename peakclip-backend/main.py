@@ -35,6 +35,31 @@ from contextlib import asynccontextmanager
 BGUTIL_POT_AVAILABLE = False
 
 
+def upload_with_verification(supabase, bucket, file_path, storage_path, content_type):
+    """Upload a file to Supabase Storage and verify it is reachable."""
+    public_url = None
+    try:
+        with open(file_path, 'rb') as f:
+            supabase.storage.from_(bucket).upload(storage_path, f, {"content-type": content_type, "upsert": "true"})
+        public_url = supabase.storage.from_(bucket).get_public_url(storage_path)
+
+        # Verify the uploaded object is accessible and non-empty
+        for attempt in range(2):
+            try:
+                r = httpx.head(public_url, timeout=15, follow_redirects=True)
+                if r.status_code < 400 and (r.headers.get('content-length') is None or int(r.headers.get('content-length', 1)) > 0):
+                    return public_url
+                print(f"Upload verification attempt {attempt + 1} failed for {public_url}: status={r.status_code} size={r.headers.get('content-length')}")
+            except Exception as e:
+                print(f"Upload verification error attempt {attempt + 1} for {public_url}: {e}")
+            time.sleep(1)
+        print(f"Upload verification failed after retries: {public_url}")
+        return None
+    except Exception as e:
+        print(f"Storage upload failed: {e}")
+        return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -1271,24 +1296,20 @@ def process_video_background(job_id: str, user_id: str, url: str):
 
                 jobs_store[job_id] = {"status": "processing", "message": f"Uploading clip {i+1}..."}
                 # Upload to Supabase Storage
-                clip_storage_url = ""
-                try:
-                    with open(output_path, 'rb') as f:
-                        storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
-                        supabase.storage.from_("clips").upload(storage_path, f, {"content-type": "video/mp4", "upsert": "true"})
-                        clip_storage_url = supabase.storage.from_("clips").get_public_url(storage_path)
-                except Exception as e:
-                    print(f"Storage upload failed: {e}")
+                storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
+                clip_storage_url = upload_with_verification(
+                    supabase, "clips", output_path, storage_path, "video/mp4"
+                ) or ""
 
                 # Upload thumbnail to Supabase Storage
-                thumb_storage_url = ""
-                try:
-                    with open(thumb_path, 'rb') as f:
-                        thumb_storage_path = f"thumbnails/{job_id}.jpg"
-                        supabase.storage.from_("clips").upload(thumb_storage_path, f, {"content-type": "image/jpeg", "upsert": "true"})
-                        thumb_storage_url = supabase.storage.from_("clips").get_public_url(thumb_storage_path)
-                except Exception as e:
-                    print(f"Thumbnail storage upload failed: {e}")
+                thumb_storage_path = f"thumbnails/{job_id}.jpg"
+                thumb_storage_url = upload_with_verification(
+                    supabase, "clips", thumb_path, thumb_storage_path, "image/jpeg"
+                ) or ""
+
+                if not clip_storage_url:
+                    print(f"Skipping clip {i+1} insert because upload verification failed.")
+                    continue
 
                 supabase.table("clips").insert({
                     "user_id": user_id,
@@ -1320,6 +1341,10 @@ def process_video_background(job_id: str, user_id: str, url: str):
             for f in temp_files_extra:
                 try: os.unlink(f)
                 except OSError: pass
+
+        if not output_clips:
+            jobs_store[job_id] = {"status": "error", "message": "All clip uploads failed. Check Supabase Storage permissions/bucket."}
+            raise Exception("All clip uploads failed")
 
         jobs_store[job_id] = {"status": "done", "message": f"{len(output_clips)} clips ready", "clips": output_clips}
         return {
@@ -1502,14 +1527,10 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         local_files.append(output_path)
 
         # Upload to Supabase Storage
-        public_url = ""
-        try:
-            with open(output_path, 'rb') as f:
-                storage_path = f"exports/{output_filename}"
-                supabase.storage.from_("clips").upload(storage_path, f, {"content-type": f"video/{output_ext}", "upsert": "true"})
-                public_url = supabase.storage.from_("clips").get_public_url(storage_path)
-        except Exception as e:
-            print(f"Storage upload failed: {e}")
+        storage_path = f"exports/{output_filename}"
+        public_url = upload_with_verification(
+            supabase, "clips", output_path, storage_path, f"video/{output_ext}"
+        ) or ""
 
         # Update clip record
         supabase.table("clips").update({
@@ -1884,23 +1905,19 @@ Return JSON with this exact format:
 
             local_files.append(output_path)
 
-            clip_storage_url = ""
-            try:
-                with open(output_path, 'rb') as f:
-                    storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
-                    supabase.storage.from_("clips").upload(storage_path, f, {"content-type": "video/mp4", "upsert": "true"})
-                    clip_storage_url = supabase.storage.from_("clips").get_public_url(storage_path)
-            except Exception as e:
-                print(f"Storage upload failed: {e}")
+            storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
+            clip_storage_url = upload_with_verification(
+                supabase, "clips", output_path, storage_path, "video/mp4"
+            ) or ""
 
-            thumb_storage_url = ""
-            try:
-                with open(thumb_path, 'rb') as f:
-                    thumb_storage_path = f"thumbnails/{job_id}.jpg"
-                    supabase.storage.from_("clips").upload(thumb_storage_path, f, {"content-type": "image/jpeg", "upsert": "true"})
-                    thumb_storage_url = supabase.storage.from_("clips").get_public_url(thumb_storage_path)
-            except Exception as e:
-                print(f"Thumbnail storage upload failed: {e}")
+            thumb_storage_path = f"thumbnails/{job_id}.jpg"
+            thumb_storage_url = upload_with_verification(
+                supabase, "clips", thumb_path, thumb_storage_path, "image/jpeg"
+            ) or ""
+
+            if not clip_storage_url:
+                print(f"Skipping clip {i+1} insert because upload verification failed.")
+                continue
 
             supabase.table("clips").insert({
                 "user_id": user_id,
@@ -1925,6 +1942,10 @@ Return JSON with this exact format:
                 "file": clip_storage_url,
                 "thumbnail_url": thumb_storage_url
             })
+
+        if not output_clips:
+            jobs_store[job_id] = {"status": "error", "message": "All clip uploads failed. Check Supabase Storage permissions/bucket."}
+            raise Exception("All clip uploads failed")
 
         jobs_store[job_id] = {"status": "done", "message": f"{len(output_clips)} clips ready"}
     except Exception as e:
