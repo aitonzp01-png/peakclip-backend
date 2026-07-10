@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from '../../lib/supabase'
+import { exportClip } from '../../lib/api'
 import ErrorBoundary from '../../lib/error-boundary'
 import './editor.css'
 
@@ -18,7 +19,8 @@ import {
   Scissors, Trash2, ZoomIn, Type, Music, Film, Wand2,
   Layers, Tag, Shuffle, AlignLeft, Anchor, Palette,
   Sparkles, Smartphone, Eye, EyeOff, Captions,
-  Search, Star, Upload, RotateCcw, RotateCw, Zap
+  Search, Star, Upload, RotateCcw, RotateCw, Zap,
+  Home, Plus
 } from 'lucide-react'
 
 // --- CONSTANTS ---
@@ -48,6 +50,7 @@ const VIRAL_HOOKS = [
 export default function EditorPage() {
   const router = useRouter()
   const videoRef = useRef(null)
+  const mobileVideoRef = useRef(null)
   const subtitleCanvasRef = useRef(null)
   const faceCanvasRef = useRef(null)
   const waveformCanvasRef = useRef(null)
@@ -71,6 +74,18 @@ export default function EditorPage() {
   const [duration, setDuration] = useState(60)
   const [currentTime, setCurrentTime] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
+
+  // Mobile editor state
+  const [mobileTab, setMobileTab] = useState('home')
+  const [trimStart, setTrimStart] = useState(0)
+  const [trimEnd, setTrimEnd] = useState(0)
+  const [playbackSpeed, setPlaybackSpeed] = useState(1)
+  const [selectedSubtitleId, setSelectedSubtitleId] = useState(null)
+  const [mobilePlaying, setMobilePlaying] = useState(false)
+  const [mobileExporting, setMobileExporting] = useState(false)
+  const [mobileExportUrl, setMobileExportUrl] = useState(null)
+
+  const effectiveTrimEnd = trimEnd || duration
 
   // Translation & Dubbing
   const [languageMode, setLanguageMode] = useState('original')
@@ -437,8 +452,64 @@ export default function EditorPage() {
   }
 
   const triggerExport = async () => {
+    if (!clipId || !videoSrc) {
+      triggerToast('error', 'No clip available to export')
+      return
+    }
+    setMobileExporting(true)
+    setMobileExportUrl(null)
     setShowExportModal(false)
     triggerToast('success', 'Video export started.')
+    try {
+      const trimStartPct = duration ? (trimStart / duration) * 100 : 0
+      const trimEndPct = duration ? (effectiveTrimEnd / duration) * 100 : 100
+      const activeWord = activeTranscript.find(w => !w.deleted && currentTime >= w.startTime && currentTime <= w.endTime)
+      const subtitleText = activeWord ? activeWord.word : activeTranscript.filter(w => !w.deleted).map(w => w.word).join(' ')
+
+      const styleMap = {
+        karaoke: 'bold-yellow',
+        beasty: 'tiktok-style',
+        popline: 'tiktok-style',
+        deepdiver: 'minimal-white',
+        youshaei: 'white-outline',
+        podp: 'white-outline',
+        mozi: 'white-outline',
+        typewriter: 'bold-yellow'
+      }
+      const position = subtitleStyle.positionY < 40 ? 'top' : subtitleStyle.positionY > 60 ? 'bottom' : 'middle'
+      const trackMap = { m1: 'chill', m2: 'hype', m3: 'epic' }
+
+      const response = await exportClip(clipId, {
+        video_url: videoSrc,
+        trim_start: Math.max(0, Math.min(100, trimStartPct)),
+        trim_end: Math.max(0, Math.min(100, trimEndPct)),
+        subtitle_text: subtitleText || 'PeakClip',
+        subtitle_style: styleMap[selectedPresetId] || 'bold-yellow',
+        subtitle_position: position,
+        font_size: subtitleStyle.fontSize,
+        watermark_text: '',
+        watermark_position: 'top-right',
+        music_track: trackMap[activeMusicTrack] || 'none',
+        music_volume: musicVolume,
+        filter_style: 'none',
+        resolution: exportResolution.toLowerCase(),
+        format: 'mp4',
+        fps: 30
+      })
+
+      if (!response.ok) {
+        const err = await response.text().catch(() => 'Export failed')
+        throw new Error(err)
+      }
+      const data = await response.json()
+      setMobileExportUrl(data.video_url || null)
+      triggerToast('success', 'Export complete!')
+    } catch (err) {
+      console.error(err)
+      triggerToast('error', err.message || 'Export failed')
+    } finally {
+      setMobileExporting(false)
+    }
   }
 
   // --- UNDO / REDO ---
@@ -941,6 +1012,70 @@ export default function EditorPage() {
     setCurrentTime(boundedTime)
   }
 
+  // --- MOBILE HELPERS ---
+  const mobileTogglePlay = () => {
+    const v = mobileVideoRef.current
+    if (!v) return
+    if (v.paused) {
+      if (v.currentTime >= effectiveTrimEnd - 0.05) v.currentTime = trimStart
+      v.play().catch(() => {})
+    } else {
+      v.pause()
+    }
+  }
+
+  const handleMobileTimeUpdate = (e) => {
+    const v = e.currentTarget
+    if (!v) return
+    if (v.currentTime < trimStart - 0.05) {
+      v.currentTime = trimStart
+    }
+    if (v.currentTime >= effectiveTrimEnd) {
+      v.currentTime = trimStart
+      v.pause()
+    }
+  }
+
+  const handleTrimPreset = (length) => {
+    setTrimStart(0)
+    setTrimEnd(Math.min(duration, length))
+  }
+
+  const handleAddSubtitle = () => {
+    const last = activeTranscript[activeTranscript.length - 1]
+    const start = last ? last.endTime + 0.1 : currentTime
+    const newWord = {
+      id: `subtitle-${Date.now()}`,
+      word: 'New caption',
+      startTime: start,
+      endTime: start + 1,
+      deleted: false,
+      favorite: false
+    }
+    const next = [...activeTranscript, newWord]
+    setActiveTranscript(next)
+    setSelectedSubtitleId(newWord.id)
+    saveToHistory({ transcript: next })
+  }
+
+  const handleDeleteSubtitle = () => {
+    if (!activeSubtitleId) return
+    const next = activeTranscript.filter(w => w.id !== activeSubtitleId)
+    setActiveTranscript(next)
+    setSelectedSubtitleId(null)
+    saveToHistory({ transcript: next })
+  }
+
+  const handleAddTextOverlay = () => {
+    const text = typeof window !== 'undefined' ? window.prompt('Text content:') : ''
+    if (text) {
+      const next = [...textOverlays, { id: `text-${Date.now()}`, text, x: 50, y: 50, fontSize: 24, color: '#ffffff' }]
+      setTextOverlays(next)
+      setSelectedTextId(next[next.length - 1].id)
+      saveToHistory({ textOverlays: next })
+    }
+  }
+
   const handleCanvasMouseDown = (e, overlay) => {
     setSelectedTextId(overlay.id)
     setDraggingTextId(overlay.id)
@@ -974,6 +1109,8 @@ export default function EditorPage() {
       saveToHistory({ textOverlays })
     }
   }
+
+  const activeSubtitleId = selectedSubtitleId || activeTranscript[0]?.id || null
 
   const editorContent = loading ? (
     <div style={{
@@ -2037,52 +2174,52 @@ export default function EditorPage() {
     </div>
 
     {/* --- MOBILE EDITOR --- */}
-    <div className="editor-mobile-layout">
-      <header className="editor-mobile-header">
+    <div className='editor-mobile-layout'>
+      <header className='editor-mobile-header'>
         <button
-          className="editor-mobile-back"
+          className='editor-mobile-back'
           onClick={() => router.push('/dashboard')}
-          aria-label="Back to dashboard"
+          aria-label='Back to dashboard'
         >
           <ArrowLeft size={22} strokeWidth={1.5} />
         </button>
         <input
-          type="text"
+          type='text'
           value={clipTitle}
           onChange={(e) => setClipTitle(e.target.value)}
           onBlur={handleSave}
-          className="editor-mobile-title-input"
-          aria-label="Clip title"
+          className='editor-mobile-title-input'
+          aria-label='Clip title'
         />
         <button
-          className="editor-mobile-save"
+          className='editor-mobile-save'
           onClick={handleSave}
           disabled={saving}
-          aria-label="Save title"
+          aria-label='Save title'
         >
           {saving ? '...' : <Save size={20} strokeWidth={1.5} />}
         </button>
       </header>
 
-      <div className="editor-mobile-video-wrap">
+      <div className='editor-mobile-video-wrap'>
         {videoError ? (
-          <div className="editor-mobile-video-error">
-            <p className="editor-mobile-error-title">Couldn&apos;t load video</p>
-            <p className="editor-mobile-error-text">
+          <div className='editor-mobile-video-error'>
+            <p className='editor-mobile-error-title'>Couldn&apos;t load video</p>
+            <p className='editor-mobile-error-text'>
               The clip file isn&apos;t reachable right now. This usually happens when the upload to storage failed.
             </p>
             {displayVideoSrc && (
               <a
                 href={displayVideoSrc}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="editor-mobile-error-link"
+                target='_blank'
+                rel='noopener noreferrer'
+                className='editor-mobile-error-link'
               >
                 Open original file
               </a>
             )}
             <button
-              className="editor-mobile-error-retry"
+              className='editor-mobile-error-retry'
               onClick={() => {
                 setVideoError(null)
                 setDisplayVideoSrc(normalizeVideoUrl(videoSrc))
@@ -2093,11 +2230,16 @@ export default function EditorPage() {
           </div>
         ) : (
           <video
+            ref={mobileVideoRef}
             src={displayVideoSrc}
             controls
             playsInline
-            preload="metadata"
-            className="editor-mobile-video"
+            preload='metadata'
+            playbackRate={playbackSpeed}
+            className='editor-mobile-video'
+            onPlay={() => setMobilePlaying(true)}
+            onPause={() => setMobilePlaying(false)}
+            onTimeUpdate={handleMobileTimeUpdate}
             onError={(e) => {
               const originalSrc = e?.currentTarget?.src || displayVideoSrc
               const normalizedSrc = normalizeVideoUrl(originalSrc)
@@ -2112,26 +2254,356 @@ export default function EditorPage() {
         )}
       </div>
 
-      <div className="editor-mobile-meta">
-        <span>{formatDuration(duration)}</span>
-        <span>{clipDate || 'Just now'}</span>
-      </div>
+      <div className='editor-mobile-main'>
+        <div className='editor-mobile-tab-content'>
+          {mobileTab === 'home' && (
+            <div className='editor-mobile-section'>
+              <div className='editor-mobile-meta'>
+                <span>{formatDuration(duration)}</span>
+                <span>{aspectRatio} &bull; {clipDate || 'Just now'}</span>
+              </div>
+              <button
+                className='editor-mobile-play-btn'
+                onClick={mobileTogglePlay}
+                aria-label={mobilePlaying ? 'Pause' : 'Play'}
+              >
+                {mobilePlaying ? (
+                  <Pause size={28} fill='currentColor' />
+                ) : (
+                  <Play size={28} fill='currentColor' />
+                )}
+              </button>
+              <button
+                className='editor-mobile-btn-primary'
+                onClick={() => setShowExportModal(true)}
+                disabled={videoError}
+              >
+                <Download size={18} strokeWidth={1.5} />
+                Export
+              </button>
+            </div>
+          )}
 
-      <div className="editor-mobile-actions">
-        <button
-          className="editor-mobile-btn-secondary"
-          onClick={() => router.push('/dashboard')}
-        >
-          Close
-        </button>
-        <button
-          className="editor-mobile-btn-primary"
-          onClick={() => setShowExportModal(true)}
-          disabled={videoError}
-        >
-          <Download size={18} strokeWidth={1.5} />
-          Export
-        </button>
+          {mobileTab === 'trim' && (
+            <div className='editor-mobile-section'>
+              <h3 className='editor-mobile-section-title'>Trim clip</h3>
+              <div className='editor-mobile-card'>
+                <div className='editor-mobile-row-between'>
+                  <span className='editor-mobile-label'>Start</span>
+                  <span className='editor-mobile-value'>{trimStart.toFixed(2)}s</span>
+                </div>
+                <input
+                  type='range'
+                  min={0}
+                  max={duration}
+                  step={0.1}
+                  value={trimStart}
+                  onChange={(e) => setTrimStart(Math.min(parseFloat(e.target.value), effectiveTrimEnd - 0.1))}
+                  className='editor-mobile-slider'
+                />
+                <div className='editor-mobile-row-between' style={{ marginTop: '12px' }}>
+                  <span className='editor-mobile-label'>End</span>
+                  <span className='editor-mobile-value'>{effectiveTrimEnd.toFixed(2)}s</span>
+                </div>
+                <input
+                  type='range'
+                  min={0}
+                  max={duration}
+                  step={0.1}
+                  value={effectiveTrimEnd}
+                  onChange={(e) => setTrimEnd(Math.max(parseFloat(e.target.value), trimStart + 0.1))}
+                  className='editor-mobile-slider'
+                />
+              </div>
+
+              <div className='editor-mobile-card'>
+                <div className='editor-mobile-label' style={{ marginBottom: '10px' }}>Quick length</div>
+                <div className='editor-mobile-preset-row'>
+                  {[15, 30, 60].map((len) => (
+                    <button
+                      key={len}
+                      className='editor-mobile-chip'
+                      onClick={() => handleTrimPreset(len)}
+                    >
+                      {len}s
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className='editor-mobile-card'>
+                <div className='editor-mobile-label' style={{ marginBottom: '10px' }}>Playback speed</div>
+                <div className='editor-mobile-preset-row'>
+                  {[0.5, 1, 1.5, 2].map((speed) => (
+                    <button
+                      key={speed}
+                      className={`editor-mobile-chip ${playbackSpeed === speed ? 'active' : ''}`}
+                      onClick={() => setPlaybackSpeed(speed)}
+                    >
+                      {speed}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {mobileTab === 'subtitles' && (
+            <div className='editor-mobile-section'>
+              <div className='editor-mobile-section-header'>
+                <h3 className='editor-mobile-section-title'>Subtitles</h3>
+                <button
+                  className='editor-mobile-icon-btn'
+                  onClick={handleAddSubtitle}
+                  aria-label='Add subtitle'
+                >
+                  <Plus size={18} strokeWidth={2} />
+                </button>
+              </div>
+
+              {activeSubtitleId && activeTranscript.find((w) => w.id === activeSubtitleId) && (
+                <div className='editor-mobile-card'>
+                  <div className='editor-mobile-row-between' style={{ marginBottom: '10px' }}>
+                    <span className='editor-mobile-label'>Edit selected</span>
+                    <button
+                      className='editor-mobile-delete-text'
+                      onClick={handleDeleteSubtitle}
+                    >
+                      <Trash2 size={14} strokeWidth={2} />
+                      Delete
+                    </button>
+                  </div>
+                  <textarea
+                    value={activeTranscript.find((w) => w.id === activeSubtitleId)?.word || ''}
+                    onChange={(e) => handleWordTextEdit(activeSubtitleId, e.target.value)}
+                    rows={3}
+                    className='editor-mobile-textarea'
+                  />
+                  <div className='editor-mobile-label' style={{ marginTop: '12px', marginBottom: '8px' }}>Style preset</div>
+                  <div className='editor-mobile-preset-grid'>
+                    {SUBTITLE_PRESETS.map((preset) => {
+                      const isSel = selectedPresetId === preset.id
+                      return (
+                        <button
+                          key={preset.id}
+                          className={`editor-mobile-preset-tile ${isSel ? 'active' : ''}`}
+                          onClick={() => applyPreset(preset)}
+                        >
+                          {preset.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className='editor-mobile-label' style={{ marginTop: '12px' }}>Position ({subtitleStyle.positionY}%)</div>
+                  <input
+                    type='range'
+                    min={10}
+                    max={90}
+                    value={subtitleStyle.positionY}
+                    onChange={(e) => setSubtitleStyle({ ...subtitleStyle, positionY: parseInt(e.target.value) })}
+                    className='editor-mobile-slider'
+                  />
+                  <div className='editor-mobile-label' style={{ marginTop: '12px' }}>Font size ({subtitleStyle.fontSize}px)</div>
+                  <input
+                    type='range'
+                    min={12}
+                    max={60}
+                    value={subtitleStyle.fontSize}
+                    onChange={(e) => setSubtitleStyle({ ...subtitleStyle, fontSize: parseInt(e.target.value) })}
+                    className='editor-mobile-slider'
+                  />
+                </div>
+              )}
+
+              <div className='editor-mobile-list'>
+                {activeTranscript.map((w) => (
+                  <button
+                    key={w.id}
+                    className={`editor-mobile-list-item ${activeSubtitleId === w.id ? 'active' : ''} ${w.deleted ? 'deleted' : ''}`}
+                    onClick={() => setSelectedSubtitleId(w.id)}
+                  >
+                    <span className='editor-mobile-time-badge'>{w.startTime.toFixed(1)}s</span>
+                    <span className='editor-mobile-list-text'>{w.deleted ? '[removed]' : w.word}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {mobileTab === 'text' && (
+            <div className='editor-mobile-section'>
+              <div className='editor-mobile-section-header'>
+                <h3 className='editor-mobile-section-title'>Text overlays</h3>
+                <button
+                  className='editor-mobile-icon-btn'
+                  onClick={handleAddTextOverlay}
+                  aria-label='Add text overlay'
+                >
+                  <Plus size={18} strokeWidth={2} />
+                </button>
+              </div>
+
+              {selectedTextId && textOverlays.find((t) => t.id === selectedTextId) && (
+                <div className='editor-mobile-card'>
+                  <div className='editor-mobile-row-between' style={{ marginBottom: '10px' }}>
+                    <span className='editor-mobile-label'>Edit text</span>
+                    <button
+                      className='editor-mobile-delete-text'
+                      onClick={() => {
+                        const next = textOverlays.filter((t) => t.id !== selectedTextId)
+                        setTextOverlays(next)
+                        setSelectedTextId(null)
+                        saveToHistory({ textOverlays: next })
+                      }}
+                    >
+                      <Trash2 size={14} strokeWidth={2} />
+                      Delete
+                    </button>
+                  </div>
+                  <input
+                    type='text'
+                    value={textOverlays.find((t) => t.id === selectedTextId)?.text || ''}
+                    onChange={(e) => setTextOverlays(textOverlays.map((t) => t.id === selectedTextId ? { ...t, text: e.target.value } : t))}
+                    className='editor-mobile-input'
+                  />
+                  <div className='editor-mobile-label' style={{ marginTop: '12px' }}>Color</div>
+                  <input
+                    type='color'
+                    value={textOverlays.find((t) => t.id === selectedTextId)?.color || '#ffffff'}
+                    onChange={(e) => setTextOverlays(textOverlays.map((t) => t.id === selectedTextId ? { ...t, color: e.target.value } : t))}
+                    className='editor-mobile-color-input'
+                  />
+                  <div className='editor-mobile-label' style={{ marginTop: '12px' }}>Font size ({textOverlays.find((t) => t.id === selectedTextId)?.fontSize || 24}px)</div>
+                  <input
+                    type='range'
+                    min={12}
+                    max={80}
+                    value={textOverlays.find((t) => t.id === selectedTextId)?.fontSize || 24}
+                    onChange={(e) => setTextOverlays(textOverlays.map((t) => t.id === selectedTextId ? { ...t, fontSize: parseInt(e.target.value) } : t))}
+                    className='editor-mobile-slider'
+                  />
+                </div>
+              )}
+
+              <div className='editor-mobile-list'>
+                {textOverlays.map((t) => (
+                  <button
+                    key={t.id}
+                    className={`editor-mobile-list-item ${selectedTextId === t.id ? 'active' : ''}`}
+                    onClick={() => setSelectedTextId(t.id)}
+                  >
+                    <span className='editor-mobile-list-text' style={{ color: t.color }}>{t.text}</span>
+                    <span className='editor-mobile-time-badge'>{t.fontSize}px</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {mobileTab === 'music' && (
+            <div className='editor-mobile-section'>
+              <h3 className='editor-mobile-section-title'>Music</h3>
+              <div className='editor-mobile-card'>
+                <div className='editor-mobile-label' style={{ marginBottom: '10px' }}>Background track</div>
+                <div className='editor-mobile-list'>
+                  {bgMusicList.map((track) => (
+                    <button
+                      key={track.id}
+                      className={`editor-mobile-list-item ${activeMusicTrack === track.id ? 'active' : ''}`}
+                      onClick={() => setActiveMusicTrack(track.id)}
+                    >
+                      <span className='editor-mobile-list-text'>{track.name}</span>
+                      <span className='editor-mobile-time-badge'>{track.duration}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className='editor-mobile-card'>
+                <div className='editor-mobile-label'>Music volume ({musicVolume}%)</div>
+                <input
+                  type='range'
+                  min={0}
+                  max={100}
+                  value={musicVolume}
+                  onChange={(e) => setMusicVolume(parseInt(e.target.value))}
+                  className='editor-mobile-slider'
+                />
+              </div>
+            </div>
+          )}
+
+          {mobileTab === 'export' && (
+            <div className='editor-mobile-section'>
+              <h3 className='editor-mobile-section-title'>Export</h3>
+              <div className='editor-mobile-card'>
+                <div className='editor-mobile-label' style={{ marginBottom: '10px' }}>Quality</div>
+                <div className='editor-mobile-preset-row'>
+                  {['720p', '1080p', '4K'].map((res) => (
+                    <button
+                      key={res}
+                      className={`editor-mobile-chip ${exportResolution === res ? 'active' : ''}`}
+                      onClick={() => setExportResolution(res)}
+                    >
+                      {res}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {mobileExportUrl && (
+                <div className='editor-mobile-card' style={{ background: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.3)' }}>
+                  <div className='editor-mobile-label' style={{ marginBottom: '8px' }}>Export complete</div>
+                  <a
+                    href={mobileExportUrl}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className='editor-mobile-btn-primary'
+                    style={{ textDecoration: 'none' }}
+                  >
+                    Download video
+                  </a>
+                </div>
+              )}
+              <button
+                className='editor-mobile-btn-primary'
+                onClick={triggerExport}
+                disabled={videoError || mobileExporting}
+              >
+                {mobileExporting ? (
+                  'Exporting...'
+                ) : (
+                  <>
+                    <Download size={18} strokeWidth={1.5} />
+                    Export now
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <nav className='editor-mobile-tabs'>
+          {[
+            { id: 'home', label: 'Home', icon: <Home size={18} strokeWidth={2} /> },
+            { id: 'trim', label: 'Trim', icon: <Scissors size={18} strokeWidth={2} /> },
+            { id: 'subtitles', label: 'Subtitles', icon: <Captions size={18} strokeWidth={2} /> },
+            { id: 'text', label: 'Text', icon: <Type size={18} strokeWidth={2} /> },
+            { id: 'music', label: 'Music', icon: <Music size={18} strokeWidth={2} /> },
+            { id: 'export', label: 'Export', icon: <Download size={18} strokeWidth={2} /> }
+          ].map((tab) => {
+            const isActive = mobileTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                className={`editor-mobile-tab-btn ${isActive ? 'active' : ''}`}
+                onClick={() => setMobileTab(tab.id)}
+                aria-label={tab.label}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
+        </nav>
       </div>
     </div>
     </>
