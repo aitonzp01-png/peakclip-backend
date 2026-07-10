@@ -50,8 +50,8 @@ const VIRAL_HOOKS = [
 export default function EditorPage() {
   const router = useRouter()
   const videoRef = useRef(null)
-  const mobileVideoRef = useRef(null)
   const subtitleCanvasRef = useRef(null)
+  const mobileSubtitleCanvasRef = useRef(null)
   const faceCanvasRef = useRef(null)
   const waveformCanvasRef = useRef(null)
   const synthRef = useRef(null)
@@ -540,9 +540,8 @@ export default function EditorPage() {
   }
 
   // --- CANVAS SUBTITLE RENDERING ENGINE ---
-  const drawSubtitles = useCallback(() => {
-    const canvas = subtitleCanvasRef.current
-    if (!canvas || !videoRef.current) return
+  const drawSubtitlesOnCanvas = (canvas) => {
+    if (!canvas) return
     const ctx = canvas.getContext('2d')
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
@@ -661,6 +660,11 @@ export default function EditorPage() {
       ctx.restore()
       startX += ww.width * autoScale
     })
+  }
+
+  const drawSubtitles = useCallback(() => {
+    drawSubtitlesOnCanvas(subtitleCanvasRef.current)
+    drawSubtitlesOnCanvas(mobileSubtitleCanvasRef.current)
   }, [activeTranscript, currentTime, subtitleStyle, selectedPresetId])
 
   const hexToRgba = (hex, opacity) => {
@@ -739,6 +743,9 @@ export default function EditorPage() {
         if (faceTrackingEnabled) {
           await detectFace()
         }
+      } else if (mobileVideoRef.current) {
+        setCurrentTime(mobileVideoRef.current.currentTime)
+        drawSubtitles()
       }
       animId = requestAnimationFrame(update)
     }
@@ -2202,6 +2209,12 @@ export default function EditorPage() {
       </header>
 
       <div className='editor-mobile-video-wrap'>
+        <canvas
+          ref={mobileSubtitleCanvasRef}
+          width={360}
+          height={640}
+          className='editor-mobile-subtitle-canvas'
+        />
         {videoError ? (
           <div className='editor-mobile-video-error'>
             <p className='editor-mobile-error-title'>Couldn&apos;t load video</p>
