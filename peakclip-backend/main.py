@@ -1095,7 +1095,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                             time.sleep(2)
                             continue
                 if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small", "proxy", "tunnel connection"]):
-                    if attempt >= 3 and proxy_url and not proxy_disabled and not has_oauth:
+                    if attempt >= 1 and proxy_url and not proxy_disabled and not has_oauth:
                         print(f"Proxy failing repeatedly ({err_lower[:80]}). Disabling proxy to try direct connection.")
                         proxy_disabled = True
                         if attempt < max_attempts - 1:
@@ -1106,9 +1106,6 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         print(f"YouTube issue (attempt {attempt+1}/{max_attempts}): {err_lower[:80]}, waiting {wait}s...")
                         time.sleep(wait)
                         continue
-                jobs_store[job_id] = {"status": "error", "message": f"Download error: {last_err}"}
-                return
-
         # If yt-dlp completely failed, try public fallback services
         if last_err is not None or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
             check_deadline("fallbacks")
@@ -1133,7 +1130,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     print(f"Job {job_id}: fallback {name} error: {e}")
             if not fallback_success or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
                 print(f"Job {job_id}: all fallback downloaders failed")
-                jobs_store[job_id] = {"status": "error", "message": "Could not download this video. YouTube is blocking our server. Options: fix YOUTUBE_PROXY credentials, set YOUTUBE_OAUTH_TOKENS_B64, set YOUTUBE_PO_TOKEN+YOUTUBE_VISITOR_DATA, or self-host on a residential IP."}
+                ytdlp_err = str(last_err)[:200] if last_err else "unknown"
+                jobs_store[job_id] = {"status": "error", "message": f"Download failed: {ytdlp_err}. YouTube is blocking our server. Options: fix YOUTUBE_PROXY credentials, set YOUTUBE_OAUTH_TOKENS_B64, set YOUTUBE_PO_TOKEN+YOUTUBE_VISITOR_DATA, or self-host on a residential IP."}
                 return
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
