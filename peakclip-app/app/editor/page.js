@@ -17,7 +17,7 @@ import {
   ArrowLeft, Save, Download, Play, Pause, SkipBack, SkipForward,
   Scissors, Trash2, ZoomIn, Type, Music, Film, Wand2,
   Layers, Tag, Shuffle, AlignLeft, Anchor, Palette,
-  Sparkles, Smartphone, Monitor, Eye, EyeOff, Captions,
+  Sparkles, Smartphone, Eye, EyeOff, Captions,
   Search, Star, Upload, RotateCcw, RotateCw, Zap
 } from 'lucide-react'
 
@@ -64,6 +64,7 @@ export default function EditorPage() {
   // Clip details
   const [clipId, setClipId] = useState(null)
   const [clipTitle, setClipTitle] = useState('New redesigned clip')
+  const [clipDate, setClipDate] = useState('')
   const [videoSrc, setVideoSrc] = useState(null)
   const [duration, setDuration] = useState(60)
   const [currentTime, setCurrentTime] = useState(0)
@@ -192,6 +193,11 @@ export default function EditorPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
+  const formatDuration = (seconds) => {
+    const date = new Date(seconds * 1000)
+    return date.toISOString().substr(14, 5)
+  }
+
   // --- HTML5 SPEECH SYNTHESIS FOR DUBBING ---
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -232,6 +238,7 @@ export default function EditorPage() {
             setVideoSrc(clipData.video_url || 'https://assets.mixkit.co/videos/preview/mixkit-holding-a-retro-game-controller-with-both-hands-41484-large.mp4')
             clipDuration = parseFloat(clipData.duration) || 39
             setDuration(clipDuration)
+            setClipDate(clipData.created_at ? new Date(clipData.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '')
 
             // Setup multi-lingual transcription
             let rawTranscript = []
@@ -267,6 +274,7 @@ export default function EditorPage() {
           // Default demo clip
           setVideoSrc('https://assets.mixkit.co/videos/preview/mixkit-holding-a-retro-game-controller-with-both-hands-41484-large.mp4')
           setDuration(39)
+          setClipDate(new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))
           const defaultEN = generateEnglishTranscript(39)
           setTranscriptEN(defaultEN)
           setTranscriptES(generateSpanishTranscript(defaultEN))
@@ -2014,17 +2022,64 @@ export default function EditorPage() {
       )}
     </div>
 
-    {/* --- MOBILE FALLBACK --- */}
-    <div className="editor-mobile-message">
-      <Monitor size={48} strokeWidth={1.5} color="var(--cream-accent)" />
-      <h2>Desktop-optimized editor</h2>
-      <p>PeakClip works best on large screens. Open it on a computer to edit, sync subtitles, and export clips without limits.</p>
-      <button
-        className="editor-mobile-btn"
-        onClick={() => router.push('/dashboard')}
-      >
-        Back to dashboard
-      </button>
+    {/* --- MOBILE EDITOR --- */}
+    <div className="editor-mobile-layout">
+      <header className="editor-mobile-header">
+        <button
+          className="editor-mobile-back"
+          onClick={() => router.push('/dashboard')}
+          aria-label="Back to dashboard"
+        >
+          <ArrowLeft size={22} strokeWidth={1.5} />
+        </button>
+        <input
+          type="text"
+          value={clipTitle}
+          onChange={(e) => setClipTitle(e.target.value)}
+          onBlur={handleSave}
+          className="editor-mobile-title-input"
+          aria-label="Clip title"
+        />
+        <button
+          className="editor-mobile-save"
+          onClick={handleSave}
+          disabled={saving}
+          aria-label="Save title"
+        >
+          {saving ? '...' : <Save size={20} strokeWidth={1.5} />}
+        </button>
+      </header>
+
+      <div className="editor-mobile-video-wrap">
+        <video
+          src={videoSrc}
+          controls
+          playsInline
+          preload="metadata"
+          className="editor-mobile-video"
+        />
+      </div>
+
+      <div className="editor-mobile-meta">
+        <span>{formatDuration(duration)}</span>
+        <span>{clipDate || 'Just now'}</span>
+      </div>
+
+      <div className="editor-mobile-actions">
+        <button
+          className="editor-mobile-btn-secondary"
+          onClick={() => router.push('/dashboard')}
+        >
+          Close
+        </button>
+        <button
+          className="editor-mobile-btn-primary"
+          onClick={() => setShowExportModal(true)}
+        >
+          <Download size={18} strokeWidth={1.5} />
+          Export
+        </button>
+      </div>
     </div>
     </>
   )
