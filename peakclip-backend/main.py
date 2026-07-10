@@ -1057,7 +1057,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         [sys.executable, ytdlp_script, json.dumps(sub_opts)],
                         capture_output=True,
                         text=True,
-                        timeout=30,
+                        timeout=90,
                     )
                     if result.returncode != 0:
                         stderr_tail = (result.stderr or '')[-500:]
