@@ -42,7 +42,7 @@ const SUBTITLE_PRESETS = [
 ]
 
 const VIRAL_HOOKS = [
-  { title: 'The OpusClip secret', text: 'The OpusClip secret revealed in less than a minute...' },
+  { title: 'The PeakClip secret', text: 'The PeakClip secret revealed in less than a minute...' },
   { title: 'Avoid this big mistake', text: 'Avoid this big mistake when editing your social clips...' },
   { title: '3 retention tricks', text: '3 quick retention tricks creators ignore...' }
 ]
@@ -1131,7 +1131,7 @@ export default function EditorPage() {
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
         <div style={{ width: '40px', height: '40px', border: '3px solid color-mix(in srgb, var(--cream-accent) 20%, transparent)', borderTopColor: 'var(--cream-accent)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-        <span style={{ fontSize: '14px', color: 'var(--cream-text-secondary)' }}>Starting OpusClip editor...</span>
+        <span style={{ fontSize: '14px', color: 'var(--cream-text-secondary)' }}>Starting PeakClip editor...</span>
       </div>
     </div>
   ) : (
