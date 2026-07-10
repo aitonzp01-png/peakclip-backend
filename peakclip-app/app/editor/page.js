@@ -577,7 +577,7 @@ export default function EditorPage() {
       ctx.lineJoin = 'round'
       ctx.strokeText(wordText, textX, baseY)
 
-      ctx.fillStyle = '#ff1f1f'
+      ctx.fillStyle = subtitleStyle.highlightColor || '#ff1f1f'
       ctx.fillText(wordText, textX, baseY)
       ctx.restore()
       return
@@ -640,7 +640,7 @@ export default function EditorPage() {
         strokeColor = 'rgba(0,0,0,0.5)'
         strokeWidth = 2
       } else if (selectedPresetId === 'karaoke') {
-        color = ww.isActive ? '#ff1f1f' : '#ffffff'
+        color = ww.isActive ? (subtitleStyle.highlightColor || '#ff1f1f') : '#ffffff'
         stroke = ww.isActive
         strokeColor = '#000000'
         strokeWidth = 3
@@ -648,15 +648,35 @@ export default function EditorPage() {
 
       ctx.font = `${subtitleStyle.fontStyle || 'normal'} ${fontWeight} ${fontSize * scale}px ${font}`
 
+      const tw = ctx.measureText(ww.text).width
+
+      if (subtitleStyle.backgroundColor && subtitleStyle.backgroundColor !== 'transparent') {
+        const bgOpacity = subtitleStyle.backgroundOpacity != null ? subtitleStyle.backgroundOpacity / 100 : 1
+        const bgColor = hexToRgba(subtitleStyle.backgroundColor, bgOpacity)
+        const pad = 10 * scale
+        const bgH = fontSize * scale * 1.3
+        ctx.fillStyle = bgColor
+        ctx.beginPath()
+        ctx.roundRect(-tw / 2 - pad, -bgH * 0.8, tw + pad * 2, bgH + pad * 2, subtitleStyle.backgroundBorderRadius || 6)
+        ctx.fill()
+      }
+
+      if (subtitleStyle.shadow) {
+        ctx.shadowColor = subtitleStyle.shadowColor || '#000000'
+        ctx.shadowBlur = subtitleStyle.shadowBlur || 4
+        ctx.shadowOffsetX = subtitleStyle.shadowOffsetX || 2
+        ctx.shadowOffsetY = subtitleStyle.shadowOffsetY || 2
+      }
+
       if (stroke) {
         ctx.strokeStyle = strokeColor
         ctx.lineWidth = strokeWidth
         ctx.lineJoin = 'round'
-        ctx.strokeText(ww.text, -ctx.measureText(ww.text).width / 2, 0)
+        ctx.strokeText(ww.text, -tw / 2, 0)
       }
 
       ctx.fillStyle = color
-      ctx.fillText(ww.text, -ctx.measureText(ww.text).width / 2, 0)
+      ctx.fillText(ww.text, -tw / 2, 0)
 
       ctx.restore()
       startX += ww.width * autoScale
@@ -738,15 +758,16 @@ export default function EditorPage() {
   useEffect(() => {
     let animId
     const update = async () => {
-      if (videoRef.current) {
+      const isMobile = window.innerWidth <= 768
+      if (isMobile && mobileVideoRef.current) {
+        setCurrentTime(mobileVideoRef.current.currentTime)
+        drawSubtitles()
+      } else if (videoRef.current) {
         setCurrentTime(videoRef.current.currentTime)
         drawSubtitles()
         if (faceTrackingEnabled) {
           await detectFace()
         }
-      } else if (mobileVideoRef.current) {
-        setCurrentTime(mobileVideoRef.current.currentTime)
-        drawSubtitles()
       }
       animId = requestAnimationFrame(update)
     }
@@ -914,6 +935,7 @@ export default function EditorPage() {
   const handleWordTextEdit = (id, newText) => {
     const nextTranscript = activeTranscript.map(w => w.id === id ? { ...w, word: newText } : w)
     setActiveTranscript(nextTranscript)
+    saveToHistory({ transcript: nextTranscript })
   }
 
   const handleDownloadSrt = () => {
@@ -2426,8 +2448,48 @@ export default function EditorPage() {
                     onChange={(e) => setSubtitleStyle({ ...subtitleStyle, fontSize: parseInt(e.target.value) })}
                     className='editor-mobile-slider'
                   />
+                  <div className='editor-mobile-label' style={{ marginTop: '12px' }}>Font</div>
+                  <select
+                    value={subtitleStyle.fontFamily}
+                    onChange={(e) => setSubtitleStyle({ ...subtitleStyle, fontFamily: e.target.value })}
+                    className='editor-mobile-select'
+                  >
+                    {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                  <div className='editor-mobile-label' style={{ marginTop: '12px' }}>Text color</div>
+                  <input
+                    type='color'
+                    value={subtitleStyle.color}
+                    onChange={(e) => setSubtitleStyle({ ...subtitleStyle, color: e.target.value })}
+                    className='editor-mobile-color'
+                  />
+                  <div className='editor-mobile-label' style={{ marginTop: '12px' }}>Stroke ({subtitleStyle.strokeWidth}px)</div>
+                  <input
+                    type='range'
+                    min={0}
+                    max={8}
+                    value={subtitleStyle.strokeWidth}
+                    onChange={(e) => setSubtitleStyle({ ...subtitleStyle, strokeWidth: parseInt(e.target.value), stroke: parseInt(e.target.value) > 0 })}
+                    className='editor-mobile-slider'
+                  />
+                  <div className='editor-mobile-label' style={{ marginTop: '12px' }}>Outline color</div>
+                  <input
+                    type='color'
+                    value={subtitleStyle.strokeColor}
+                    onChange={(e) => setSubtitleStyle({ ...subtitleStyle, strokeColor: e.target.value })}
+                    className='editor-mobile-color'
+                  />
                 </div>
               )}
+
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', fontSize: '12px' }}>
+                <button onClick={() => setShowSrtModal(true)} className='editor-mobile-link-btn'>
+                  Import SRT
+                </button>
+                <button onClick={handleDownloadSrt} className='editor-mobile-link-btn'>
+                  Download SRT
+                </button>
+              </div>
 
               <div className='editor-mobile-list'>
                 {activeTranscript.map((w) => (

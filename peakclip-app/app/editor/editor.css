@@ -738,6 +738,34 @@ html, body {
     width: 100%;
     margin-top: 8px;
   }
+  .editor-mobile-select {
+    width: 100%;
+    background: var(--cream-bg);
+    color: var(--cream-text-primary);
+    border: 1px solid var(--cream-panel-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  .editor-mobile-color {
+    width: 100%;
+    height: 40px;
+    border: 1px solid var(--cream-panel-border);
+    border-radius: 10px;
+    background: transparent;
+    cursor: pointer;
+    margin-top: 6px;
+  }
+  .editor-mobile-link-btn {
+    background: none;
+    border: none;
+    color: var(--cream-accent);
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px 0;
+  }
 
   .editor-mobile-preset-row {
     display: flex;
