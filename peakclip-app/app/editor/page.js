@@ -50,6 +50,7 @@ const VIRAL_HOOKS = [
 export default function EditorPage() {
   const router = useRouter()
   const videoRef = useRef(null)
+  const mobileVideoRef = useRef(null)
   const subtitleCanvasRef = useRef(null)
   const mobileSubtitleCanvasRef = useRef(null)
   const faceCanvasRef = useRef(null)
