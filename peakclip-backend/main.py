@@ -246,9 +246,9 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ
     except Exception as e:
         print(f"COLUMN MIGRATION subscription error: {e}")
 
-    # Add start_time / end_time / transcript columns to clips table if missing
+    # Add start_time / end_time / transcript / srt_url / subtitles_srt / words_json columns
     try:
-        supabase.table("clips").select("start_time,end_time,transcript").limit(1).execute()
+        supabase.table("clips").select("start_time,end_time,transcript,srt_url,subtitles_srt,words_json").limit(1).execute()
         print("SQL MIGRATION: columns already exist (OK)")
     except Exception:
         async with httpx.AsyncClient(timeout=15) as client:
@@ -257,7 +257,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ
                 "Authorization": f"Bearer {service_key}",
                 "Content-Type": "application/json",
             }
-            alter_sql = "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS transcript JSONB;"
+            alter_sql = "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS transcript JSONB; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS srt_url TEXT; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS subtitles_srt TEXT; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS words_json JSONB;"
             for url in [
                 f"https://{project_ref}.supabase.co/sql/v1/query",
                 f"https://api.supabase.com/v1/projects/{project_ref}/database/query",
@@ -978,15 +978,13 @@ def process_video_background(job_id: str, user_id: str, url: str):
             'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
         ]
         format_fallbacks = [
-            'worst[ext=mp4]/worst',
-            'worstvideo+worstaudio/worst',
-            'best[ext=mp4]/best',
+            'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best',
+            'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]/best',
             'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
             'bestvideo+bestaudio/best',
-            'bestaudio/best',
-            'worst',
-            'worstvideo[ext=mp4]/worst[ext=mp4]/worst',
-            'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
+            'worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst',
+            'worst[ext=mp4]/worst',
         ]
         impersonate_profiles = [None, 'chrome', 'safari', 'chrome-120', 'chrome-119', 'safari-17']
 
@@ -1367,12 +1365,13 @@ Return JSON with this exact format:
 
                 # Try increasingly aggressive settings; 1080p skipped (OOM on Railway)
                 render_attempts = [
-                    {"scale": "720:1280", "preset": "ultrafast", "crf": "26", "label": "ultrafast_720p"},
-                    {"scale": "720:1280", "preset": "fast",      "crf": "23", "label": "fast_720p"},
+                    {"scale": "720:1280", "preset": "fast", "crf": "20", "label": "fast_720p", "b_v": "2500k", "maxrate": "3000k", "bufsize": "6000k"},
+                    {"scale": "720:1280", "preset": "ultrafast", "crf": "24", "label": "ultrafast_720p", "b_v": "2000k", "maxrate": "2500k", "bufsize": "5000k"},
                 ]
                 rendered = False
                 for att in render_attempts:
-                    vid_filter = f"scale={att['scale']}:force_original_aspect_ratio=increase,crop={att['scale']}"
+                    scale_flags = f"scale={att['scale']}:force_original_aspect_ratio=increase:flags=lanczos"
+                    vid_filter = f"{scale_flags},crop={att['scale']},setsar=1,format=yuv420p"
                     parts = [f"[0:v]{vid_filter}[v]", audio_filter]
                     cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
                     if music_path:
@@ -1382,6 +1381,7 @@ Return JSON with this exact format:
                             '-map', '[v]', '-map', '[a]',
                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
                             '-preset', att['preset'], '-crf', att['crf'],
+                            '-b:v', att['b_v'], '-maxrate', att['maxrate'], '-bufsize', att['bufsize'],
                             '-c:a', 'aac', '-b:a', '128k',
                             '-movflags', '+faststart', '-y', no_subs]
                     try:
@@ -1393,45 +1393,45 @@ Return JSON with this exact format:
                         break
 
                 if not rendered:
-                    # Last resort: raw seek, no filter_complex (bypasses complex scaling)
                     _ffmpeg(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
                              '-threads', '4',
-                             '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
-                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '28',
+                             '-vf', 'scale=720:1280:force_original_aspect_ratio=increase:flags=lanczos,crop=720:1280',
+                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
+                             '-b:v', '1500k', '-maxrate', '2000k', '-bufsize', '4000k',
                              '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', no_subs],
                             f"clip{i+1}_raw", timeout=300)
 
-                # Step 2: burn subtitles (best-effort, skip if it fails)
+                # Use rendered video as-is (subtitles uploaded separately, NOT burned)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                    srt_path_ff = srt_path.replace('\\', '/')
-                    sub_cmd = ['ffmpeg', '-i', no_subs, '-threads', '2',
-                               '-vf', f"subtitles={srt_path_ff}",
-                               '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
-                               '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                    try:
-                        _ffmpeg(sub_cmd, f"clip{i+1}_subs", timeout=120)
-                    except subprocess.TimeoutExpired:
-                        print(f"CLIP {i+1}: subtitle burn timed out, using no-subs version")
-                    if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                        shutil.copy2(no_subs, output_path)
+                    output_path = no_subs
                 else:
-                    print(f"CLIP {i+1}: no rendered output for this clip, skipping")
-                    output_path = None
-
-                if output_path:
-                    local_files.append(output_path)
-                else:
-                    print(f"CLIP {i+1}: skipping (no render output)")
+                    print(f"CLIP {i+1}: no rendered output, skipping")
                     continue
 
                 jobs_store[job_id] = {"status": "processing", "message": f"Uploading clip {i+1}..."}
-                # Upload to Supabase Storage
+
+                # 1. Upload video (no subs burned) to Supabase Storage
                 storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
+                local_files.append(output_path)
                 clip_storage_url = upload_with_verification(
                     supabase, "clips", output_path, storage_path, "video/mp4"
                 ) or ""
 
-                # Upload thumbnail to Supabase Storage
+                # 2. Upload SRT subtitles as a separate file
+                srt_storage_url = ""
+                srt_content = ""
+                if os.path.exists(srt_path) and os.path.getsize(srt_path) > 0:
+                    srt_storage_path = f"{job_id}/{job_id}_clip{i+1}.srt"
+                    srt_storage_url = upload_with_verification(
+                        supabase, "clips", srt_path, srt_storage_path, "text/plain"
+                    ) or ""
+                    try:
+                        with open(srt_path, 'r', encoding='utf-8') as _sf:
+                            srt_content = _sf.read()
+                    except Exception:
+                        srt_content = ""
+
+                # 3. Upload thumbnail
                 thumb_storage_path = f"thumbnails/{job_id}.jpg"
                 thumb_storage_url = upload_with_verification(
                     supabase, "clips", thumb_path, thumb_storage_path, "image/jpeg"
@@ -1446,6 +1446,9 @@ Return JSON with this exact format:
                     "title": clip["title"],
                     "status": "done",
                     "video_url": clip_storage_url,
+                    "srt_url": srt_storage_url or None,
+                    "subtitles_srt": srt_content or None,
+                    "words_json": json.dumps(words_data) if words_data else None,
                     "thumbnail_url": thumb_storage_url,
                     "duration": round(duration, 1),
                     "start_time": clip_start,
@@ -1461,6 +1464,7 @@ Return JSON with this exact format:
                     "end": clip["end"],
                     "hook_score": clip.get("hook_score", 5),
                     "file": clip_storage_url,
+                    "srt_url": srt_storage_url or "",
                     "thumbnail_url": thumb_storage_url
                 })
         finally:
@@ -1975,10 +1979,12 @@ Return JSON with this exact format:
 
             music_path = resolve_music_path(clip_mood)
             
-            # Step 1: render video+audio without subtitles (h264, 9:16 portrait)
+            # Render video (no subtitles burned — uploaded separately)
+            scale_target = "720:1280"
+            scale_flags = f"scale={scale_target}:force_original_aspect_ratio=increase:flags=lanczos"
+            vid_filter = f"{scale_flags},crop={scale_target},setsar=1,format=yuv420p"
             no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
             local_files.append(no_subs)
-            vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
             audio_filter = ""
             if music_path:
                 music_path_ff = music_path.replace('\\', '/')
@@ -1986,58 +1992,52 @@ Return JSON with this exact format:
             else:
                 audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
             parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-            step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
+            cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
             if music_path:
-                step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-            step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
-                      '-map', '[v]', '-map', '[a]',
-                      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                      '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-            subprocess.run(step1, capture_output=True, timeout=600)
+                cmd += ['-stream_loop', '-1', '-i', music_path_ff]
+            cmd += ['-t', str(duration), '-threads', '4',
+                    '-filter_complex', ';'.join(parts),
+                    '-map', '[v]', '-map', '[a]',
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+                    '-preset', 'fast', '-crf', '20',
+                    '-b:v', '2500k', '-maxrate', '3000k', '-bufsize', '6000k',
+                    '-c:a', 'aac', '-b:a', '128k',
+                    '-movflags', '+faststart', '-y', no_subs]
+            print(f"FFMPEG: clip{i+1} render: {' '.join(cmd)}")
+            subprocess.run(cmd, capture_output=True, timeout=300)
 
-            if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                # Step 2: burn subtitles onto the rendered video
-                srt_path_ff = srt_path.replace('\\', '/')
-                step2 = ['ffmpeg', '-i', no_subs,
-                         '-vf', f"subtitles={srt_path_ff}",
-                         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                         '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                subprocess.run(step2, capture_output=True, timeout=300)
-                if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                    shutil.copy2(no_subs, output_path)
-            else:
-                # Fallback: render at 720p (lower memory)
-                vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
-                parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-                step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-                if music_path:
-                    step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-                step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
-                          '-map', '[v]', '-map', '[a]',
-                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                          '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-                subprocess.run(step1, capture_output=True, timeout=600)
-                if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                    srt_path_ff = srt_path.replace('\\', '/')
-                    step2 = ['ffmpeg', '-i', no_subs,
-                             '-vf', f"subtitles={srt_path_ff}",
-                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                             '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                    subprocess.run(step2, capture_output=True, timeout=300)
-                    if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                        shutil.copy2(no_subs, output_path)
-                else:
-                    subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
-                                    '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
-                                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path],
-                                   capture_output=True, timeout=300)
+            if not (os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024):
+                cmd_fb = ['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                          '-threads', '4',
+                          '-vf', f'scale={scale_target}:force_original_aspect_ratio=increase:flags=lanczos,crop={scale_target}',
+                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '24',
+                          '-b:v', '2000k', '-maxrate', '2500k', '-bufsize', '5000k',
+                          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', no_subs]
+                print(f"FFMPEG: clip{i+1} fallback: {' '.join(cmd_fb)}")
+                subprocess.run(cmd_fb, capture_output=True, timeout=300)
+                if not (os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024):
+                    print(f"CLIP {i+1}: render failed, skipping")
+                    continue
 
-            local_files.append(output_path)
-
+            # Upload video (no subs burned)
             storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
             clip_storage_url = upload_with_verification(
-                supabase, "clips", output_path, storage_path, "video/mp4"
+                supabase, "clips", no_subs, storage_path, "video/mp4"
             ) or ""
+
+            # Upload SRT separately
+            srt_storage_url = ""
+            srt_content = ""
+            if os.path.exists(srt_path) and os.path.getsize(srt_path) > 0:
+                srt_storage_path = f"{job_id}/{job_id}_clip{i+1}.srt"
+                srt_storage_url = upload_with_verification(
+                    supabase, "clips", srt_path, srt_storage_path, "text/plain"
+                ) or ""
+                try:
+                    with open(srt_path, 'r', encoding='utf-8') as _sf:
+                        srt_content = _sf.read()
+                except Exception:
+                    srt_content = ""
 
             thumb_storage_path = f"thumbnails/{job_id}.jpg"
             thumb_storage_url = upload_with_verification(
@@ -2053,11 +2053,13 @@ Return JSON with this exact format:
                 "title": clip["title"],
                 "status": "done",
                 "video_url": clip_storage_url,
+                "srt_url": srt_storage_url or None,
+                "subtitles_srt": srt_content or None,
+                "words_json": json.dumps(words_data) if words_data else None,
                 "thumbnail_url": thumb_storage_url,
                 "duration": round(duration, 1),
                 "start_time": clip_start,
-                "end_time": clip["end"],
-                "transcript": json.dumps(words_data)
+                "end_time": clip["end"]
             }).execute()
 
             output_clips.append({
@@ -2069,6 +2071,7 @@ Return JSON with this exact format:
                 "end": clip["end"],
                 "hook_score": clip.get("hook_score", 5),
                 "file": clip_storage_url,
+                "srt_url": srt_storage_url or "",
                 "thumbnail_url": thumb_storage_url
             })
 
