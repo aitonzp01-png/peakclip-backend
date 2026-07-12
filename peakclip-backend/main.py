@@ -374,7 +374,7 @@ supabase = create_client(
 
 client = openai.OpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
-    timeout=120.0,
+    timeout=300.0,
     max_retries=2
 )
 groq_api_key = os.getenv("GROQ_API_KEY")
@@ -1170,18 +1170,18 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 fut = pool.submit(call_transcribe, client_obj, model)
                 return fut.result(timeout=timeout_sec)
         transcript = None
-        # Try OpenAI first (hard timeout 30s)
+        # Try OpenAI first (hard timeout 180s)
         try:
-            transcript = run_with_timeout(client, "whisper-1", 30)
+            transcript = run_with_timeout(client, "whisper-1", 180)
         except FuturesTimeout:
-            print(f"Job {job_id}: OpenAI Whisper timed out after 30s")
+            print(f"Job {job_id}: OpenAI Whisper timed out after 180s")
         except Exception as oai_err:
             print(f"Job {job_id}: OpenAI Whisper error (attempting Groq fallback): {str(oai_err)[:120]}")
         # If OpenAI failed, try Groq fallback
         if transcript is None and groq_client:
             try:
                 jobs_store[job_id] = {"status": "processing", "message": "Transcribing with Groq (OpenAI quota/timed out)..."}
-                transcript = run_with_timeout(groq_client, "whisper-large-v3-turbo", 60)
+                transcript = run_with_timeout(groq_client, "whisper-large-v3-turbo", 180)
             except FuturesTimeout:
                 print(f"Job {job_id}: Groq fallback timed out after 60s")
             except Exception as groq_err:
