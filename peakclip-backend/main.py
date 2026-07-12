@@ -327,7 +327,11 @@ supabase = create_client(
     os.getenv("SUPABASE_SERVICE_KEY")
 )
 
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = openai.OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    timeout=120.0,
+    max_retries=2
+)
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_PRICE_CREATOR = os.getenv("STRIPE_PRICE_CREATOR", "price_creator")
 STRIPE_PRICE_PRO = os.getenv("STRIPE_PRICE_PRO", "price_pro")
@@ -673,13 +677,26 @@ async def process_video(req: VideoRequest, user: dict = Depends(get_current_user
     generate_thumbnail(video_path, thumb_path)
     local_files.append(thumb_path)
 
-    with open(audio_path, 'rb') as f:
-        transcript = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=f,
-            response_format="verbose_json",
-            timestamp_granularities=["word", "segment"]
-        )
+    try:
+        audio_size = os.path.getsize(audio_path)
+        print(f"TRANSCRIBING: audio file {audio_size} bytes, calling Whisper API...")
+        with open(audio_path, 'rb') as f:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+                response_format="verbose_json",
+                timestamp_granularities=["word", "segment"]
+            )
+        print(f"TRANSCRIBING: Whisper API returned successfully")
+    except openai.RateLimitError as e:
+        print(f"TRANSCRIBE ERROR: rate limited: {e}")
+        raise HTTPException(status_code=429, detail="OpenAI rate limit exceeded. Check billing at https://platform.openai.com")
+    except openai.APITimeoutError:
+        print(f"TRANSCRIBE ERROR: timeout after 120s")
+        raise HTTPException(status_code=504, detail="Transcription timed out. Try a shorter video.")
+    except Exception as e:
+        print(f"TRANSCRIBE ERROR: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)[:200]}")
 
     words_data = []
     if hasattr(transcript, 'words') and transcript.words:
@@ -1274,13 +1291,29 @@ async def upload_video(
 
     jobs_store[job_id] = {"status": "processing", "message": "Transcribing audio..."}
 
-    with open(audio_path, 'rb') as f:
-        transcript = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=f,
-            response_format="verbose_json",
-            timestamp_granularities=["word", "segment"]
-        )
+    try:
+        audio_size = os.path.getsize(audio_path)
+        print(f"TRANSCRIBING: audio file {audio_size} bytes, calling Whisper API...")
+        with open(audio_path, 'rb') as f:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+                response_format="verbose_json",
+                timestamp_granularities=["word", "segment"]
+            )
+        print(f"TRANSCRIBING: Whisper API returned successfully")
+    except openai.RateLimitError as e:
+        print(f"TRANSCRIBE ERROR: rate limited: {e}")
+        jobs_store[job_id] = {"status": "error", "message": "OpenAI rate limit exceeded. Check billing."}
+        raise HTTPException(status_code=429, detail="OpenAI rate limit exceeded")
+    except openai.APITimeoutError:
+        print(f"TRANSCRIBE ERROR: timeout after 120s")
+        jobs_store[job_id] = {"status": "error", "message": "Transcription timed out. Try a shorter video."}
+        raise HTTPException(status_code=504, detail="Transcription timed out")
+    except Exception as e:
+        print(f"TRANSCRIBE ERROR: {type(e).__name__}: {e}")
+        jobs_store[job_id] = {"status": "error", "message": f"Transcription failed: {str(e)[:200]}"}
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)[:200]}")
 
     words_data = []
     if hasattr(transcript, 'words') and transcript.words:
