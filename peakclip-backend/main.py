@@ -24,6 +24,7 @@ import time
 import httpx
 import sys
 import asyncio
+import traceback
 import base64
 import shutil
 import concurrent.futures
@@ -1247,22 +1248,6 @@ def process_video_background(job_id: str, user_id: str, url: str):
             print(f"TRANSCRIBE: done, {len(words_data)} words")
 
         check_deadline("ai-analysis")
-
-        words_data = []
-        if hasattr(transcript, 'words') and transcript.words:
-            for w in transcript.words:
-                word_text = getattr(w, 'word', '') or ''
-                w_start = getattr(w, 'start', None)
-                w_end = getattr(w, 'end', None)
-                if w_start is not None and w_end is not None and word_text.strip():
-                    words_data.append({"word": word_text, "start": w_start, "end": w_end})
-
-        segments_text = "\n".join([
-            f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}"
-            for s in transcript.segments
-        ])
-
-        check_deadline("ai-analysis")
         jobs_store[job_id] = {"status": "processing", "message": "Analyzing viral moments with AI..."}
         analysis_body = [{
             "role": "system",
@@ -1334,6 +1319,22 @@ Return JSON with this exact format:
         output_clips = []
         temp_files_extra = []
 
+        def _ffmpeg(cmd, label, timeout=300):
+            print(f"FFMPEG {label}: {' '.join(cmd)}")
+            t0 = time.time()
+            try:
+                r = subprocess.run(cmd, capture_output=True, timeout=timeout)
+                elapsed = time.time() - t0
+                sz = os.path.getsize(cmd[-1]) if os.path.exists(cmd[-1]) else 0
+                print(f"FFMPEG {label}: done {elapsed:.1f}s rc={r.returncode} size={sz}")
+                if r.returncode != 0:
+                    print(f"FFMPEG {label}: stderr={r.stderr[-2000:]}")
+                return r
+            except subprocess.TimeoutExpired:
+                elapsed = time.time() - t0
+                print(f"FFMPEG {label}: TIMEOUT after {elapsed:.1f}s")
+                raise
+
         try:
             for i, clip in enumerate(clips_data["clips"]):
                 check_deadline(f"clip-{i+1}")
@@ -1372,16 +1373,18 @@ Return JSON with this exact format:
                           '-map', '[v]', '-map', '[a]',
                           '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
                           '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-                subprocess.run(step1, capture_output=True, timeout=600)
+                _ffmpeg(step1, f"clip{i+1}_step1_1080p", timeout=300)
 
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                    # Step 2: burn subtitles onto the rendered video
                     srt_path_ff = srt_path.replace('\\', '/')
                     step2 = ['ffmpeg', '-i', no_subs,
                              '-vf', f"subtitles={srt_path_ff}",
                              '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
                              '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                    subprocess.run(step2, capture_output=True, timeout=300)
+                    try:
+                        _ffmpeg(step2, f"clip{i+1}_step2_subs", timeout=120)
+                    except subprocess.TimeoutExpired:
+                        print(f"CLIP {i+1}: subtitle burn timed out, using no-subs version")
                     if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                         shutil.copy2(no_subs, output_path)
                 else:
@@ -1395,22 +1398,28 @@ Return JSON with this exact format:
                               '-map', '[v]', '-map', '[a]',
                               '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
                               '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-                    subprocess.run(step1, capture_output=True, timeout=600)
+                    try:
+                        _ffmpeg(step1, f"clip{i+1}_step1_720p", timeout=300)
+                    except subprocess.TimeoutExpired:
+                        print(f"CLIP {i+1}: 720p step1 timed out, trying ultrafast fallback")
                     if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                         srt_path_ff = srt_path.replace('\\', '/')
                         step2 = ['ffmpeg', '-i', no_subs,
                                  '-vf', f"subtitles={srt_path_ff}",
                                  '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
                                  '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                        subprocess.run(step2, capture_output=True, timeout=300)
+                        try:
+                            _ffmpeg(step2, f"clip{i+1}_step2_subs_720p", timeout=120)
+                        except subprocess.TimeoutExpired:
+                            print(f"CLIP {i+1}: subtitle burn timed out, using no-subs version")
                         if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                             shutil.copy2(no_subs, output_path)
                     else:
                         # Final fallback: output is just the raw-seeked segment, no frills
-                        subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
-                                        '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
-                                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path],
-                                       capture_output=True, timeout=300)
+                        _ffmpeg(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                                 '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
+                                 '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path],
+                                f"clip{i+1}_ultrafast", timeout=300)
 
                 local_files.append(output_path)
 
