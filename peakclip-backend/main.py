@@ -1156,46 +1156,97 @@ def process_video_background(job_id: str, user_id: str, url: str):
         local_files.append(thumb_path)
 
         check_deadline("transcription")
-        jobs_store[job_id] = {"status": "processing", "message": "Transcribing audio..."}
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-        def call_transcribe(client_obj, model):
-            with open(audio_path, 'rb') as f:
+        audio_size_mb = os.path.getsize(audio_path) / (1024 * 1024)
+        jobs_store[job_id] = {"status": "processing", "message": f"Transcribing {audio_size_mb:.0f}MB audio..."}
+        print(f"TRANSCRIBE: starting, audio={audio_size_mb:.1f}MB path={audio_path}")
+
+        # Compress large audio to speed up Whisper
+        transcribe_path = audio_path
+        if audio_size_mb > 15:
+            compressed = audio_path.replace('.mp3', '_compressed.mp3')
+            print(f"TRANSCRIBE: compressing large audio ({audio_size_mb:.1f}MB)...")
+            subprocess.run([
+                'ffmpeg', '-y', '-i', audio_path,
+                '-ar', '16000', '-ac', '1', '-b:a', '32k', compressed
+            ], capture_output=True, timeout=120)
+            if os.path.exists(compressed) and os.path.getsize(compressed) > 1024:
+                comp_mb = os.path.getsize(compressed) / (1024 * 1024)
+                print(f"TRANSCRIBE: compressed to {comp_mb:.1f}MB")
+                transcribe_path = compressed
+                local_files.append(compressed)
+
+        # ── Attempt transcription with OpenAI, fallback to Groq ──
+        transcript = None
+
+        # Helper: transcribe with a given client and model
+        def _do_transcribe(client_obj, model):
+            with open(transcribe_path, 'rb') as f:
                 return client_obj.audio.transcriptions.create(
                     model=model, file=f,
                     response_format="verbose_json",
                     timestamp_granularities=["word", "segment"],
                 )
-        def run_with_timeout(client_obj, model, timeout_sec):
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                fut = pool.submit(call_transcribe, client_obj, model)
-                return fut.result(timeout=timeout_sec)
-        transcript = None
-        # Try OpenAI first (hard timeout 180s)
-        try:
-            transcript = run_with_timeout(client, "whisper-1", 180)
-        except FuturesTimeout:
-            print(f"Job {job_id}: OpenAI Whisper timed out after 180s")
-        except Exception as oai_err:
-            print(f"Job {job_id}: OpenAI Whisper error (attempting Groq fallback): {str(oai_err)[:120]}")
-        # If OpenAI failed, try Groq fallback
-        if transcript is None and groq_client:
+
+        # Try OpenAI
+        import threading
+        openai_result = []
+        openai_error = []
+        def _openai_thread():
             try:
-                jobs_store[job_id] = {"status": "processing", "message": "Transcribing with Groq (OpenAI quota/timed out)..."}
-                transcript = run_with_timeout(groq_client, "whisper-large-v3-turbo", 180)
-            except FuturesTimeout:
-                print(f"Job {job_id}: Groq fallback timed out after 60s")
-            except Exception as groq_err:
-                print(f"Job {job_id}: Groq fallback also failed: {str(groq_err)[:120]}")
+                print(f"TRANSCRIBE: OpenAI Whisper starting...")
+                t0 = time.time()
+                r = _do_transcribe(client, "whisper-1")
+                elapsed = time.time() - t0
+                print(f"TRANSCRIBE: OpenAI Whisper OK in {elapsed:.1f}s")
+                openai_result.append(r)
+            except Exception as e:
+                openai_error.append(e)
+
+        t = threading.Thread(target=_openai_thread, daemon=True)
+        t.start()
+        t.join(timeout=240)
+        if t.is_alive():
+            print(f"TRANSCRIBE: OpenAI Whisper did not finish within 240s")
+        elif openai_result:
+            transcript = openai_result[0]
+        elif openai_error:
+            print(f"TRANSCRIBE: OpenAI Whisper error: {openai_error[0]}")
+            # Try Groq fallback
+            if groq_client:
+                jobs_store[job_id] = {"status": "processing", "message": "Transcribing with Groq..."}
+                try:
+                    print(f"TRANSCRIBE: Groq Whisper starting...")
+                    t0 = time.time()
+                    transcript = _do_transcribe(groq_client, "whisper-large-v3-turbo")
+                    elapsed = time.time() - t0
+                    print(f"TRANSCRIBE: Groq Whisper OK in {elapsed:.1f}s")
+                except Exception as groq_err:
+                    print(f"TRANSCRIBE: Groq also failed: {groq_err}")
+        else:
+            print(f"TRANSCRIBE: OpenAI thread finished without result or error (timeout?)")
+
         if transcript is None:
-            msgs = []
-            if not Groq:
-                msgs.append("Groq library not installed on server")
-            elif not groq_client:
-                msgs.append("OpenAI quota/timed out and no GROQ_API_KEY configured")
-            else:
-                msgs.append("OpenAI and Groq both failed or timed out")
-            msgs.append("To fix: set GROQ_API_KEY in Railway Dashboard (free at console.groq.com)")
-            raise Exception(". ".join(msgs))
+            print(f"TRANSCRIBE: all services failed, continuing without subtitles")
+            words_data = []
+            segments_text = "Transcript not available."
+            jobs_store[job_id] = {"status": "processing", "message": "Transcription unavailable, generating clips without subtitles..."}
+        else:
+            words_data = []
+            if hasattr(transcript, 'words') and transcript.words:
+                for w in transcript.words:
+                    word_text = getattr(w, 'word', '') or ''
+                    w_start = getattr(w, 'start', None)
+                    w_end = getattr(w, 'end', None)
+                    if w_start is not None and w_end is not None and word_text.strip():
+                        words_data.append({"word": word_text, "start": w_start, "end": w_end})
+
+            segments_text = "\n".join([
+                f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}"
+                for s in transcript.segments
+            ])
+            print(f"TRANSCRIBE: done, {len(words_data)} words")
+
+        check_deadline("ai-analysis")
 
         words_data = []
         if hasattr(transcript, 'words') and transcript.words:
