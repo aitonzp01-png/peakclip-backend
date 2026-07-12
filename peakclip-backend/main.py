@@ -1355,73 +1355,74 @@ Return JSON with this exact format:
                 # ── Resolve music track (silently skip if missing) ──
                 music_path = resolve_music_path(clip_mood)
 
-                # Step 1: render video+audio without subtitles (h264, 9:16 portrait)
+                # Step 1: render video+audio (no subs) — try low-memory settings first
                 no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
                 local_files.append(no_subs)
-                vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
                 audio_filter = ""
                 if music_path:
                     music_path_ff = music_path.replace('\\', '/')
                     audio_filter = "[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]"
                 else:
                     audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
-                parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-                step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-                if music_path:
-                    step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-                step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
-                          '-map', '[v]', '-map', '[a]',
-                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                          '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-                _ffmpeg(step1, f"clip{i+1}_step1_1080p", timeout=300)
 
+                # Try increasingly aggressive settings; 1080p skipped (OOM on Railway)
+                render_attempts = [
+                    {"scale": "720:1280", "preset": "ultrafast", "crf": "26", "label": "ultrafast_720p"},
+                    {"scale": "720:1280", "preset": "fast",      "crf": "23", "label": "fast_720p"},
+                ]
+                rendered = False
+                for att in render_attempts:
+                    vid_filter = f"scale={att['scale']}:force_original_aspect_ratio=increase,crop={att['scale']}"
+                    parts = [f"[0:v]{vid_filter}[v]", audio_filter]
+                    cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
+                    if music_path:
+                        cmd += ['-stream_loop', '-1', '-i', music_path_ff]
+                    cmd += ['-t', str(duration), '-threads', '4',
+                            '-filter_complex', ';'.join(parts),
+                            '-map', '[v]', '-map', '[a]',
+                            '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+                            '-preset', att['preset'], '-crf', att['crf'],
+                            '-c:a', 'aac', '-b:a', '128k',
+                            '-movflags', '+faststart', '-y', no_subs]
+                    try:
+                        _ffmpeg(cmd, f"clip{i+1}_{att['label']}", timeout=300)
+                    except subprocess.TimeoutExpired:
+                        continue
+                    if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
+                        rendered = True
+                        break
+
+                if not rendered:
+                    # Last resort: raw seek, no filter_complex (bypasses complex scaling)
+                    _ffmpeg(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                             '-threads', '4',
+                             '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
+                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '28',
+                             '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', no_subs],
+                            f"clip{i+1}_raw", timeout=300)
+
+                # Step 2: burn subtitles (best-effort, skip if it fails)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     srt_path_ff = srt_path.replace('\\', '/')
-                    step2 = ['ffmpeg', '-i', no_subs,
-                             '-vf', f"subtitles={srt_path_ff}",
-                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                             '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
+                    sub_cmd = ['ffmpeg', '-i', no_subs, '-threads', '2',
+                               '-vf', f"subtitles={srt_path_ff}",
+                               '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
+                               '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
                     try:
-                        _ffmpeg(step2, f"clip{i+1}_step2_subs", timeout=120)
+                        _ffmpeg(sub_cmd, f"clip{i+1}_subs", timeout=120)
                     except subprocess.TimeoutExpired:
                         print(f"CLIP {i+1}: subtitle burn timed out, using no-subs version")
                     if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
                         shutil.copy2(no_subs, output_path)
                 else:
-                    # Fallback: render at 720p (lower memory)
-                    vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
-                    parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-                    step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-                    if music_path:
-                        step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-                    step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
-                              '-map', '[v]', '-map', '[a]',
-                              '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                              '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-                    try:
-                        _ffmpeg(step1, f"clip{i+1}_step1_720p", timeout=300)
-                    except subprocess.TimeoutExpired:
-                        print(f"CLIP {i+1}: 720p step1 timed out, trying ultrafast fallback")
-                    if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                        srt_path_ff = srt_path.replace('\\', '/')
-                        step2 = ['ffmpeg', '-i', no_subs,
-                                 '-vf', f"subtitles={srt_path_ff}",
-                                 '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                                 '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                        try:
-                            _ffmpeg(step2, f"clip{i+1}_step2_subs_720p", timeout=120)
-                        except subprocess.TimeoutExpired:
-                            print(f"CLIP {i+1}: subtitle burn timed out, using no-subs version")
-                        if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                            shutil.copy2(no_subs, output_path)
-                    else:
-                        # Final fallback: output is just the raw-seeked segment, no frills
-                        _ffmpeg(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
-                                 '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
-                                 '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path],
-                                f"clip{i+1}_ultrafast", timeout=300)
+                    print(f"CLIP {i+1}: no rendered output for this clip, skipping")
+                    output_path = None
 
-                local_files.append(output_path)
+                if output_path:
+                    local_files.append(output_path)
+                else:
+                    print(f"CLIP {i+1}: skipping (no render output)")
+                    continue
 
                 jobs_store[job_id] = {"status": "processing", "message": f"Uploading clip {i+1}..."}
                 # Upload to Supabase Storage
@@ -1448,8 +1449,7 @@ Return JSON with this exact format:
                     "thumbnail_url": thumb_storage_url,
                     "duration": round(duration, 1),
                     "start_time": clip_start,
-                    "end_time": clip["end"],
-                    "transcript": json.dumps(words_data)
+                    "end_time": clip["end"]
                 }).execute()
 
                 output_clips.append({
