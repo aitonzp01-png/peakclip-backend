@@ -978,13 +978,22 @@ def process_video_background(job_id: str, user_id: str, url: str):
             'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
         ]
         format_fallbacks = [
+            # Try best quality first
             'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best',
-            'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]/best',
-            'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
-            'bestvideo+bestaudio/best',
-            'worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst',
+            # Quick fallback to reliable worst MP4
             'worst[ext=mp4]/worst',
+            # Best MP4
+            'best[ext=mp4]/best',
+            # Best non-MP4
+            'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
+            # Any format
+            'bestvideo+bestaudio/best',
+            # Worst MP4 extended
+            'worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst',
+            # Absolute worst
+            'worst',
+            # Another fallback
+            'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
         ]
         impersonate_profiles = [None, 'chrome', 'safari', 'chrome-120', 'chrome-119', 'safari-17']
 
