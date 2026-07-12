@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getSupabaseClient } from '../../lib/supabase';
 import Sidebar from './components/Sidebar.jsx';
@@ -37,6 +38,7 @@ export default function Dashboard() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState(0);
   const [jobId, setJobId] = useState(null);
+  const [processingError, setProcessingError] = useState(null);
   const [shakeInput, setShakeInput] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -149,9 +151,8 @@ export default function Dashboard() {
           }
         } else if (data.status === 'error') {
           clearInterval(interval);
-          setIsProcessing(false);
+          setProcessingError(data.message || 'Error processing video');
           setJobId(null);
-          setToast({ type: 'error', text: data.message || 'Error al procesar el video' });
         }
       } catch (err) {
         console.error(err);
@@ -186,13 +187,13 @@ export default function Dashboard() {
     }
     
     if (credits <= 0 && plan !== 'pro') {
-      setToast({ type: 'error', text: 'No te quedan créditos. Mejora tu plan.' });
+      setToast({ type: 'error', text: 'You have no credits left. Upgrade your plan.' });
       return;
     }
 
     const trimmedUrl = url.trim();
     if (!validateUrl(trimmedUrl)) {
-      setToast({ type: 'error', text: 'Introduce un enlace de video válido' });
+      setToast({ type: 'error', text: 'Enter a valid video link' });
       return;
     }
 
@@ -231,7 +232,7 @@ export default function Dashboard() {
         setToast({ type: 'error', text: `Error: ${err.slice(0, 100)}` });
       }
     } catch (err) {
-      setToast({ type: 'error', text: `Error de conexión: ${err.message}` });
+      setToast({ type: 'error', text: `Connection error: ${err.message}` });
     }
     setUrl('');
     setLoading(false);
@@ -245,7 +246,7 @@ export default function Dashboard() {
   const handleFileUpload = async () => {
     if (!selectedFile || !user) return;
     if (credits <= 0 && plan !== 'pro') {
-      setToast({ type: 'error', text: 'No te quedan créditos. Mejora tu plan.' });
+      setToast({ type: 'error', text: 'You have no credits left. Upgrade your plan.' });
       return;
     }
 
@@ -272,10 +273,10 @@ export default function Dashboard() {
         }
       } else {
         const err = await response.text();
-        setToast({ type: 'error', text: `Error al subir: ${err.slice(0, 100)}` });
+        setToast({ type: 'error', text: `Upload error: ${err.slice(0, 100)}` });
       }
     } catch (err) {
-      setToast({ type: 'error', text: `La subida falló: ${err.message}` });
+      setToast({ type: 'error', text: `Upload failed: ${err.message}` });
     }
     setUploading(false);
   };
@@ -297,17 +298,17 @@ export default function Dashboard() {
         const data = await response.json();
         window.location.href = data.url;
       } else {
-        setToast({ type: 'error', text: 'Error al abrir pasarela de pago.' });
+        setToast({ type: 'error', text: 'Error opening payment gateway.' });
       }
     } catch {
-      setToast({ type: 'error', text: 'No se pudo conectar a la pasarela.' });
+      setToast({ type: 'error', text: 'Could not connect to the payment gateway.' });
     }
     setCheckoutLoading(false);
   };
 
   const handleUpdateProfile = async () => {
     if (!displayName.trim()) {
-      setSettingsStatus('El nombre no puede estar vacío');
+      setSettingsStatus('Name cannot be empty');
       return;
     }
     setSaving(true);
@@ -317,25 +318,25 @@ export default function Dashboard() {
         data: { name: displayName.trim() }
       });
       if (error) throw error;
-      setSettingsStatus('success: Perfil actualizado correctamente');
+      setSettingsStatus('success: Profile updated successfully');
       setTimeout(() => setSettingsStatus(''), 3000);
     } catch (err) {
-      setSettingsStatus(`error: ${err.message || 'La actualización falló'}`);
+      setSettingsStatus(`error: ${err.message || 'Update failed'}`);
     }
     setSaving(false);
   };
 
   const handleUpdatePassword = async () => {
     if (!passwordNew) {
-      setSettingsStatus('error: La nueva contraseña es obligatoria');
+      setSettingsStatus('error: New password is required');
       return;
     }
     if (passwordNew.length < 6) {
-      setSettingsStatus('error: Debe tener al menos 6 caracteres');
+      setSettingsStatus('error: Must be at least 6 characters');
       return;
     }
     if (passwordNew !== passwordConfirm) {
-      setSettingsStatus('error: Las contraseñas no coinciden');
+      setSettingsStatus('error: Passwords do not match');
       return;
     }
     setSaving(true);
@@ -343,12 +344,12 @@ export default function Dashboard() {
     try {
       const { error } = await getSupabaseClient().auth.updateUser({ password: passwordNew });
       if (error) throw error;
-      setSettingsStatus('success: Contraseña actualizada correctamente');
+      setSettingsStatus('success: Password updated successfully');
       setPasswordNew('');
       setPasswordConfirm('');
       setTimeout(() => setSettingsStatus(''), 3000);
     } catch (err) {
-      setSettingsStatus(`error: ${err.message || 'Fallo de actualización'}`);
+      setSettingsStatus(`error: ${err.message || 'Update failed'}`);
     }
     setSaving(false);
   };
@@ -377,10 +378,10 @@ export default function Dashboard() {
   };
 
   const handleRenameClip = async (clipId, currentTitle) => {
-    const newTitle = prompt('Nuevo título para el clip:', currentTitle);
+    const newTitle = prompt('New title for clip:', currentTitle);
     if (newTitle === null) return;
     if (!newTitle.trim()) {
-      setToast({ type: 'error', text: 'El título no puede estar vacío' });
+      setToast({ type: 'error', text: 'Title cannot be empty' });
       return;
     }
     try {
@@ -390,14 +391,14 @@ export default function Dashboard() {
         .eq('id', clipId);
       if (error) throw error;
       setClips(prev => prev.map(c => c.id === clipId ? { ...c, title: newTitle.trim() } : c));
-      setToast({ type: 'success', text: 'Clip renombrado correctamente' });
+      setToast({ type: 'success', text: 'Clip renamed successfully' });
     } catch (err) {
-      setToast({ type: 'error', text: err.message || 'Error al renombrar' });
+      setToast({ type: 'error', text: err.message || 'Error renaming' });
     }
   };
 
   const handleDeleteClip = async (clipId) => {
-    if (!confirm('¿Estás seguro de que quieres eliminar este clip?')) return;
+    if (!confirm('Are you sure you want to delete this clip?')) return;
     try {
       const { error } = await getSupabaseClient()
         .from('clips')
@@ -405,19 +406,19 @@ export default function Dashboard() {
         .eq('id', clipId);
       if (error) throw error;
       setClips(prev => prev.filter(c => c.id !== clipId));
-      setToast({ type: 'success', text: 'Clip eliminado correctamente' });
+      setToast({ type: 'success', text: 'Clip deleted successfully' });
     } catch (err) {
-      setToast({ type: 'error', text: err.message || 'Error al eliminar' });
+      setToast({ type: 'error', text: err.message || 'Error deleting' });
     }
   };
 
   const handleModalSubmit = (toolName) => {
     // Process tool action
     if (!modalUrl.trim()) {
-      setToast({ type: 'error', text: 'Pega un enlace antes de procesar' });
+      setToast({ type: 'error', text: 'Paste a link before processing' });
       return;
     }
-    setToast({ type: 'success', text: `Procesando con ${toolName}...` });
+    setToast({ type: 'success', text: `Processing with ${toolName}...` });
     setActiveModalTool(null);
     setModalUrl('');
   };
@@ -426,9 +427,9 @@ export default function Dashboard() {
   const tools = [
     {
       id: 'clips',
-      name: 'Clips automáticos',
+      name: 'Auto Clips',
       badge: '',
-      desc: 'Genera clips virales automáticamente de tu video con IA.',
+      desc: 'Automatically generate viral clips from your video with AI.',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
@@ -438,9 +439,9 @@ export default function Dashboard() {
     },
     {
       id: 'subtitles',
-      name: 'Subtítulos IA',
-      badge: 'Nuevo',
-      desc: 'Añade subtítulos elegantes o traduce tu contenido con un clic.',
+      name: 'AI Subtitles',
+      badge: 'New',
+      desc: 'Add stylish subtitles or translate your content with one click.',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M7 15h4M7 11h10" />
@@ -449,9 +450,9 @@ export default function Dashboard() {
     },
     {
       id: 'editor',
-      name: 'Editor de video',
+      name: 'Video Editor',
       badge: '',
-      desc: 'Edita tus clips directamente en el navegador.',
+      desc: 'Edit your clips directly in the browser.',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" />
@@ -463,9 +464,9 @@ export default function Dashboard() {
     },
     {
       id: 'voice',
-      name: 'Mejorar voz',
-      badge: 'Nuevo',
-      desc: 'Mejora la calidad de voz de tu video automáticamente.',
+      name: 'Enhance Voice',
+      badge: 'New',
+      desc: 'Automatically improve the voice quality of your video.',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
@@ -475,9 +476,9 @@ export default function Dashboard() {
     },
     {
       id: 'reframe',
-      name: 'Reencuadre IA',
+      name: 'AI Reframe',
       badge: '',
-      desc: 'Reencuadre tu video verticalmente con seguimiento de cara.',
+      desc: 'Reframe your video vertically with face tracking.',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
@@ -486,9 +487,9 @@ export default function Dashboard() {
     },
     {
       id: 'schedule',
-      name: 'Programar',
-      badge: 'Próx.',
-      desc: 'Programa la publicación automática en tus redes sociales.',
+      name: 'Schedule',
+      badge: 'Soon',
+      desc: 'Schedule automatic posting to your social networks.',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" />
@@ -498,9 +499,9 @@ export default function Dashboard() {
     },
     {
       id: 'analytics_tool',
-      name: 'Analíticas',
-      badge: 'Próx.',
-      desc: 'Analiza el rendimiento de tus clips en todas las plataformas.',
+      name: 'Analytics',
+      badge: 'Soon',
+      desc: 'Analyze the performance of your clips across all platforms.',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -509,9 +510,9 @@ export default function Dashboard() {
     },
     {
       id: 'export',
-      name: 'Exportar',
+      name: 'Export',
       badge: '',
-      desc: 'Exporta tus clips en el formato y resolución que necesites.',
+      desc: 'Export your clips in the format and resolution you need.',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
@@ -567,12 +568,12 @@ export default function Dashboard() {
   };
 
   const stepsDetails = [
-    { label: 'Descargando video...' },
-    { label: 'Transcribiendo audio con IA...' },
-    { label: 'Analizando momentos virales...' },
-    { label: 'Generando clips...' },
-    { label: 'Añadiendo subtítulos...' },
-    { label: 'Finalizando exportación...' }
+    { label: 'Downloading video...' },
+    { label: 'Transcribing audio with AI...' },
+    { label: 'Analyzing viral moments...' },
+    { label: 'Generating clips...' },
+    { label: 'Adding subtitles...' },
+    { label: 'Finalizing export...' }
   ];
 
   // Pricing Plans
@@ -582,8 +583,8 @@ export default function Dashboard() {
       price: '$0',
       period: '/month',
       clips: '3 clips/month',
-      features: ['3 créditos', 'Formato vertical 9:16', 'Subtítulos básicos'],
-      cta: 'Plan actual',
+      features: ['3 credits', 'Vertical 9:16 format', 'Basic subtitles'],
+      cta: 'Current plan',
       disabled: true
     },
     {
@@ -591,8 +592,8 @@ export default function Dashboard() {
       price: '$26.99',
       period: '/month',
       clips: '200 clips/month',
-      features: ['200 créditos', 'Subtítulos animados', 'Plantillas de gameplay', 'Exportación HD'],
-      cta: 'Empezar con Creator',
+      features: ['200 credits', 'Animated subtitles', 'Gameplay templates', 'HD export'],
+      cta: 'Start with Creator',
       price_id: process.env.NEXT_PUBLIC_STRIPE_PRICE_CREATOR || 'price_creator',
       popular: true
     },
@@ -600,9 +601,9 @@ export default function Dashboard() {
       name: 'Pro',
       price: '$69.99',
       period: '/month',
-      clips: 'Ilimitados',
-      features: ['Créditos ilimitados', 'Editor avanzado', 'Auto-publicar en redes', 'Puntuación viral IA', 'Soporte prioritario'],
-      cta: 'Empezar con Pro',
+      clips: 'Unlimited',
+      features: ['Unlimited credits', 'Advanced editor', 'Auto-post to socials', 'Viral score AI', 'Priority support'],
+      cta: 'Start with Pro',
       price_id: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO || 'price_pro'
     }
   ];
@@ -634,44 +635,71 @@ export default function Dashboard() {
         {/* PROCESSING WINDOW OVERLAY VIEW */}
         {isProcessing ? (
           <div className="db-processing-view">
-            <div className="db-processing-spinner-container">
-              <div className="db-spinner-bg" />
-              <div className="db-spinner-fg" />
-              <div className="db-spinner-icon">
-                {getStepIcon(step)}
-              </div>
-            </div>
-            
-            <h2 className="db-step-title">{stepsDetails[step]?.label}</h2>
-            <p className="db-step-subtitle">Esto puede tomar unos minutos...</p>
-
-            {/* Progress bar */}
-            <div className="db-progress-container">
-              <div className="db-progress-text-row">
-                <span className="db-progress-step">Paso {step + 1} de 6</span>
-                <span className="db-progress-percent">{Math.round(((step + 1) / 6) * 100)}%</span>
-              </div>
-              <div className="db-progress-track">
-                <div className="db-progress-fill" style={{ width: `${((step + 1) / 6) * 100}%` }} />
-              </div>
-            </div>
-
-            {/* List of 6 steps */}
-            <div className="db-steps-list">
-              {stepsDetails.map((s, index) => (
-                <div
-                  key={index}
-                  className={`db-step-item ${
-                    index < step ? 'completed' : index === step ? 'current' : 'pending'
-                  }`}
-                >
-                  <span style={{ fontSize: '13px', display: 'flex', alignItems: 'center' }}>
-                    {index < step ? '✓' : index === step ? '▶' : '○'}
-                  </span>
-                  <span>{s.label}</span>
+            {processingError ? (
+              <>
+                <div className="db-processing-spinner-container" style={{ opacity: 0.3 }}>
+                  <div className="db-spinner-bg" />
+                  <div className="db-spinner-fg" style={{ animation: 'none', borderTopColor: 'var(--db-error, #e44)' }} />
+                  <div className="db-spinner-icon" style={{ color: 'var(--db-error, #e44)' }}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <h2 className="db-step-title" style={{ color: 'var(--db-error, #e44)' }}>Something went wrong</h2>
+                <p className="db-step-subtitle">{processingError}</p>
+                <button
+                  onClick={() => { setIsProcessing(false); setProcessingError(null); }}
+                  style={{
+                    marginTop: '24px', backgroundColor: 'var(--db-btn-primary-bg)', color: 'var(--db-btn-primary-color)',
+                    border: 'none', borderRadius: '10px', padding: '12px 32px', cursor: 'pointer', fontWeight: '700', fontSize: '14px'
+                  }}
+                >
+                  Back to dashboard
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="db-processing-spinner-container">
+                  <div className="db-spinner-bg" />
+                  <div className="db-spinner-fg" />
+                  <div className="db-spinner-icon">
+                    {getStepIcon(step)}
+                  </div>
+                </div>
+                
+                <h2 className="db-step-title">{stepsDetails[step]?.label}</h2>
+                <p className="db-step-subtitle">This may take a few minutes...</p>
+
+                {/* Progress bar */}
+                <div className="db-progress-container">
+                  <div className="db-progress-text-row">
+                    <span className="db-progress-step">Step {step + 1} of 6</span>
+                    <span className="db-progress-percent">{Math.round(((step + 1) / 6) * 100)}%</span>
+                  </div>
+                  <div className="db-progress-track">
+                    <div className="db-progress-fill" style={{ width: `${((step + 1) / 6) * 100}%` }} />
+                  </div>
+                </div>
+
+                {/* List of 6 steps */}
+                <div className="db-steps-list">
+                  {stepsDetails.map((s, index) => (
+                    <div
+                      key={index}
+                      className={`db-step-item ${
+                        index < step ? 'completed' : index === step ? 'current' : 'pending'
+                      }`}
+                    >
+                      <span style={{ fontSize: '13px', display: 'flex', alignItems: 'center' }}>
+                        {index < step ? '✓' : index === step ? '▶' : '○'}
+                      </span>
+                      <span>{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -684,8 +712,8 @@ export default function Dashboard() {
               >
                 {/* Primary Card */}
                 <div className="db-input-card">
-                  <h1 className="db-input-card-title">Convierte tu próximo video en clips virales</h1>
-                  <p className="db-input-card-subtitle">Pega un link o sube tu archivo</p>
+                  <h1 className="db-input-card-title">Turn your next video into viral clips</h1>
+                  <p className="db-input-card-subtitle">Paste a link or upload your file</p>
 
                   <div className={`db-url-container ${shakeInput ? 'shake' : ''}`}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9a9aa3" strokeWidth="2" strokeLinecap="round">
@@ -697,7 +725,7 @@ export default function Dashboard() {
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                      placeholder="Pega un enlace de YouTube, Twitch..."
+                      placeholder="Paste a YouTube, Twitch link..."
                       className="db-url-input"
                       disabled={loading}
                     />
@@ -720,11 +748,11 @@ export default function Dashboard() {
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                         <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
                       </svg>
-                      Subir archivo
+                      Upload file
                     </button>
 
                     <button
-                      onClick={() => setToast({ type: 'success', text: 'Conectando con Google Drive...' })}
+                      onClick={() => setToast({ type: 'success', text: 'Connecting to Google Drive...' })}
                       className="db-secondary-btn"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24">
@@ -740,7 +768,7 @@ export default function Dashboard() {
 
                     {selectedFile && (
                       <span style={{ fontSize: '12px', color: '#6b6b72', display: 'flex', alignItems: 'center' }}>
-                        Seleccionado: {selectedFile.name}
+                        Selected: {selectedFile.name}
                       </span>
                     )}
                   </div>
@@ -757,10 +785,10 @@ export default function Dashboard() {
                             <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3" />
                             <path d="M12 2a10 10 0 0 1 10 10" stroke="#f5f5f0" stroke-width="3" stroke-linecap="round" />
                           </svg>
-                          Subiendo archivo de video...
+                          Uploading video file...
                         </>
                       ) : (
-                        'Subir y Procesar Video'
+                        'Upload and Process Video'
                       )}
                     </button>
                   ) : (
@@ -775,10 +803,10 @@ export default function Dashboard() {
                             <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3" />
                             <path d="M12 2a10 10 0 0 1 10 10" stroke="#f5f5f0" stroke-width="3" stroke-linecap="round" />
                           </svg>
-                          Procesando tu video...
+                          Processing your video...
                         </>
                       ) : (
-                        'Obtener clips en 1 clic'
+                        'Get clips in 1 click'
                       )}
                     </button>
                   )}
@@ -787,7 +815,7 @@ export default function Dashboard() {
                 {/* HORIZONTAL TOOLS CAROUSEL */}
                 <div className="db-tools-section">
                   <span className="db-section-label" style={{ paddingLeft: '0', display: 'block', marginBottom: '14px', textAlign: 'center' }}>
-                    Herramientas
+                    Tools
                   </span>
                   
                   <div className="db-tools-grid">
@@ -810,9 +838,9 @@ export default function Dashboard() {
                 {/* RECENT PROJECTS / CLIPS (Shows top 3) */}
                 <div className="db-projects-section">
                   <div className="db-projects-header">
-                    <span className="db-section-label" style={{ paddingLeft: '0', margin: '0' }}>Clips Recientes</span>
+                    <span className="db-section-label" style={{ paddingLeft: '0', margin: '0' }}>                    Recent Clips</span>
                     <button onClick={() => setActiveTab('clips')} className="db-footer-link" style={{ fontSize: '13px', fontWeight: '600' }}>
-                      Ver todos →
+                      View all →
                     </button>
                   </div>
                   
@@ -822,8 +850,8 @@ export default function Dashboard() {
                         <rect x="2" y="2" width="20" height="20" rx="4" />
                         <polygon points="10 8 16 12 10 16 10 8" fill="#e0e0da" stroke="none" />
                       </svg>
-                      <h3 className="db-empty-title">Aún no tienes clips</h3>
-                      <p className="db-empty-subtitle">Pega un link arriba para generar tu primer clip viral.</p>
+                      <h3 className="db-empty-title">You don't have clips yet</h3>
+                      <p className="db-empty-subtitle">Paste a link above to generate your first viral clip.</p>
                     </div>
                   ) : (
                     <div className="db-clips-grid">
@@ -835,31 +863,38 @@ export default function Dashboard() {
                         >
                           <div className="db-clip-thumbnail">
                             {clip.thumbnail_url ? (
-                              <img src={clip.thumbnail_url} alt={clip.title} className="db-clip-img" />
+                              <Image
+                                src={clip.thumbnail_url}
+                                alt={clip.title || 'Clip thumbnail'}
+                                fill
+                                sizes="(max-width: 768px) 50vw, 25vw"
+                                className="db-clip-img"
+                                style={{ objectFit: 'cover' }}
+                              />
                             ) : (
                               <div className="db-clip-thumb-placeholder">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                                   <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
                                 </svg>
                                 <span style={{ fontSize: '11px', marginTop: '4px' }}>
-                                  {clip.status === 'processing' ? 'Procesando...' : 'Sin vista previa'}
+                                  {clip.status === 'processing' ? 'Processing...' : 'No preview'}
                                 </span>
                               </div>
                             )}
                             
                             {/* NEW badge if created in last 24h */}
                             {new Date() - new Date(clip.created_at) < 24 * 60 * 60 * 1000 && (
-                              <span className="db-clip-new-badge">Nuevo</span>
+                              <span className="db-clip-new-badge">New</span>
                             )}
                           </div>
                           
                           <div className="db-clip-info">
-                            <span className="db-clip-title">{clip.title || 'Clip sin título'}</span>
+                            <span className="db-clip-title">{clip.title || 'Untitled clip'}</span>
                             <span className="db-clip-platform">{clip.platform || 'YouTube'}</span>
                             
                             <div className="db-clip-footer">
                               <span className="db-clip-date">
-                                {new Date(clip.created_at).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
+                                {new Date(clip.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                               </span>
                               
                               <div style={{ position: 'relative' }}>
@@ -883,7 +918,7 @@ export default function Dashboard() {
                                       }}
                                       className="db-dropdown-item"
                                     >
-                                      Renombrar
+                                      Rename
                                     </button>
                                     <button
                                       onClick={(e) => {
@@ -893,7 +928,7 @@ export default function Dashboard() {
                                       }}
                                       className="db-dropdown-item"
                                     >
-                                      Descargar
+                                      Download
                                     </button>
                                     <button
                                       onClick={(e) => {
@@ -903,7 +938,7 @@ export default function Dashboard() {
                                       }}
                                       className="db-dropdown-item delete"
                                     >
-                                      Eliminar
+                                      Delete
                                     </button>
                                   </div>
                                 )}
@@ -929,21 +964,21 @@ export default function Dashboard() {
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#0f0f0f" strokeWidth="1.5" style={{ margin: '0 auto 20px' }}>
                   <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12"/>
                 </svg>
-                <h2 className="db-empty-title">Crear Nueva Campaña</h2>
+                <h2 className="db-empty-title">Create New Campaign</h2>
                 <p className="db-empty-subtitle" style={{ maxWidth: '400px', margin: '6px auto 20px' }}>
-                  Agrupa tus videos y clips bajo una misma campaña para organizar tu contenido de forma más inteligente.
+                  Group your videos and clips under one campaign to organize your content more intelligently.
                 </p>
                 <button
                   onClick={() => {
-                    const name = prompt('Nombre de la campaña:');
+                    const name = prompt('Campaign name:');
                     if (name) {
-                      setToast({ type: 'success', text: `Campaña "${name}" creada correctamente` });
+                      setToast({ type: 'success', text: `Campaign "${name}" created successfully` });
                       setActiveTab('generate');
                     }
                   }}
                   className="db-empty-action-btn"
                 >
-                  Empezar campaña
+                  Start campaign
                 </button>
               </motion.div>
             )}
@@ -960,13 +995,13 @@ export default function Dashboard() {
                 <div className="db-projects-header">
                   <div className="db-tabs-container">
                     <button className="db-tab-btn active">
-                      Todos los proyectos ({clips.length})
+                      All projects ({clips.length})
                     </button>
                     <button
-                      onClick={() => setToast({ type: 'success', text: 'Mostrando guardados (0)' })}
+                      onClick={() => setToast({ type: 'success', text: 'Showing saved (0)' })}
                       className="db-tab-btn inactive"
                     >
-                      Guardados (0)
+                      Saved (0)
                     </button>
                   </div>
                   <span className="db-storage-info">0 GB / 10 GB</span>
@@ -978,10 +1013,10 @@ export default function Dashboard() {
                       <rect x="2" y="2" width="20" height="20" rx="4" />
                       <polygon points="10 8 16 12 10 16 10 8" fill="#e0e0da" stroke="none" />
                     </svg>
-                    <h3 className="db-empty-title">Aún no tienes clips</h3>
-                    <p className="db-empty-subtitle">Pega un link en el inicio para generar tu primer clip viral.</p>
+                    <h3 className="db-empty-title">You don't have clips yet</h3>
+                    <p className="db-empty-subtitle">Paste a link on the home tab to generate your first viral clip.</p>
                     <button onClick={() => setActiveTab('generate')} className="db-empty-action-btn">
-                      Crear primer clip
+                      Create first clip
                     </button>
                   </div>
                 ) : (
@@ -994,30 +1029,37 @@ export default function Dashboard() {
                       >
                         <div className="db-clip-thumbnail">
                           {clip.thumbnail_url ? (
-                            <img src={clip.thumbnail_url} alt={clip.title} className="db-clip-img" />
+                            <Image
+                              src={clip.thumbnail_url}
+                               alt={clip.title || 'Clip thumbnail'}
+                              fill
+                              sizes="(max-width: 768px) 50vw, 25vw"
+                              className="db-clip-img"
+                              style={{ objectFit: 'cover' }}
+                            />
                           ) : (
                             <div className="db-clip-thumb-placeholder">
                               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                                 <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
                               </svg>
                               <span style={{ fontSize: '11px', marginTop: '4px' }}>
-                                {clip.status === 'processing' ? 'Procesando...' : 'Sin vista previa'}
+                                {clip.status === 'processing' ? 'Processing...' : 'No preview'}
                               </span>
                             </div>
                           )}
                           
                           {new Date() - new Date(clip.created_at) < 24 * 60 * 60 * 1000 && (
-                            <span className="db-clip-new-badge">Nuevo</span>
+                             <span className="db-clip-new-badge">New</span>
                           )}
                         </div>
                         
                         <div className="db-clip-info">
-                          <span className="db-clip-title">{clip.title || 'Clip sin título'}</span>
+                           <span className="db-clip-title">{clip.title || 'Untitled clip'}</span>
                           <span className="db-clip-platform">{clip.platform || 'YouTube'}</span>
                           
                           <div className="db-clip-footer">
                             <span className="db-clip-date">
-                              {new Date(clip.created_at).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}
+                               {new Date(clip.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </span>
                             
                             <div style={{ position: 'relative' }}>
@@ -1041,7 +1083,7 @@ export default function Dashboard() {
                                     }}
                                     className="db-dropdown-item"
                                   >
-                                    Renombrar
+                                    Rename
                                   </button>
                                   <button
                                     onClick={(e) => {
@@ -1051,7 +1093,7 @@ export default function Dashboard() {
                                     }}
                                     className="db-dropdown-item"
                                   >
-                                    Descargar
+                                    Download
                                   </button>
                                   <button
                                     onClick={(e) => {
@@ -1061,7 +1103,7 @@ export default function Dashboard() {
                                     }}
                                     className="db-dropdown-item delete"
                                   >
-                                    Eliminar
+                                    Delete
                                   </button>
                                 </div>
                               )}
@@ -1083,11 +1125,11 @@ export default function Dashboard() {
                 className="db-input-card"
                 style={{ textAlign: 'center', padding: '60px 40px' }}
               >
-                <h2 className="db-empty-title">Calendario de Publicaciones</h2>
+                <h2 className="db-empty-title">Publishing Calendar</h2>
                 <p className="db-empty-subtitle" style={{ maxWidth: '320px', margin: '6px auto 20px' }}>
-                  Programa y organiza tus publicaciones automáticas en tus redes sociales.
+                  Schedule and organize your automatic posts on social media.
                 </p>
-                <span className="db-nav-badge" style={{ fontSize: '12px', padding: '6px 12px' }}>Próximamente</span>
+                <span className="db-nav-badge" style={{ fontSize: '12px', padding: '6px 12px' }}>Coming soon</span>
               </motion.div>
             )}
 
@@ -1099,11 +1141,11 @@ export default function Dashboard() {
                 className="db-input-card"
                 style={{ textAlign: 'center', padding: '60px 40px' }}
               >
-                <h2 className="db-empty-title">Analíticas y Métricas</h2>
+                <h2 className="db-empty-title">Analytics and Metrics</h2>
                 <p className="db-empty-subtitle" style={{ maxWidth: '320px', margin: '6px auto 20px' }}>
-                  Descubre qué clips están rindiendo mejor y el alcance total de tus contenidos.
+                  Discover which clips are performing best and the total reach of your content.
                 </p>
-                <span className="db-nav-badge" style={{ fontSize: '12px', padding: '6px 12px' }}>Próximamente</span>
+                <span className="db-nav-badge" style={{ fontSize: '12px', padding: '6px 12px' }}>Coming soon</span>
               </motion.div>
             )}
 
@@ -1115,15 +1157,15 @@ export default function Dashboard() {
                 className="db-input-card"
                 style={{ textAlign: 'center', padding: '60px 40px' }}
               >
-                <h2 className="db-empty-title">Redes Sociales Vinculadas</h2>
+                <h2 className="db-empty-title">Linked Social Accounts</h2>
                 <p className="db-empty-subtitle" style={{ maxWidth: '320px', margin: '6px auto 20px' }}>
-                  Conecta tus cuentas de TikTok, Instagram, YouTube Shorts y Facebook Reels.
+                  Connect your TikTok, Instagram, YouTube Shorts and Facebook Reels accounts.
                 </p>
                 <button
-                  onClick={() => setToast({ type: 'success', text: 'Redes vinculadas (demo)' })}
+                  onClick={() => setToast({ type: 'success', text: 'Accounts linked (demo)' })}
                   className="db-empty-action-btn"
                 >
-                  Vincular canal
+                  Link channel
                 </button>
               </motion.div>
             )}
@@ -1135,7 +1177,7 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', maxWidth: '960px', margin: '0 auto' }}>
+                <div className="db-pricing-grid">
                   {pricingPlans.map((p, idx) => (
                     <div
                       key={idx}
@@ -1157,7 +1199,7 @@ export default function Dashboard() {
                             left: '50%',
                             transform: 'translateX(-50%)',
                             background: '#0f0f0f',
-                            color: '#c4ff3d',
+                            color: '#ff1f1f',
                             fontSize: '10px',
                             fontWeight: '800',
                             padding: '4px 12px',
@@ -1184,7 +1226,7 @@ export default function Dashboard() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
                           {p.features.map((f, fIdx) => (
                             <div key={fIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                              <span style={{ color: '#22c55e' }}>✓</span>
+                              <span style={{ color: '#ff1f1f' }}>✓</span>
                               <span>{f}</span>
                             </div>
                           ))}
@@ -1203,7 +1245,7 @@ export default function Dashboard() {
                           justifyContent: 'center'
                         }}
                       >
-                        {checkoutLoading ? 'Redireccionando...' : p.cta}
+                        {checkoutLoading ? 'Redirecting...' : p.cta}
                       </button>
                     </div>
                   ))}
@@ -1222,13 +1264,13 @@ export default function Dashboard() {
                   {/* Profile Card */}
                   <div className="db-input-card" style={{ margin: 0 }}>
                     <h3 style={{ fontSize: '16px', fontWeight: '900', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                      Mi Perfil
+                      My Profile
                     </h3>
                     
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', color: '#6b6b72', marginBottom: '4px', fontWeight: '600' }}>
-                          Nombre a mostrar
+                          Display name
                         </label>
                         <input
                           type="text"
@@ -1241,7 +1283,7 @@ export default function Dashboard() {
                       
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', color: '#6b6b72', marginBottom: '4px', fontWeight: '600' }}>
-                          Correo electrónico
+                          Email
                         </label>
                         <input
                           type="text"
@@ -1258,7 +1300,7 @@ export default function Dashboard() {
                         className="db-primary-btn"
                         style={{ marginTop: '12px', padding: '12px' }}
                       >
-                        {saving ? 'Guardando...' : 'Guardar cambios'}
+                        {saving ? 'Saving...' : 'Save changes'}
                       </button>
                     </div>
                   </div>
@@ -1266,13 +1308,13 @@ export default function Dashboard() {
                   {/* Password Card */}
                   <div className="db-input-card" style={{ margin: 0 }}>
                     <h3 style={{ fontSize: '16px', fontWeight: '900', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                      Cambiar contraseña
+                      Change password
                     </h3>
                     
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', color: '#6b6b72', marginBottom: '4px', fontWeight: '600' }}>
-                          Nueva contraseña
+                          New password
                         </label>
                         <input
                           type="password"
@@ -1285,7 +1327,7 @@ export default function Dashboard() {
 
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', color: '#6b6b72', marginBottom: '4px', fontWeight: '600' }}>
-                          Confirmar contraseña
+                          Confirm password
                         </label>
                         <input
                           type="password"
@@ -1302,7 +1344,7 @@ export default function Dashboard() {
                         className="db-primary-btn"
                         style={{ marginTop: '12px', padding: '12px' }}
                       >
-                        {saving ? 'Actualizando...' : 'Actualizar contraseña'}
+                        {saving ? 'Updating...' : 'Update password'}
                       </button>
                     </div>
                   </div>
@@ -1345,7 +1387,7 @@ export default function Dashboard() {
               <button
                 onClick={() => setActiveModalTool(null)}
                 className="db-modal-close"
-                aria-label="Cerrar modal"
+                aria-label="Close modal"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -1355,14 +1397,14 @@ export default function Dashboard() {
               <h2 className="db-modal-title">{activeModalTool.name}</h2>
               <p className="db-modal-desc">{activeModalTool.desc}</p>
 
-              {/* Subtítulos IA styles grid */}
+              {/* AI Subtitles styles grid */}
               {activeModalTool.id === 'subtitles' && (
                 <div className="db-caption-grid">
                   <div
                     onClick={() => setSelectedSubStyle('viral')}
                     className={`db-caption-style-card ${selectedSubStyle === 'viral' ? 'active' : ''}`}
                   >
-                    <div className="db-caption-style-text" style={{ backgroundColor: '#0f0f0f', color: '#c4ff3d' }}>
+                    <div className="db-caption-style-text" style={{ backgroundColor: '#0f0f0f', color: '#ff1f1f' }}>
                       VIRAL
                     </div>
                   </div>
@@ -1398,24 +1440,24 @@ export default function Dashboard() {
                 type="text"
                 value={modalUrl}
                 onChange={(e) => setModalUrl(e.target.value)}
-                placeholder="Pega un enlace de YouTube..."
+                placeholder="Paste a YouTube link..."
                 className="db-modal-input"
               />
 
               <div className="db-modal-links-row">
                 <button
-                  onClick={() => setToast({ type: 'success', text: 'Subiendo archivo local...' })}
+                  onClick={() => setToast({ type: 'success', text: 'Uploading local file...' })}
                   className="db-modal-link-btn"
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                     <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
                   </svg>
-                  Subir archivo
+                  Upload file
                 </button>
                 
                 <button
-                  onClick={() => setToast({ type: 'success', text: 'Conectando con Google Drive...' })}
+                  onClick={() => setToast({ type: 'success', text: 'Connecting to Google Drive...' })}
                   className="db-modal-link-btn"
                 >
                   Google Drive
@@ -1426,7 +1468,7 @@ export default function Dashboard() {
                 onClick={() => handleModalSubmit(activeModalTool.name)}
                 className="db-modal-action-btn"
               >
-                Procesar con {activeModalTool.name}
+                Process with {activeModalTool.name}
               </button>
             </motion.div>
           </div>

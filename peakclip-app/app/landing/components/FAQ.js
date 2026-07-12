@@ -61,7 +61,7 @@ export default function FAQ() {
 
   return (
     <section id="faq" ref={sectionRef} style={{
-      background: '#f5f5f0', padding: '100px 80px',
+      background: '#f6f6f2', padding: '100px 24px',
       position: 'relative',
     }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -75,35 +75,38 @@ export default function FAQ() {
             <div style={{ flex: '0 0 280px' }}>
               <span style={{
                 fontSize: 12, fontWeight: 600, letterSpacing: 3,
-                color: '#6b6b72', textTransform: 'uppercase',
+                color: '#6b6b6b', textTransform: 'uppercase',
                 display: 'block', marginBottom: 16,
               }}>
                 FAQ
               </span>
               <h2 style={{
-                fontSize: 'clamp(32px,4vw,56px)', fontWeight: 900,
-                letterSpacing: -2, lineHeight: 0.97, color: '#0f0f0f',
+                fontFamily: 'var(--font-display), "Bebas Neue", sans-serif',
+                fontSize: 'clamp(44px,6vw,80px)',
+                fontWeight: 400,
+                letterSpacing: '-0.5px',
+                lineHeight: 1.05,
+                color: '#0f0f0f',
                 marginBottom: 16,
               }}>
                 Got<br />
                 <span style={{
-                  fontStyle: 'italic', color: '#0f0f0f',
-                  background: '#c4ff3d', padding: '0 8px',
-                  borderRadius: 8,
+                  background: '#ff1f1f', color: '#ffffff',
+                  padding: '0 10px', borderRadius: 6,
                 }}>
                   questions?
                 </span>
               </h2>
-              <p style={{ fontSize: 14, color: '#6b6b72', maxWidth: 250, lineHeight: 1.6, marginBottom: 24 }}>
+              <p style={{ fontSize: 14, color: '#6b6b6b', maxWidth: 250, lineHeight: 1.6, marginBottom: 24 }}>
                 Quick answers to the most common questions about PeakClip.
               </p>
               <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 13, color: '#6b6b72', marginBottom: 6 }}>
+                  <p style={{ fontSize: 13, color: '#6b6b6b', marginBottom: 6 }}>
                     Can't find your answer?
                   </p>
                   <a href="/contact" className="faq-contact-link" style={{
-                    fontSize: 14, fontWeight: 700, color: '#0f0f0f',
+                    fontSize: 14, fontWeight: 700, color: '#ff1f1f',
                     textDecoration: 'none', transition: 'opacity 0.2s',
                   }}>
                     Contact us →
@@ -118,7 +121,7 @@ export default function FAQ() {
                 const isOpen = openIndex === i
                 return (
                     <div key={i} style={{
-                      borderBottom: '1px solid rgba(0,0,0,0.06)',
+                      borderBottom: '1px solid #e8e8e3',
                     }}>
                       <button
                         onClick={() => toggle(i)}
@@ -128,7 +131,8 @@ export default function FAQ() {
                           display: 'flex', alignItems: 'center',
                           justifyContent: 'space-between', gap: 16,
                           textAlign: 'left', fontFamily: 'inherit',
-                          fontSize: 15, fontWeight: 700, color: '#0f0f0f',
+                          fontSize: 15, fontWeight: 700,
+                          color: isOpen ? '#ff1f1f' : '#0f0f0f',
                           transition: 'color 0.2s',
                         }}
                         className="faq-question-btn"
@@ -138,6 +142,7 @@ export default function FAQ() {
                         flexShrink: 0, transition: 'transform 0.35s ease',
                         transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)',
                         display: 'flex', alignItems: 'center',
+                        color: isOpen ? '#ff1f1f' : '#0f0f0f',
                       }}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                           <path d="M12 5v14M5 12h14" />
@@ -150,7 +155,7 @@ export default function FAQ() {
                       maxHeight: isOpen ? '200px' : '0',
                     }}>
                       <p style={{
-                        fontSize: 14, color: '#6b6b72', lineHeight: 1.7,
+                        fontSize: 14, color: '#6b6b6b', lineHeight: 1.7,
                         paddingBottom: 20, margin: 0,
                       }}>
                         {faq.a}
@@ -171,11 +176,13 @@ export default function FAQ() {
           transform: translateY(0) !important;
         }
         .faq-question-btn:hover {
-          color: #0f0f0f !important;
-          opacity: 0.6;
+          color: #ff1f1f !important;
+        }
+        .faq-question-btn:hover span {
+          color: #ff1f1f !important;
         }
         .faq-contact-link:hover {
-          opacity: 0.6;
+          opacity: 0.7;
         }
         .faq-layout {
           display: flex;
@@ -184,7 +191,7 @@ export default function FAQ() {
           text-align: left;
         }
         @media (max-width: 768px) {
-          section#faq { padding: 60px 20px !important; }
+          section#faq { padding: 60px 16px !important; }
           .faq-layout {
             flex-direction: column !important;
             gap: 40px !important;
@@ -206,6 +213,15 @@ export default function FAQ() {
           }
           .faq-title-wrap > div > div:first-child p {
             max-width: 100% !important;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .faq-title-wrap, .faq-question-btn span, .faq-question-btn + div {
+            transition: none !important;
+          }
+          .faq-title-wrap {
+            opacity: 1 !important;
+            transform: translateY(0) !important;
           }
         }
       `}</style>

@@ -1,0 +1,84 @@
+NOTAS PARA ARREGLAR LA DESCARGA DE YOUTUBE
+==========================================
+
+PROBLEMA
+--------
+PeakClip no puede descargar videos de YouTube porque el proxy (servidor
+intermedio) no funciona. YouTube bloquea las IPs de Railway (donde esta
+alojado el backend), asi que sin proxy no puede conectar.
+
+ERROR ACTUAL
+------------
+"407 Proxy Authentication Required"
+El proxy rechaza el usuario o la contraseña.
+Mensaje exacto del servidor: "The proxy you are connecting is not in your list."
+Eso significa que las credenciales no son validas para ese proxy.
+
+
+PRUEBAS HECHAS EN ESTA MAQUINA
+--------------------------------
+1. Con el proxy actual:
+   curl -x http://urftgivr-15:denm9iovlhzv@p.webshare.io:80 https://www.youtube.com
+   Resultado: 407 Proxy Authentication Required
+
+2. Sin proxy (conexion directa):
+   curl https://www.youtube.com
+   Resultado: 200 OK (funciona perfecto)
+
+CONCLUSION: Tu IP local NO esta bloqueada por YouTube. El unico problema
+es que el proxy de Webshare tiene credenciales invalidas.
+
+
+SOLUCION PASO A PASO
+--------------------
+
+1. ENTRAR EN WEBSHARE
+   - Ir a: https://proxy.webshare.io/
+   - Iniciar sesion con la cuenta que compro el proxy.
+
+2. REVISAR QUE LA CUENTA ESTE ACTIVA
+   - Verificar que tenga creditos/saldo.
+   - Revisar que no haya ningun aviso de suspension o expiracion.
+
+3. REVISAR USUARIO Y CONTRASEÑA
+   - Buscar la seccion "Proxy Credentials" o "Proxy List".
+   - El usuario actual deberia ser similar a: urftgivr-15
+   - Comparar la contraseña actual con la que esta en Railway:
+     * Ir al proyecto de Railway
+     * Variables de entorno -> YOUTUBE_PROXY
+     * El formato es: http://USUARIO:PASSWORD@p.webshare.io:80
+   - Si la contraseña no coincide, actualizarla en Railway.
+
+4. PROBAR EL PROXY DESDE LA PC
+   - Abrir consola/terminal.
+   - Ejecutar (reemplazando USUARIO y PASSWORD):
+     curl -x http://USUARIO:PASSWORD@p.webshare.io:80 https://www.youtube.com
+   - Si devuelve codigo 407, las credenciales estan mal.
+   - Si devuelve mucho texto/HTML, el proxy funciona.
+
+5. SI LAS CREDENCIALES NO FUNCIONAN
+   - En Webshare buscar "Rotate password" o "Regenerate credentials".
+   - Generar nuevas credenciales.
+   - Copiar el nuevo usuario y password.
+   - Pegarlos en Railway en la variable YOUTUBE_PROXY.
+   - Guardar y redeployear el backend.
+
+6. SI SIGUE SIN FUNCIONAR
+   - El proxy de datacenter (el mas barato) puede estar bloqueado por YouTube.
+   - Opciones:
+     a) Cambiar a "Residential Proxy" o "ISP Proxy" dentro de Webshare.
+     b) Cambiar de proveedor: Bright Data, Oxylabs, Smartproxy.
+   - Estos suelen ser mas caros pero funcionan mejor con YouTube.
+
+7. OPCION EXTRA: NO USAR PROXY
+   - Como vimos, tu IP local llega bien a YouTube.
+   - Si puedes alojar el backend en tu oficina/casa o en un servidor con
+     una IP similar, probablemente funcione sin proxy.
+
+
+COMO SABER SI YA FUNCIONA
+-------------------------
+- Ir a la app de PeakClip.
+- Pegar una URL de YouTube y procesar.
+- Si empieza a generar el clip, ya esta resuelto.
+- Si sigue fallando, revisar los logs de Railway para ver el error.

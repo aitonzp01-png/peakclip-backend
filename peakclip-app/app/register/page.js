@@ -9,6 +9,7 @@ import '../auth/auth.css';
 export default function Register() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '' });
   const router = useRouter();
 
   const handleGoogleLogin = async () => {
@@ -22,16 +23,84 @@ export default function Register() {
     setLoading(false);
   };
 
+  const autoConfirmEmail = async (userId, token) => {
+    try {
+      await fetch('/api/auth/auto-confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId }),
+      });
+    } catch (e) {
+      console.error('Auto-confirm failed:', e);
+    }
+  };
+
+  const handleEmailRegister = async (e) => {
+    e.preventDefault();
+    setMessage({ type: '', text: '' });
+
+    if (!form.email || !form.password) {
+      setMessage({ type: 'error', text: 'Enter email and password.' });
+      return;
+    }
+    if (form.password.length < 6) {
+      setMessage({ type: 'error', text: 'Password must be at least 6 characters.' });
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      setMessage({ type: 'error', text: 'Passwords do not match.' });
+      return;
+    }
+
+    setLoading(true);
+    const supabase = getSupabaseClient();
+
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email: form.email,
+      password: form.password,
+    });
+
+    if (signUpError) {
+      setMessage({ type: 'error', text: signUpError.message });
+      setLoading(false);
+      return;
+    }
+
+    // Sign in to get a session, then auto-confirm email
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email: form.email,
+      password: form.password,
+    });
+
+    if (signInError) {
+      setMessage({ type: 'error', text: signInError.message });
+      setLoading(false);
+      return;
+    }
+
+    const user = signInData.user;
+    const token = signInData.session?.access_token;
+    if (user && token) {
+      await autoConfirmEmail(user.id, token);
+    }
+
+    router.replace('/dashboard');
+    setLoading(false);
+  };
+
   return (
-    <AuthLayout skipRedirect={true}>
+    <AuthLayout>
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
         className="auth-card"
       >
-        <h2 className="auth-title">Completa el registro para obtener tus clips gratis</h2>
-        <p className="auth-subtitle">Plan gratis disponible. No se requiere tarjeta de crédito.</p>
+        <h2 className="auth-title">CREATE YOUR ACCOUNT</h2>
+        <p className="auth-subtitle">Sign up free and start creating viral clips.</p>
 
         <button onClick={handleGoogleLogin} disabled={loading} className="google-btn">
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -40,32 +109,53 @@ export default function Register() {
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
-          Continuar con Google
+          Continue with Google
         </button>
 
         <div className="auth-separator">
           <div className="line" />
-          <span className="text">o continúa con correo electrónico</span>
+          <span className="text">or sign up with email</span>
           <div className="line" />
         </div>
 
-        <div style={{ position: 'relative', marginBottom: 16 }}>
+        <form onSubmit={handleEmailRegister} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <input
-            disabled
-            placeholder="Introduce tu dirección de correo electrónico"
+            type="email"
+            required
+            placeholder="Email address"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
             className="email-input"
           />
-          <span className="email-badge">Próximamente</span>
-        </div>
-
-        <button disabled className="email-btn">Continuar con correo electrónico</button>
+          <input
+            type="password"
+            required
+            minLength={6}
+            placeholder="Password"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            className="email-input"
+          />
+          <input
+            type="password"
+            required
+            minLength={6}
+            placeholder="Repeat password"
+            value={form.confirmPassword}
+            onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+            className="email-input"
+          />
+          <button type="submit" disabled={loading} className="email-btn active">
+            {loading ? 'Creating account...' : 'Create free account'}
+          </button>
+        </form>
 
         <p className="auth-legal">
-          Al continuar, aceptas los <a href="/terms">Términos de servicio</a> y la <a href="/privacy">Política de privacidad</a>.
+          By continuing, you agree to the <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a>.
         </p>
 
         <p className="auth-switch">
-          ¿Ya tienes una cuenta? <a href="/login">Inicia sesión →</a>
+          Already have an account? <a href="/login">Sign in →</a>
         </p>
 
         {message.text && (

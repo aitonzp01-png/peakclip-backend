@@ -1,61 +1,108 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import LazyShort from './LazyShort'
+
+const accent = '#ff1f1f'
+const accentHover = '#d90000'
+const accentSoft = '#ffe5e5'
+
+const gradients = [
+  'linear-gradient(160deg, #ffe5e5 0%, #fff0f0 100%)',
+  'linear-gradient(160deg, #f6f6f2 0%, #e8e8e3 100%)',
+  'linear-gradient(160deg, #ffd6d6 0%, #fff5f5 100%)',
+  'linear-gradient(160deg, #f0f0ea 0%, #ffffff 100%)',
+  'linear-gradient(160deg, #ffcece 0%, #fffafa 100%)',
+  'linear-gradient(160deg, #e8e8e3 0%, #f6f6f2 100%)',
+]
 
 const row1Clips = [
-  { name: 'Alex R.', category: 'PODCAST', views: '2.6M', initial: 'A' },
-  { name: 'Sara M.', category: 'FITNESS', views: '1.2M', initial: 'S' },
-  { name: 'Juan Pro', category: 'GAMING', views: '4.8M', initial: 'J' },
-  { name: 'Tech Talk', category: 'TECH', views: '890k', initial: 'T' },
-  { name: 'Marta G.', category: 'VLOGS', views: '3.1M', initial: 'M' },
-  { name: 'Fin Libre', category: 'FINANCE', views: '540k', initial: 'F' },
+  {
+    id: 'DvkTX-AquQo',
+    name: 'MrBeast',
+    category: 'ENTERTAINMENT',
+    views: '15M',
+    initial: 'M',
+    avatarColor: '#ff1f1f',
+    title: 'Impossible 0.00001% Odds!',
+    duration: '0:45',
+  },
+  {
+    id: 'MqvtRvuacwo',
+    name: 'iShowSpeed',
+    category: 'REACTION',
+    views: '8M',
+    initial: 'S',
+    avatarColor: '#0f0f0f',
+    title: 'IShowSpeed LAUGHS at KSI forehead',
+    duration: '0:32',
+  },
+  {
+    id: 'NYUWVjyESIQ',
+    name: 'Dude Perfect',
+    category: 'SPORTS',
+    views: '6M',
+    initial: 'D',
+    avatarColor: '#6b6b6b',
+    title: 'Zach King VS Dude Perfect Trick Shots',
+    duration: '0:38',
+  },
 ]
 
 const row2Clips = [
-  { name: 'Carlos V.', category: 'MUSIC', views: '2.2M', initial: 'C' },
-  { name: 'Ana B.', category: 'LIFESTYLE', views: '780k', initial: 'A' },
-  { name: 'Mike D.', category: 'COMEDY', views: '5.1M', initial: 'M' },
-  { name: 'Luna R.', category: 'BEAUTY', views: '1.9M', initial: 'L' },
-  { name: 'Pro Clips', category: 'SPORTS', views: '3.4M', initial: 'P' },
-  { name: 'Dev Talk', category: 'TECH', views: '670k', initial: 'D' },
+  {
+    id: 'Xg1ro-zG7AM',
+    name: 'Mark Rober',
+    category: 'SCIENCE',
+    views: '5M',
+    initial: 'R',
+    avatarColor: '#ff1f1f',
+    title: 'Engineers vs Junkyard RC Car Death Match',
+    duration: '0:41',
+  },
+  {
+    id: 'kt_ZbaWw-MI',
+    name: 'SSSniperWolf',
+    category: 'TRENDING',
+    views: '4M',
+    initial: 'W',
+    avatarColor: '#0f0f0f',
+    title: 'I Played Youtube Shorts BINGO!',
+    duration: '0:29',
+  },
+  {
+    id: 'ghSX_jT5N8I',
+    name: 'KSI',
+    category: 'COMEDY',
+    views: '7M',
+    initial: 'K',
+    avatarColor: '#6b6b6b',
+    title: 'FUNNIEST TRY NOT TO LAUGH MOMENTS!',
+    duration: '0:35',
+  },
 ]
 
-function ClipCard({ clip }) {
+function ClipCard({ clip, index }) {
   return (
     <div className="resultados-card" style={{
       width: 180, height: 320, flexShrink: 0,
       borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
       background: '#ffffff', border: '1px solid #e8e8e2',
       boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
     }}>
-      {/* Video zone */}
-      <div style={{
-        height: 224, position: 'relative', overflow: 'hidden',
-        background: 'linear-gradient(150deg, #e8e8e2, #d4d4cc 70%)',
-      }}>
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'radial-gradient(circle at 25% 25%, rgba(196,255,61,0.3), transparent 60%)',
-          pointerEvents: 'none',
-        }} />
-
-        {/* Views badge */}
-        <div style={{
-          position: 'absolute', top: 8, right: 8,
-          background: 'rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
-          borderRadius: 20, padding: '3px 8px',
-          display: 'flex', alignItems: 'center', gap: 4,
-        }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'white' }}>
-            {clip.views}
-          </span>
-        </div>
+      {/* Short video */}
+      <div style={{ height: 224, position: 'relative' }}>
+        <LazyShort
+          videoId={clip.id}
+          title={clip.title}
+          channel={clip.name}
+          initial={clip.initial}
+          avatarColor={clip.avatarColor}
+          views={clip.views}
+          duration={clip.duration}
+          gradient={gradients[index % gradients.length]}
+          style={{ width: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' }}
+        />
       </div>
 
       {/* Info zone */}
@@ -67,9 +114,10 @@ function ClipCard({ clip }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{
             width: 32, height: 32, borderRadius: '50%',
-            background: '#f0f0ea',
+            background: clip.avatarColor || '#f6f6f2',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 700, color: '#6b6b72', flexShrink: 0,
+            fontSize: 14, fontWeight: 700, color: '#ffffff', flexShrink: 0,
+            border: '1px solid #e8e8e3',
           }}>
             {clip.initial}
           </div>
@@ -81,8 +129,13 @@ function ClipCard({ clip }) {
           </span>
         </div>
         <span style={{
-          fontSize: 11, fontWeight: 600, color: '#c4ff3d',
+          fontSize: 11, fontWeight: 700,
+          color: accent,
           textTransform: 'uppercase', letterSpacing: '0.5px',
+          background: accentSoft,
+          borderRadius: 4,
+          padding: '2px 6px',
+          width: 'fit-content',
         }}>
           {clip.category}
         </span>
@@ -92,9 +145,9 @@ function ClipCard({ clip }) {
 }
 
 function CarouselRow({ clips, direction }) {
-  const doubled = [...clips, ...clips]
+  const doubled = [...clips, ...clips, ...clips, ...clips]
   const animName = direction === 'left' ? 'scroll-left' : 'scroll-right'
-  const duration = direction === 'left' ? '28s' : '22s'
+  const duration = direction === 'left' ? '32s' : '26s'
 
   return (
     <div className="carousel-row" style={{
@@ -102,7 +155,7 @@ function CarouselRow({ clips, direction }) {
       animation: `${animName} ${duration} linear infinite`,
     }}>
       {doubled.map((clip, i) => (
-        <ClipCard key={`${clip.name}-${i}`} clip={clip} />
+        <ClipCard key={`${clip.name}-${i}`} clip={clip} index={i % clips.length} />
       ))}
     </div>
   )
@@ -131,7 +184,7 @@ export default function HowItWorks() {
 
   return (
     <section id="resultados" ref={sectionRef} style={{
-      background: '#f5f5f0', padding: '100px 0',
+      background: '#f6f6f2', padding: '100px 0',
       position: 'relative',
     }}>
       {/* Title */}
@@ -142,28 +195,34 @@ export default function HowItWorks() {
       }}>
         <span style={{
           fontSize: 12, fontWeight: 600, letterSpacing: 3,
-          color: '#6b6b72', textTransform: 'uppercase',
+          color: '#6b6b6b', textTransform: 'uppercase',
           display: 'block', marginBottom: 16,
         }}>
           RESULTS
         </span>
         <h2 style={{
-          fontSize: 'clamp(40px,6vw,72px)', fontWeight: 900,
-          letterSpacing: -2, lineHeight: 0.97, color: '#0f0f0f',
+          fontFamily: 'Bebas Neue, Inter, sans-serif',
+          fontSize: 'clamp(40px, 6vw, 72px)',
+          fontWeight: 400,
+          letterSpacing: '-0.5px',
+          lineHeight: 1.05,
+          color: '#0f0f0f',
           marginBottom: 16,
         }}>
           Content that<br />
           actually{' '}
           <span style={{
-            fontStyle: 'italic', color: '#0f0f0f',
-            background: '#c4ff3d', padding: '0 8px',
+            color: '#ffffff',
+            background: accent,
+            padding: '0 10px',
             borderRadius: 8,
+            display: 'inline-block',
           }}>
             works.
           </span>
         </h2>
         <p style={{
-          fontSize: 16, color: '#6b6b72', maxWidth: 420,
+          fontSize: 16, color: '#6b6b6b', maxWidth: 420,
           margin: '0 auto',
         }}>
           Real clips generated by PeakClip with millions of views.
@@ -171,7 +230,7 @@ export default function HowItWorks() {
       </div>
 
       {/* Carousels */}
-      <div style={{ width: '100%', overflow: 'hidden', marginTop: 40 }}>
+      <div className="carousel-wrapper" style={{ width: '100%', overflow: 'hidden', marginTop: 40, position: 'relative' }}>
         <div style={{ marginBottom: 16 }}>
           <CarouselRow clips={row1Clips} direction="left" />
         </div>
@@ -185,7 +244,7 @@ export default function HowItWorks() {
         textAlign: 'center', marginTop: 48, padding: '0 24px',
       }}>
         <span style={{
-          fontSize: 14, color: '#6b6b72', display: 'block',
+          fontSize: 14, color: '#6b6b6b', display: 'block',
           marginBottom: 16,
         }}>
           Want your videos to reach millions of people?
@@ -193,14 +252,17 @@ export default function HowItWorks() {
         <a href="/register"
           className="resultados-cta"
           style={{
-            background: '#c4ff3d', color: '#0f0f0f',
+            background: accent, color: '#ffffff',
             fontWeight: 700, fontSize: 15,
             padding: '16px 32px', borderRadius: 100,
             border: 'none', cursor: 'pointer',
-            textDecoration: 'none', display: 'inline-block',
-            transition: 'transform 0.25s, box-shadow 0.25s',
+            textDecoration: 'none', display: 'inline-flex',
+            alignItems: 'center', gap: 8,
+            position: 'relative', overflow: 'hidden',
+            transition: 'transform 0.25s, box-shadow 0.25s, background 0.25s',
           }}>
-          Start free →
+          <span style={{ position: 'relative', zIndex: 1 }}>Start free</span>
+          <span className="resultados-cta-arrow" style={{ position: 'relative', zIndex: 1 }}>→</span>
         </a>
       </div>
 
@@ -213,14 +275,64 @@ export default function HowItWorks() {
           from { transform: translateX(-50%); }
           to { transform: translateX(0); }
         }
+        .carousel-row {
+          padding: 18px 0;
+          will-change: transform;
+        }
         .carousel-row:hover { animation-play-state: paused; }
+        .resultados-card {
+          transition: transform 0.35s cubic-bezier(.22,.68,0,1.2), border-color 0.35s, box-shadow 0.35s;
+        }
         .resultados-card:hover {
-          transform: scale(1.04) !important;
-          box-shadow: 0 12px 32px rgba(0,0,0,0.14) !important;
+          transform: scale(1.03) !important;
+          border-color: ${accent} !important;
+          box-shadow: 0 12px 32px rgba(255,31,31,0.14) !important;
+          z-index: 2;
+        }
+        .carousel-wrapper::before,
+        .carousel-wrapper::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          width: 80px;
+          pointer-events: none;
+          z-index: 5;
+        }
+        .carousel-wrapper::before {
+          left: 0;
+          background: linear-gradient(90deg, #f6f6f2 0%, rgba(246,246,242,0) 100%);
+        }
+        .carousel-wrapper::after {
+          right: 0;
+          background: linear-gradient(270deg, #f6f6f2 0%, rgba(246,246,242,0) 100%);
         }
         .resultados-cta:hover {
+          background: ${accentHover};
           transform: scale(1.03);
-          box-shadow: 0 6px 24px rgba(196,255,61,0.35);
+          box-shadow: 0 8px 28px rgba(255,31,31,0.25);
+        }
+        .resultados-cta-arrow {
+          transition: transform 0.25s ease;
+          display: inline-block;
+        }
+        .resultados-cta:hover .resultados-cta-arrow {
+          transform: translateX(4px);
+        }
+        .resultados-cta::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 60%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+          transform: skewX(-20deg);
+          transition: left 0.5s ease;
+        }
+        .resultados-cta:hover::before {
+          left: 140%;
+          transition: left 0.6s ease;
         }
         .resultados-title.visible {
           opacity: 1 !important;
@@ -242,7 +354,7 @@ export default function HowItWorks() {
           section#resultados { padding: 60px 0 !important; }
           section#resultados h2 {
             font-size: clamp(32px,8vw,48px) !important;
-            letter-spacing: -1.5px !important;
+            letter-spacing: -0.5px !important;
           }
           .resultados-cta {
             display: block !important;
@@ -261,6 +373,19 @@ export default function HowItWorks() {
           }
           .resultados-card > div:last-child {
             height: 85px !important;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .carousel-row {
+            animation-play-state: paused !important;
+          }
+          .resultados-title, .resultados-card, .resultados-cta {
+            transition: none !important;
+            transform: none !important;
+          }
+          .resultados-title {
+            opacity: 1 !important;
+            transform: translateY(0) !important;
           }
         }
       `}</style>

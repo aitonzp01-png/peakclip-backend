@@ -13,21 +13,21 @@ export default function Topbar({
   const getPageTitle = () => {
     switch (activeTab) {
       case 'generate':
-        return 'Inicio';
+        return 'Home';
       case 'new_campaign':
-        return 'Nueva campaña';
+        return 'New campaign';
       case 'clips':
-        return 'Mis clips';
+        return 'My clips';
       case 'calendar':
-        return 'Calendario de publicaciones';
+        return 'Publishing calendar';
       case 'analytics':
-        return 'Analíticas de rendimiento';
+        return 'Performance analytics';
       case 'social':
-        return 'Redes sociales vinculadas';
+        return 'Linked social accounts';
       case 'upgrade':
-        return 'Suscripciones y planes';
+        return 'Plans & billing';
       case 'settings':
-        return 'Ajustes del perfil';
+        return 'Profile settings';
       default:
         return 'Dashboard';
     }
@@ -38,6 +38,16 @@ export default function Topbar({
     setActiveTab('upgrade');
   };
 
+  const getCreditsText = () => {
+    if (plan?.toLowerCase() === 'pro') {
+      return '∞ clips';
+    }
+    if (credits === 1) {
+      return '1 clip left';
+    }
+    return `${credits} clips left`;
+  };
+
   return (
     <header className="db-topbar">
       {/* LEFT: Title & Hamburger toggle on mobile */}
@@ -45,7 +55,7 @@ export default function Topbar({
         <button
           onClick={() => setSidebarOpen(prev => !prev)}
           className="db-topbar-mobile-btn"
-          aria-label="Abrir barra lateral"
+          aria-label="Open sidebar"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0f0f0f" strokeWidth="2" strokeLinecap="round">
             <line x1="3" y1="6" x2="21" y2="6" />
@@ -60,11 +70,11 @@ export default function Topbar({
       <div className="db-topbar-right">
         {/* Credits Badge */}
         <div className="db-credits-badge">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="#c4ff3d">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#ff1f1f">
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
-          <span className="db-credits-text">
-            {plan?.toLowerCase() === 'pro' ? '∞' : credits} {plan?.toLowerCase() === 'pro' ? 'clips' : credits === 1 ? 'clip' : 'clips'} restantes
+          <span className="db-credits-text db-topbar-credits-text">
+            {getCreditsText()}
           </span>
         </div>
 
@@ -72,14 +82,19 @@ export default function Topbar({
         <button
           onClick={handleUpgradeClick}
           className="db-btn-accent"
+          aria-label="Add credits"
         >
-          Añadir créditos
+          <svg className="db-btn-accent-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          <span className="db-topbar-btn-text">Add credits</span>
         </button>
 
         {/* Notification Bell */}
         <button
           className="db-notification-btn"
-          aria-label="Ver notificaciones"
+          aria-label="View notifications"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
