@@ -290,7 +290,7 @@ export default function EditorPage() {
             // Fallback: parse subtitles_srt if words_json was empty/null
             if (rawTranscript.length === 0 && clipData.subtitles_srt) {
               try {
-                const { parseSRT } = require('../../../lib/subtitles')
+                const { parseSRT } = require('../../lib/subtitles')
                 const subs = parseSRT(clipData.subtitles_srt)
                 subs.forEach((seg, idx) => {
                   const words = seg.text.split(/\s+/).filter(w => w)
@@ -316,7 +316,7 @@ export default function EditorPage() {
                 const res = await fetch(clipData.srt_url)
                 if (res.ok) {
                   const srtText = await res.text()
-                  const { parseSRT } = require('../../../lib/subtitles')
+                  const { parseSRT } = require('../../lib/subtitles')
                   const subs = parseSRT(srtText)
                   subs.forEach((seg, idx) => {
                     const words = seg.text.split(/\s+/).filter(w => w)
@@ -1066,7 +1066,7 @@ export default function EditorPage() {
 
   const handleImportSrt = () => {
     if (!srtInputText) return
-    const { parseSRT } = require('../../../lib/subtitles')
+    const { parseSRT } = require('../../lib/subtitles')
     const segments = parseSRT(srtInputText)
     const parsedWords = []
     
