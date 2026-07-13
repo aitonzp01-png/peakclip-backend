@@ -1748,7 +1748,6 @@ Return JSON with this exact format:
                     msg = str(_db_err)
                     if "words_json" in msg or "Could not find" in msg:
                         print(f"CLIP {i+1}: schema cache lag, retrying with full data...")
-                        import time
                         time.sleep(1)
                         supabase.table("clips").insert(clip_row).execute()
                         print(f"CLIP {i+1}: inserted with words_json after retry")
@@ -2401,7 +2400,6 @@ Return JSON with this exact format:
                 msg = str(_db_err)
                 if "words_json" in msg or "Could not find" in msg:
                     print(f"CLIP {i+1}: schema cache lag, retrying with full data...")
-                    import time
                     time.sleep(1)
                     supabase.table("clips").insert(clip_row).execute()
                     print(f"CLIP {i+1}: inserted with words_json after retry")
