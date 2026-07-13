@@ -214,7 +214,7 @@ async def lifespan(app: FastAPI):
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
-    # Patch yt-dlp-youtube-oauth2 plugin with fixes
+    # Patch yt-dlp-youtube-oauth2 plugin to disable it (causes 'No video formats found!')
     try:
         import yt_dlp_plugins.extractor.youtubeoauth as target_module
         patch_path = os.path.join(os.path.dirname(__file__), 'ytdlp_oauth2_patch.py')
@@ -222,7 +222,11 @@ async def lifespan(app: FastAPI):
             target_path = os.path.dirname(target_module.__file__)
             target_file = os.path.join(target_path, 'youtubeoauth.py')
             shutil.copy2(patch_path, target_file)
-            print(f"OAUTH2 PLUGIN: patched {target_file}")
+            print(f"OAUTH2 PLUGIN: patched (DISABLED) {target_file}")
+            # Remove the __pycache__ so subprocess doesn't load cached bytecode
+            pycache = os.path.join(target_path, '__pycache__')
+            if os.path.exists(pycache):
+                shutil.rmtree(pycache, ignore_errors=True)
         else:
             print(f"OAUTH2 PLUGIN: patch file not found at {patch_path}")
     except Exception as e:

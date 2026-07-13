@@ -1,201 +1,22 @@
-"""Patched yt-dlp-youtube-oauth2 plugin.
+"""DISABLED yt-dlp-youtube-oauth2 plugin.
 
-This is a copy of yt-dlp-youtube-oauth2 v1.0.10 with fixes for:
-1. Uses form-urlencoded (not JSON) for token endpoint
-2. Uses correct parameter name `device_code` (not `code`)
-3. Supports flat JSON file (youtube_oauth2.json) for pre-seeded tokens
-
-Installed by main.py during startup to patch the pip-installed version.
+This patch replaces the plugin file to make it a transparent pass-through
+to the standard youtube extractor. The OAuth2 plugin creates a youtube+oauth2
+extractor that takes priority over the standard youtube extractor and causes
+'No video formats found!' errors. This patch makes it do nothing extra.
 """
-import datetime
-import json
-import os
-import time
-import urllib.parse
-import uuid
-
-import yt_dlp.networking
-from yt_dlp.utils import ExtractorError
-from yt_dlp.utils.traversal import traverse_obj
-from yt_dlp.extractor.common import InfoExtractor
-from yt_dlp.extractor.youtube import YoutubeBaseInfoExtractor
 import importlib
 import inspect
+
+from yt_dlp.extractor.youtube import YoutubeBaseInfoExtractor
 
 YOUTUBE_IES = filter(
     lambda member: issubclass(member[1], YoutubeBaseInfoExtractor),
     inspect.getmembers(importlib.import_module('yt_dlp.extractor.youtube'), inspect.isclass)
 )
 
-# noinspection SpellCheckingInspection
-_CLIENT_ID = '861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com'
-# noinspection SpellCheckingInspection
-_CLIENT_SECRET = 'SboVhoG9s0rNafixCSGGKXAT'
-_SCOPES = 'https://gdata.youtube.com https://www.googleapis.com/auth/youtube'
-
-
-# noinspection SpellCheckingInspection,PyAttributeOutsideInit,PyMethodMayBeStatic
-class YouTubeOAuth2Handler(InfoExtractor):
-    def store_token(self, token_data):
-        self.cache.store('youtube-oauth2', 'token_data', token_data)
-        try:
-            json_path = os.path.join(self.cache._get_root_dir(), 'youtube_oauth2.json')
-            with open(json_path, 'w') as f:
-                json.dump(token_data, f)
-        except Exception:
-            pass
-        self._TOKEN_DATA = token_data
-
-    def get_token(self):
-        if not getattr(self, '_TOKEN_DATA', None):
-            json_path = os.path.join(self.cache._get_root_dir(), 'youtube_oauth2.json')
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path, 'r') as f:
-                        data = json.load(f)
-                    if self.validate_token_data(data):
-                        self._TOKEN_DATA = data
-                        return self._TOKEN_DATA
-                except Exception:
-                    pass
-            self._TOKEN_DATA = self.cache.load('youtube-oauth2', 'token_data')
-        return self._TOKEN_DATA
-
-    def validate_token_data(self, token_data):
-        return all(key in token_data for key in ('access_token', 'expires', 'refresh_token', 'token_type'))
-
-    def initialize_oauth(self):
-        token_data = self.get_token()
-
-        if token_data and not self.validate_token_data(token_data):
-            self.report_warning('Invalid cached OAuth2 token data')
-            token_data = None
-
-        if not token_data:
-            token_data = self.authorize()
-            self.store_token(token_data)
-
-        if token_data['expires'] < datetime.datetime.now(datetime.timezone.utc).timestamp() + 60:
-            self.to_screen('Access token expired, refreshing')
-            token_data = self.refresh_token(token_data['refresh_token'])
-            self.store_token(token_data)
-
-        return token_data
-
-    def handle_oauth(self, request: yt_dlp.networking.Request):
-
-        if not urllib.parse.urlparse(request.url).netloc.endswith('youtube.com'):
-            return
-
-        token_data = self.initialize_oauth()
-        request.headers.pop('X-Goog-PageId', None)
-        request.headers.pop('X-Goog-AuthUser', None)
-        if 'Authorization' in request.headers:
-            self.report_warning(
-                'Youtube cookies have been provided, but OAuth2 is being used.'
-                ' If you encounter problems, stop providing Youtube cookies to yt-dlp.')
-            request.headers.pop('Authorization', None)
-            request.headers.pop('X-Origin', None)
-
-        request.headers.pop('X-Youtube-Identity-Token', None)
-
-        authorization_header = {'Authorization': f'{token_data["token_type"]} {token_data["access_token"]}'}
-        request.headers.update(authorization_header)
-
-    def refresh_token(self, refresh_token):
-        token_response = self._download_json(
-            'https://www.youtube.com/o/oauth2/token',
-            video_id='oauth2',
-            note='Refreshing OAuth2 Token',
-            data=urllib.parse.urlencode({
-                'client_id': _CLIENT_ID,
-                'client_secret': _CLIENT_SECRET,
-                'refresh_token': refresh_token,
-                'grant_type': 'refresh_token'
-            }).encode(),
-            headers={'Content-Type': 'application/x-www-form-urlencoded', '__youtube_oauth__': True})
-        error = traverse_obj(token_response, 'error')
-        if error:
-            self.report_warning(f'Failed to refresh access token: {error}. Restarting authorization flow')
-            return self.authorize()
-
-        return {
-            'access_token': token_response['access_token'],
-            'expires': datetime.datetime.now(datetime.timezone.utc).timestamp() + token_response['expires_in'],
-            'token_type': token_response['token_type'],
-            'refresh_token': token_response.get('refresh_token', refresh_token)
-        }
-
-    def authorize(self):
-        code_response = self._download_json(
-            'https://www.youtube.com/o/oauth2/device/code',
-            video_id='oauth2',
-            note='Initializing OAuth2 Authorization Flow',
-            data=urllib.parse.urlencode({
-                'client_id': _CLIENT_ID,
-                'scope': _SCOPES,
-            }).encode(),
-            headers={'Content-Type': 'application/x-www-form-urlencoded', '__youtube_oauth__': True})
-
-        verification_url = code_response['verification_url']
-        user_code = code_response['user_code']
-        self.to_screen(f'To give yt-dlp access to your account, go to  {verification_url}  and enter code  {user_code}')
-
-        while True:
-            token_response = self._download_json(
-                'https://www.youtube.com/o/oauth2/token',
-                video_id='oauth2',
-                note=False,
-                data=urllib.parse.urlencode({
-                    'client_id': _CLIENT_ID,
-                    'client_secret': _CLIENT_SECRET,
-                    'device_code': code_response['device_code'],
-                    'grant_type': 'urn:ietf:params:oauth:grant-type:device_code'
-                }).encode(),
-                headers={'Content-Type': 'application/x-www-form-urlencoded', '__youtube_oauth__': True})
-
-            error = traverse_obj(token_response, 'error')
-            if error:
-                if error == 'authorization_pending':
-                    time.sleep(code_response['interval'])
-                    continue
-                elif error == 'expired_token':
-                    self.report_warning('The device code has expired, restarting authorization flow')
-                    return self.authorize()
-                else:
-                    raise ExtractorError(f'Unhandled OAuth2 Error: {error}')
-
-            self.to_screen('Authorization successful')
-            return {
-                'access_token': token_response['access_token'],
-                'expires': datetime.datetime.now(datetime.timezone.utc).timestamp() + token_response['expires_in'],
-                'refresh_token': token_response['refresh_token'],
-                'token_type': token_response['token_type']
-            }
-
-
 for _, ie in YOUTUBE_IES:
-    # noinspection PyUnresolvedReferences
-    class _YouTubeOAuth(ie, YouTubeOAuth2Handler, plugin_name='oauth2'):
+    class _YouTubeOAuthDisabled(ie, plugin_name='oauth2'):
         _NETRC_MACHINE = 'youtube'
         _use_oauth2 = False
-
-        def _perform_login(self, username, password):
-            if username == 'oauth2':
-                self._use_oauth2 = True
-                self.initialize_oauth()
-
-        def _create_request(self, *args, **kwargs):
-            request = super()._create_request(*args, **kwargs)
-            if '__youtube_oauth__' in request.headers:
-                request.headers.pop('__youtube_oauth__')
-            elif self._use_oauth2:
-                self.handle_oauth(request)
-            return request
-
-        @property
-        def is_authenticated(self):
-            if self._use_oauth2:
-                token_data = self.get_token()
-                return token_data and self.validate_token_data(token_data)
-            return super().is_authenticated
+        # No overrides — everything delegates to parent (standard youtube extractor)
