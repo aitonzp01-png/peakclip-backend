@@ -42,6 +42,9 @@ ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS duration NUMERIC;
 ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC;
 ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC;
 ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS transcript JSONB;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS srt_url TEXT;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS subtitles_srt TEXT;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS words_json JSONB;
 
 -- Index for fast user-scoped queries
 CREATE INDEX IF NOT EXISTS idx_clips_user_id ON public.clips(user_id);

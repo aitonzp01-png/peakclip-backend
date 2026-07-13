@@ -41,7 +41,7 @@ const useEditorStore = create((set, get) => ({
   transitionDuration: 0.3,
   activeFilter: 'none',
 
-  faceTrackingEnabled: false,
+  faceTrackingEnabled: true,
   faceTrackingSmoothness: 50,
   faceTrackingZoom: 100,
   showFaceBox: true,
@@ -271,7 +271,7 @@ const useEditorStore = create((set, get) => ({
     audioCleanEnabled: false, originalVolume: 100,
     activeTool: 'ai', toolsPanelOpen: false,
     selectedTransition: 'none', transitionDuration: 0.3, activeFilter: 'none',
-    faceTrackingEnabled: false, faceTrackingSmoothness: 50,
+    faceTrackingEnabled: true, faceTrackingSmoothness: 50,
     faceTrackingZoom: 100, showFaceBox: true, modelsLoaded: false,
     cropX: 0, cropY: 0,
     brandSettings: { primaryColor: '#c4ff3d', secondaryColor: '#f5f5f0', logoUrl: null, logoPosition: 'bottom-right', logoSize: 50, applyToAll: false },

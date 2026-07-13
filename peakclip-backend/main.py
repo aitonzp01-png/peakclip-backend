@@ -24,6 +24,7 @@ import time
 import httpx
 import sys
 import asyncio
+import traceback
 import base64
 import shutil
 import concurrent.futures
@@ -37,6 +38,138 @@ from contextlib import asynccontextmanager
 
 # Set at startup if the bgutil PO token server is reachable
 BGUTIL_POT_AVAILABLE = False
+
+# ── OAuth2 auto-refresh ───────────────────────────────────────
+YOUTUBE_OAUTH_CLIENT_ID = "861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com"
+YOUTUBE_OAUTH_CLIENT_SECRET = "SboVhoG9s0rNafixCSGGKXAT"
+
+OAUTH_TOKEN_CACHE_DIR = os.path.expanduser('~/.cache/yt-dlp')
+OAUTH_TOKEN_PATH = os.path.join(OAUTH_TOKEN_CACHE_DIR, 'youtube_oauth2.json')
+
+
+def setup_oauth2_tokens() -> str | None:
+    """Load tokens from YOUTUBE_OAUTH_TOKENS_B64 env var and write to disk."""
+    oauth_b64 = os.environ.get('YOUTUBE_OAUTH_TOKENS_B64', '').strip()
+    if not oauth_b64:
+        print("OAUTH: no YOUTUBE_OAUTH_TOKENS_B64 env var — OAuth2 disabled")
+        return None
+    try:
+        data = base64.b64decode(oauth_b64).decode('utf-8')
+        os.makedirs(OAUTH_TOKEN_CACHE_DIR, exist_ok=True)
+        with open(OAUTH_TOKEN_PATH, 'w', encoding='utf-8') as f:
+            f.write(data)
+        print(f"OAUTH: tokens written to {OAUTH_TOKEN_PATH} ({len(data)} bytes)")
+        return OAUTH_TOKEN_PATH
+    except Exception as e:
+        print(f"OAUTH: failed to load tokens from env: {e}")
+        return None
+
+
+def refresh_oauth2_tokens(token_path: str | None = None) -> bool:
+    """Refresh the access_token using the refresh_token.
+
+    Returns True on success, False if a full re-auth is needed.
+    """
+    path = token_path or OAUTH_TOKEN_PATH
+    if not path or not os.path.exists(path):
+        print("OAUTH REFRESH: token file not found")
+        return False
+    try:
+        with open(path, 'r') as f:
+            tokens = json.load(f)
+    except Exception as e:
+        print(f"OAUTH REFRESH: failed to read tokens: {e}")
+        return False
+
+    refresh_token = tokens.get('refresh_token')
+    if not refresh_token:
+        print("OAUTH REFRESH: no refresh_token in file, need full re-auth")
+        return False
+
+    print("OAUTH REFRESH: requesting new access_token...")
+    try:
+        import urllib.request, urllib.parse
+        data = urllib.parse.urlencode({
+            'client_id': YOUTUBE_OAUTH_CLIENT_ID,
+            'client_secret': YOUTUBE_OAUTH_CLIENT_SECRET,
+            'refresh_token': refresh_token,
+            'grant_type': 'refresh_token',
+        }).encode()
+        req = urllib.request.Request(
+            'https://oauth2.googleapis.com/token',
+            data=data,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
+    except Exception as e:
+        print(f"OAUTH REFRESH: HTTP error: {e}")
+        return False
+
+    if 'access_token' not in resp:
+        print(f"OAUTH REFRESH: unexpected response: {resp.get('error', 'unknown')}")
+        return False
+
+    tokens['access_token'] = resp['access_token']
+    tokens['expires'] = time.time() + resp.get('expires_in', 3600)
+    if 'refresh_token' in resp:
+        tokens['refresh_token'] = resp['refresh_token']
+
+    try:
+        with open(path, 'w') as f:
+            json.dump(tokens, f, indent=2)
+        print(f"OAUTH REFRESH: access_token refreshed, expires in {resp.get('expires_in', 3600)}s")
+        return True
+    except Exception as e:
+        print(f"OAUTH REFRESH: failed to write updated tokens: {e}")
+        return False
+
+
+def is_oauth_token_expired(token_path: str | None = None) -> bool:
+    """Check if the access_token is expired or will expire within 5 min."""
+    path = token_path or OAUTH_TOKEN_PATH
+    if not path or not os.path.exists(path):
+        return True
+    try:
+        with open(path, 'r') as f:
+            tokens = json.load(f)
+        expires = tokens.get('expires', 0)
+        return time.time() > (expires - 300)
+    except Exception:
+        return True
+
+
+def ensure_valid_oauth_token() -> str | None:
+    """Check expiry, refresh if needed, fall back to env reload on failure.
+
+    Returns the token file path if valid, None otherwise.
+    """
+    if not os.path.exists(OAUTH_TOKEN_PATH):
+        setup_oauth2_tokens()
+
+    if os.path.exists(OAUTH_TOKEN_PATH) and is_oauth_token_expired():
+        print("OAUTH: token expired, attempting refresh...")
+        if not refresh_oauth2_tokens():
+            print("OAUTH: refresh failed, reloading from env var...")
+            setup_oauth2_tokens()
+
+    return OAUTH_TOKEN_PATH if os.path.exists(OAUTH_TOKEN_PATH) else None
+
+
+async def oauth_token_monitor():
+    """Background task: check & refresh OAuth2 token every 30 minutes."""
+    print("OAUTH MONITOR: started (interval=1800s)")
+    while True:
+        try:
+            await asyncio.sleep(1800)
+            path = ensure_valid_oauth_token()
+            if path:
+                print("OAUTH MONITOR: token OK")
+            else:
+                print("OAUTH MONITOR: no tokens available")
+        except Exception as e:
+            print(f"OAUTH MONITOR: error: {e}")
+
+# ────────────────────────────────────────────────────────────────
 
 
 def upload_with_verification(supabase, bucket, file_path, storage_path, content_type):
@@ -82,6 +215,23 @@ async def lifespan(app: FastAPI):
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
+    # Patch yt-dlp-youtube-oauth2 plugin to disable it (causes 'No video formats found!')
+    try:
+        import yt_dlp_plugins.extractor.youtubeoauth as target_module
+        patch_path = os.path.join(os.path.dirname(__file__), 'ytdlp_oauth2_patch.py')
+        if os.path.exists(patch_path):
+            target_path = os.path.dirname(target_module.__file__)
+            target_file = os.path.join(target_path, 'youtubeoauth.py')
+            shutil.copy2(patch_path, target_file)
+            print(f"OAUTH2 PLUGIN: patched (DISABLED) {target_file}")
+            # Remove the __pycache__ so subprocess doesn't load cached bytecode
+            pycache = os.path.join(target_path, '__pycache__')
+            if os.path.exists(pycache):
+                shutil.rmtree(pycache, ignore_errors=True)
+        else:
+            print(f"OAUTH2 PLUGIN: patch file not found at {patch_path}")
+    except Exception as e:
+        print(f"OAUTH2 PLUGIN: patch failed ({e})")
     # Write YouTube cookies from env var if provided
     try:
         cookie_b64 = os.environ.get('YOUTUBE_COOKIES_B64')
@@ -94,20 +244,8 @@ async def lifespan(app: FastAPI):
             print("COOKIES: no YOUTUBE_COOKIES_B64 env var")
     except Exception as e:
         print(f"COOKIES: failed to write: {e}")
-    # Write YouTube OAuth tokens from env var if provided
-    try:
-        oauth_b64 = os.environ.get('YOUTUBE_OAUTH_TOKENS_B64')
-        if oauth_b64:
-            oauth_data = base64.b64decode(oauth_b64).decode('utf-8', errors='replace')
-            cache_dir = os.path.expanduser('~/.cache/yt-dlp')
-            os.makedirs(cache_dir, exist_ok=True)
-            with open(os.path.join(cache_dir, 'tokens.json'), 'w', encoding='utf-8') as f:
-                f.write(oauth_data)
-            print(f"OAUTH: written {len(oauth_data)} bytes to tokens.json")
-        else:
-            print("OAUTH: no YOUTUBE_OAUTH_TOKENS_B64 env var")
-    except Exception as e:
-        print(f"OAUTH: failed to write: {e}")
+    # Load OAuth2 tokens from env (legacy, not used for download but may be useful)
+    setup_oauth2_tokens()
     await run_migrations()
     await fetch_jwks()
     # Check if bgutil PO token server is reachable (started by Dockerfile CMD)
@@ -246,9 +384,9 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ
     except Exception as e:
         print(f"COLUMN MIGRATION subscription error: {e}")
 
-    # Add start_time / end_time / transcript columns to clips table if missing
+    # Add start_time / end_time / transcript / srt_url / subtitles_srt / words_json columns
     try:
-        supabase.table("clips").select("start_time,end_time,transcript").limit(1).execute()
+        supabase.table("clips").select("start_time,end_time,transcript,srt_url,subtitles_srt,words_json").limit(1).execute()
         print("SQL MIGRATION: columns already exist (OK)")
     except Exception:
         async with httpx.AsyncClient(timeout=15) as client:
@@ -257,7 +395,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ
                 "Authorization": f"Bearer {service_key}",
                 "Content-Type": "application/json",
             }
-            alter_sql = "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS transcript JSONB;"
+            alter_sql = "ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS start_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS end_time NUMERIC; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS transcript JSONB; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS srt_url TEXT; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS subtitles_srt TEXT; ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS words_json JSONB;"
             for url in [
                 f"https://{project_ref}.supabase.co/sql/v1/query",
                 f"https://api.supabase.com/v1/projects/{project_ref}/database/query",
@@ -266,6 +404,12 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ
                     res = await client.post(url, json={"query": alter_sql}, headers=headers)
                     if res.status_code == 200:
                         print("SQL MIGRATION: added columns (OK)")
+                        # Refresh PostgREST schema cache so columns are visible immediately
+                        try:
+                            await client.post(url, json={"query": "NOTIFY pgrst, 'reload schema'"}, headers=headers)
+                            print("SQL MIGRATION: schema cache reloaded")
+                        except Exception:
+                            pass
                         break
                 except Exception:
                     pass
@@ -373,7 +517,11 @@ supabase = create_client(
     os.getenv("SUPABASE_SERVICE_KEY")
 )
 
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = openai.OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    timeout=300.0,
+    max_retries=2
+)
 groq_api_key = os.getenv("GROQ_API_KEY")
 groq_client = Groq(api_key=groq_api_key) if groq_api_key and Groq else None
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
@@ -974,26 +1122,28 @@ def process_video_background(job_id: str, user_id: str, url: str):
             'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
         ]
         format_fallbacks = [
+            # Try best quality first
+            'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best',
+            # Quick fallback to reliable worst MP4
             'worst[ext=mp4]/worst',
-            'worstvideo+worstaudio/worst',
+            # Best MP4
             'best[ext=mp4]/best',
-            'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            # Best non-MP4
+            'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
+            # Any format
             'bestvideo+bestaudio/best',
-            'bestaudio/best',
+            # Worst MP4 extended
+            'worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst',
+            # Absolute worst
             'worst',
-            'worstvideo[ext=mp4]/worst[ext=mp4]/worst',
+            # Another fallback
             'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
         ]
         impersonate_profiles = [None, 'chrome', 'safari', 'chrome-120', 'chrome-119', 'safari-17']
 
-        # Optional proxy (residential/rotating proxy can bypass IP blocks)
+        # Auth strategy: cookies (from browser) > proxy (residential IP) > fallback downloaders
         proxy_url = os.environ.get('YOUTUBE_PROXY')
-        # Optional cookies file written by lifespan from YOUTUBE_COOKIES_B64
         cookies_file = 'cookies.txt' if os.path.exists('cookies.txt') else None
-        # Optional OAuth token file written by lifespan from YOUTUBE_OAUTH_TOKENS_B64
-        oauth_token_file = os.path.expanduser('~/.cache/yt-dlp/tokens.json')
-        has_oauth = os.path.exists(oauth_token_file)
-        # Optional PO token and visitor data to bypass bot checks
         po_token = os.environ.get('YOUTUBE_PO_TOKEN')
         visitor_data = os.environ.get('YOUTUBE_VISITOR_DATA')
 
@@ -1018,6 +1168,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     'format': fmt,
                     'outtmpl': video_path,
                     'quiet': True,
+                    'verbose': True if attempt == 0 else False,
                     'no_warnings': True,
                     'extract_flat': False,
                     'noplaylist': True,
@@ -1039,23 +1190,20 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 }
                 if imp:
                     ydl_opts['impersonate'] = imp
-                if proxy_url and not proxy_disabled and not has_oauth:
+                if proxy_url and not proxy_disabled:
                     ydl_opts['proxy'] = proxy_url
                 if cookies_file:
                     ydl_opts['cookies'] = cookies_file
-                if has_oauth:
-                    ydl_opts['username'] = 'oauth'
                 extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
                 if po_token:
                     extractor_args['youtube']['po_token'] = po_token
                 if visitor_data:
                     extractor_args['youtube']['visitor_data'] = visitor_data
-                # Enable bgutil PO token HTTP provider if its server is running
                 if BGUTIL_POT_AVAILABLE:
                     extractor_args['youtubepot-bgutilhttp'] = {}
                 if extractor_args['youtube'] or 'youtubepot-bgutilhttp' in extractor_args:
                     ydl_opts['extractor_args'] = extractor_args
-                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled and not has_oauth else 'no'} cookies={'yes' if cookies_file else 'no'} oauth={'yes' if has_oauth else 'no'}")
+                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled else 'no'} cookies={'yes' if cookies_file else 'no'}")
                 # Run yt-dlp in a subprocess so we can hard-kill it on timeout
                 ytdlp_script = os.path.join(os.path.dirname(__file__), 'ytdlp_download.py')
                 sub_opts = dict(ydl_opts)
@@ -1065,17 +1213,26 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         [sys.executable, ytdlp_script, json.dumps(sub_opts)],
                         capture_output=True,
                         text=True,
-                        timeout=30,
+                        timeout=60,
                     )
                     if result.returncode != 0:
-                        stderr_tail = (result.stderr or '')[-500:]
-                        print(f"yt-dlp attempt {attempt+1} stderr: {stderr_tail}")
-                        raise Exception(f"yt-dlp exited {result.returncode}: {stderr_tail}")
+                        stderr_tail = (result.stderr or '')[-1000:]
+                        stdout_tail = (result.stdout or '')[-500:]
+                        print(f"yt-dlp attempt {attempt+1} exit={result.returncode}")
+                        if stderr_tail:
+                            print(f"  stderr[-1000]: {stderr_tail}")
+                        if stdout_tail:
+                            print(f"  stdout[-500]: {stdout_tail}")
+                        raise Exception(f"yt-dlp exited {result.returncode}: {stderr_tail[:200]}")
                 except subprocess.TimeoutExpired as e:
                     stderr_tail = (e.stderr or '')[-300:] if hasattr(e, 'stderr') else ''
                     print(f"yt-dlp attempt {attempt+1} timed out. stderr: {stderr_tail}")
                     raise TimeoutError(f"Download attempt {attempt+1} timed out")
                 if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
+                    if os.path.exists(video_path):
+                        with open(video_path, 'rb') as _f:
+                            _head = _f.read(500)
+                        print(f"yt-dlp output too small ({os.path.getsize(video_path)} bytes): {_head[:200]}")
                     raise Exception("File not downloaded or too small")
                 last_err = None
                 break
@@ -1132,7 +1289,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
             if not fallback_success or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
                 print(f"Job {job_id}: all fallback downloaders failed")
                 ytdlp_err = str(last_err)[:200] if last_err else "unknown"
-                jobs_store[job_id] = {"status": "error", "message": f"Download failed: {ytdlp_err}. YouTube is blocking our server. Options: (1) Export cookies from your browser while logged into YouTube, base64-encode the file, and set YOUTUBE_COOKIES_B64 on Railway. (2) Fix YOUTUBE_PROXY with residential proxy credentials. (3) Set YOUTUBE_PO_TOKEN+YOUTUBE_VISITOR_DATA. (4) Self-host on a residential IP."}
+                jobs_store[job_id] = {"status": "error", "message": "Download failed. Railway's IP is blocked by YouTube. Solutions: (1) Export fresh cookies from your browser and set YOUTUBE_COOKIES_B64. (2) Set YOUTUBE_PROXY with residential proxy credentials. (3) Self-host the backend on a residential connection."}
                 return
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
@@ -1153,60 +1310,95 @@ def process_video_background(job_id: str, user_id: str, url: str):
         local_files.append(thumb_path)
 
         check_deadline("transcription")
-        jobs_store[job_id] = {"status": "processing", "message": "Transcribing audio..."}
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-        def call_transcribe(client_obj, model):
-            with open(audio_path, 'rb') as f:
+        audio_size_mb = os.path.getsize(audio_path) / (1024 * 1024)
+        jobs_store[job_id] = {"status": "processing", "message": f"Transcribing {audio_size_mb:.0f}MB audio..."}
+        print(f"TRANSCRIBE: starting, audio={audio_size_mb:.1f}MB path={audio_path}")
+
+        # Compress large audio to speed up Whisper
+        transcribe_path = audio_path
+        if audio_size_mb > 15:
+            compressed = audio_path.replace('.mp3', '_compressed.mp3')
+            print(f"TRANSCRIBE: compressing large audio ({audio_size_mb:.1f}MB)...")
+            subprocess.run([
+                'ffmpeg', '-y', '-i', audio_path,
+                '-ar', '16000', '-ac', '1', '-b:a', '32k', compressed
+            ], capture_output=True, timeout=120)
+            if os.path.exists(compressed) and os.path.getsize(compressed) > 1024:
+                comp_mb = os.path.getsize(compressed) / (1024 * 1024)
+                print(f"TRANSCRIBE: compressed to {comp_mb:.1f}MB")
+                transcribe_path = compressed
+                local_files.append(compressed)
+
+        # ── Attempt transcription with OpenAI, fallback to Groq ──
+        transcript = None
+
+        # Helper: transcribe with a given client and model
+        def _do_transcribe(client_obj, model):
+            with open(transcribe_path, 'rb') as f:
                 return client_obj.audio.transcriptions.create(
                     model=model, file=f,
                     response_format="verbose_json",
                     timestamp_granularities=["word", "segment"],
                 )
-        def run_with_timeout(client_obj, model, timeout_sec):
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                fut = pool.submit(call_transcribe, client_obj, model)
-                return fut.result(timeout=timeout_sec)
-        transcript = None
-        # Try OpenAI first (hard timeout 30s)
-        try:
-            transcript = run_with_timeout(client, "whisper-1", 30)
-        except FuturesTimeout:
-            print(f"Job {job_id}: OpenAI Whisper timed out after 30s")
-        except Exception as oai_err:
-            print(f"Job {job_id}: OpenAI Whisper error (attempting Groq fallback): {str(oai_err)[:120]}")
-        # If OpenAI failed, try Groq fallback
-        if transcript is None and groq_client:
+
+        # Try OpenAI
+        import threading
+        openai_result = []
+        openai_error = []
+        def _openai_thread():
             try:
-                jobs_store[job_id] = {"status": "processing", "message": "Transcribing with Groq (OpenAI quota/timed out)..."}
-                transcript = run_with_timeout(groq_client, "whisper-large-v3-turbo", 60)
-            except FuturesTimeout:
-                print(f"Job {job_id}: Groq fallback timed out after 60s")
-            except Exception as groq_err:
-                print(f"Job {job_id}: Groq fallback also failed: {str(groq_err)[:120]}")
+                print(f"TRANSCRIBE: OpenAI Whisper starting...")
+                t0 = time.time()
+                r = _do_transcribe(client, "whisper-1")
+                elapsed = time.time() - t0
+                print(f"TRANSCRIBE: OpenAI Whisper OK in {elapsed:.1f}s")
+                openai_result.append(r)
+            except Exception as e:
+                openai_error.append(e)
+
+        t = threading.Thread(target=_openai_thread, daemon=True)
+        t.start()
+        t.join(timeout=240)
+        if t.is_alive():
+            print(f"TRANSCRIBE: OpenAI Whisper did not finish within 240s")
+        elif openai_result:
+            transcript = openai_result[0]
+        elif openai_error:
+            print(f"TRANSCRIBE: OpenAI Whisper error: {openai_error[0]}")
+            # Try Groq fallback
+            if groq_client:
+                jobs_store[job_id] = {"status": "processing", "message": "Transcribing with Groq..."}
+                try:
+                    print(f"TRANSCRIBE: Groq Whisper starting...")
+                    t0 = time.time()
+                    transcript = _do_transcribe(groq_client, "whisper-large-v3-turbo")
+                    elapsed = time.time() - t0
+                    print(f"TRANSCRIBE: Groq Whisper OK in {elapsed:.1f}s")
+                except Exception as groq_err:
+                    print(f"TRANSCRIBE: Groq also failed: {groq_err}")
+        else:
+            print(f"TRANSCRIBE: OpenAI thread finished without result or error (timeout?)")
+
         if transcript is None:
-            msgs = []
-            if not Groq:
-                msgs.append("Groq library not installed on server")
-            elif not groq_client:
-                msgs.append("OpenAI quota/timed out and no GROQ_API_KEY configured")
-            else:
-                msgs.append("OpenAI and Groq both failed or timed out")
-            msgs.append("To fix: set GROQ_API_KEY in Railway Dashboard (free at console.groq.com)")
-            raise Exception(". ".join(msgs))
+            print(f"TRANSCRIBE: all services failed, continuing without subtitles")
+            words_data = []
+            segments_text = "Transcript not available."
+            jobs_store[job_id] = {"status": "processing", "message": "Transcription unavailable, generating clips without subtitles..."}
+        else:
+            words_data = []
+            if hasattr(transcript, 'words') and transcript.words:
+                for w in transcript.words:
+                    word_text = getattr(w, 'word', '') or ''
+                    w_start = getattr(w, 'start', None)
+                    w_end = getattr(w, 'end', None)
+                    if w_start is not None and w_end is not None and word_text.strip():
+                        words_data.append({"word": word_text, "start": w_start, "end": w_end})
 
-        words_data = []
-        if hasattr(transcript, 'words') and transcript.words:
-            for w in transcript.words:
-                word_text = getattr(w, 'word', '') or ''
-                w_start = getattr(w, 'start', None)
-                w_end = getattr(w, 'end', None)
-                if w_start is not None and w_end is not None and word_text.strip():
-                    words_data.append({"word": word_text, "start": w_start, "end": w_end})
-
-        segments_text = "\n".join([
-            f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}"
-            for s in transcript.segments
-        ])
+            segments_text = "\n".join([
+                f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}"
+                for s in transcript.segments
+            ])
+            print(f"TRANSCRIBE: done, {len(words_data)} words")
 
         check_deadline("ai-analysis")
         jobs_store[job_id] = {"status": "processing", "message": "Analyzing viral moments with AI..."}
@@ -1280,6 +1472,22 @@ Return JSON with this exact format:
         output_clips = []
         temp_files_extra = []
 
+        def _ffmpeg(cmd, label, timeout=300):
+            print(f"FFMPEG {label}: {' '.join(cmd)}")
+            t0 = time.time()
+            try:
+                r = subprocess.run(cmd, capture_output=True, timeout=timeout)
+                elapsed = time.time() - t0
+                sz = os.path.getsize(cmd[-1]) if os.path.exists(cmd[-1]) else 0
+                print(f"FFMPEG {label}: done {elapsed:.1f}s rc={r.returncode} size={sz}")
+                if r.returncode != 0:
+                    print(f"FFMPEG {label}: stderr={r.stderr[-2000:]}")
+                return r
+            except subprocess.TimeoutExpired:
+                elapsed = time.time() - t0
+                print(f"FFMPEG {label}: TIMEOUT after {elapsed:.1f}s")
+                raise
+
         try:
             for i, clip in enumerate(clips_data["clips"]):
                 check_deadline(f"clip-{i+1}")
@@ -1300,74 +1508,113 @@ Return JSON with this exact format:
                 # ── Resolve music track (silently skip if missing) ──
                 music_path = resolve_music_path(clip_mood)
 
-                # Step 1: render video+audio without subtitles (h264, 9:16 portrait)
+                # Step 1: extract raw clip segment via stream copy (no re-encode, <10MB RAM)
+                raw_clip = f"outputs/{job_id}_clip{i+1}_raw.mp4"
+                local_files.append(raw_clip)
+                # Use -noaccurate_seek for faster seeking with -c copy
+                _ffmpeg(['ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                         '-t', str(duration),
+                         '-c', 'copy', '-avoid_negative_ts', '1',
+                         '-y', raw_clip],
+                        f"clip{i+1}_extract", timeout=300)
+                if not (os.path.exists(raw_clip) and os.path.getsize(raw_clip) >= 1024):
+                    print(f"CLIP {i+1}: stream copy failed, falling back to re-encode only")
+                    raw_clip = video_path  # fallback: use full video as input
+
+                # Step 2: re-encode just the short clip at target resolution
                 no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
                 local_files.append(no_subs)
-                vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
                 audio_filter = ""
                 if music_path:
                     music_path_ff = music_path.replace('\\', '/')
                     audio_filter = "[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]"
                 else:
                     audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
-                parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-                step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-                if music_path:
-                    step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-                step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
-                          '-map', '[v]', '-map', '[a]',
-                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                          '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-                subprocess.run(step1, capture_output=True, timeout=600)
+
+                render_attempts = [
+                    {"scale": "720:1280", "preset": "ultrafast", "crf": "22", "label": "ufast_720p", "b_v": "2000k", "maxrate": "3000k", "bufsize": "6000k"},
+                    {"scale": "720:1280", "preset": "ultrafast", "crf": "24", "label": "ufast_720p_low", "b_v": "1500k", "maxrate": "2000k", "bufsize": "4000k"},
+                ]
+                rendered = False
+                for att in render_attempts:
+                    scale_flags = f"scale={att['scale']}:force_original_aspect_ratio=increase:flags=lanczos"
+                    vid_filter = f"{scale_flags},crop={att['scale']},setsar=1,format=yuv420p"
+                    parts = [f"[0:v]{vid_filter}[v]", audio_filter]
+                    cmd = ['ffmpeg', '-i', raw_clip]
+                    if music_path:
+                        cmd += ['-stream_loop', '-1', '-i', music_path_ff]
+                    # Add SRT as subtitle track (last input so audio indices don't shift)
+                    if os.path.exists(srt_path):
+                        cmd += ['-i', srt_path]
+                    sub_map = f"-map {2 if music_path else 1}:s" if os.path.exists(srt_path) else ""
+                    cmd += ['-threads', '4',
+                            '-filter_complex', ';'.join(parts),
+                            '-map', '[v]', '-map', '[a]']
+                    if sub_map:
+                        cmd += sub_map.split()
+                    cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+                            '-preset', att['preset'], '-crf', att['crf'],
+                            '-b:v', att['b_v'], '-maxrate', att['maxrate'], '-bufsize', att['bufsize'],
+                            '-c:a', 'aac', '-b:a', '128k']
+                    if sub_map:
+                        cmd += ['-c:s', 'mov_text', '-disposition:s:0', 'default']
+                    cmd += ['-movflags', '+faststart', '-y', no_subs]
+                    try:
+                        _ffmpeg(cmd, f"clip{i+1}_{att['label']}", timeout=300)
+                    except subprocess.TimeoutExpired:
+                        continue
+                    if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
+                        rendered = True
+                        break
+
+                if not rendered:
+                    cmd = ['ffmpeg', '-i', raw_clip]
+                    if os.path.exists(srt_path):
+                        cmd += ['-i', srt_path]
+                    sub_map = f"-map {1}:s" if os.path.exists(srt_path) else ""
+                    cmd += ['-threads', '4',
+                            '-vf', 'scale=720:1280:force_original_aspect_ratio=increase:flags=lanczos,crop=720:1280',
+                            '-map', '0:v', '-map', '0:a']
+                    if sub_map:
+                        cmd += sub_map.split()
+                    cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
+                            '-b:v', '1500k', '-maxrate', '2000k', '-bufsize', '4000k',
+                            '-c:a', 'aac', '-b:a', '128k']
+                    if sub_map:
+                        cmd += ['-c:s', 'mov_text', '-disposition:s:0', 'default']
+                    cmd += ['-movflags', '+faststart', '-y', no_subs]
+                    _ffmpeg(cmd, f"clip{i+1}_raw", timeout=300)
 
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                    # Step 2: burn subtitles onto the rendered video
-                    srt_path_ff = srt_path.replace('\\', '/')
-                    step2 = ['ffmpeg', '-i', no_subs,
-                             '-vf', f"subtitles={srt_path_ff}",
-                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                             '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                    subprocess.run(step2, capture_output=True, timeout=300)
-                    if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                        shutil.copy2(no_subs, output_path)
+                    output_path = no_subs
                 else:
-                    # Fallback: render at 720p (lower memory)
-                    vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
-                    parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-                    step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-                    if music_path:
-                        step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-                    step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
-                              '-map', '[v]', '-map', '[a]',
-                              '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                              '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-                    subprocess.run(step1, capture_output=True, timeout=600)
-                    if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                        srt_path_ff = srt_path.replace('\\', '/')
-                        step2 = ['ffmpeg', '-i', no_subs,
-                                 '-vf', f"subtitles={srt_path_ff}",
-                                 '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                                 '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                        subprocess.run(step2, capture_output=True, timeout=300)
-                        if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                            shutil.copy2(no_subs, output_path)
-                    else:
-                        # Final fallback: output is just the raw-seeked segment, no frills
-                        subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
-                                        '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
-                                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path],
-                                       capture_output=True, timeout=300)
-
-                local_files.append(output_path)
+                    print(f"CLIP {i+1}: no rendered output, skipping")
+                    continue
 
                 jobs_store[job_id] = {"status": "processing", "message": f"Uploading clip {i+1}..."}
-                # Upload to Supabase Storage
+
+                # 1. Upload video (no subs burned) to Supabase Storage
                 storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
+                local_files.append(output_path)
                 clip_storage_url = upload_with_verification(
                     supabase, "clips", output_path, storage_path, "video/mp4"
                 ) or ""
 
-                # Upload thumbnail to Supabase Storage
+                # 2. Upload SRT subtitles as a separate file
+                srt_storage_url = ""
+                srt_content = ""
+                if os.path.exists(srt_path) and os.path.getsize(srt_path) > 0:
+                    srt_storage_path = f"{job_id}/{job_id}_clip{i+1}.srt"
+                    srt_storage_url = upload_with_verification(
+                        supabase, "clips", srt_path, srt_storage_path, "text/plain"
+                    ) or ""
+                    try:
+                        with open(srt_path, 'r', encoding='utf-8') as _sf:
+                            srt_content = _sf.read()
+                    except Exception:
+                        srt_content = ""
+
+                # 3. Upload thumbnail
                 thumb_storage_path = f"thumbnails/{job_id}.jpg"
                 thumb_storage_url = upload_with_verification(
                     supabase, "clips", thumb_path, thumb_storage_path, "image/jpeg"
@@ -1377,17 +1624,29 @@ Return JSON with this exact format:
                     print(f"Skipping clip {i+1} insert because upload verification failed.")
                     continue
 
-                supabase.table("clips").insert({
+                clip_row = {
                     "user_id": user_id,
                     "title": clip["title"],
                     "status": "done",
                     "video_url": clip_storage_url,
+                    "srt_url": srt_storage_url or None,
+                    "subtitles_srt": srt_content or None,
+                    "words_json": json.dumps(words_data) if words_data else None,
                     "thumbnail_url": thumb_storage_url,
                     "duration": round(duration, 1),
                     "start_time": clip_start,
-                    "end_time": clip["end"],
-                    "transcript": json.dumps(words_data)
-                }).execute()
+                    "end_time": clip["end"]
+                }
+                try:
+                    supabase.table("clips").insert(clip_row).execute()
+                except Exception as _db_err:
+                    msg = str(_db_err)
+                    if "words_json" in msg or "Could not find" in msg:
+                        clip_row.pop("words_json", None)
+                        supabase.table("clips").insert(clip_row).execute()
+                        print(f"CLIP {i+1}: inserted without words_json (schema cache lag)")
+                    else:
+                        raise
 
                 output_clips.append({
                     "clip": i + 1,
@@ -1398,6 +1657,7 @@ Return JSON with this exact format:
                     "end": clip["end"],
                     "hook_score": clip.get("hook_score", 5),
                     "file": clip_storage_url,
+                    "srt_url": srt_storage_url or "",
                     "thumbnail_url": thumb_storage_url
                 })
         finally:
@@ -1912,10 +2172,12 @@ Return JSON with this exact format:
 
             music_path = resolve_music_path(clip_mood)
             
-            # Step 1: render video+audio without subtitles (h264, 9:16 portrait)
+            # Render video (no subtitles burned — uploaded separately)
+            scale_target = "640:360"
+            scale_flags = f"scale={scale_target}:force_original_aspect_ratio=increase:flags=lanczos"
+            vid_filter = f"{scale_flags},crop={scale_target},setsar=1,format=yuv420p"
             no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
             local_files.append(no_subs)
-            vid_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
             audio_filter = ""
             if music_path:
                 music_path_ff = music_path.replace('\\', '/')
@@ -1923,58 +2185,52 @@ Return JSON with this exact format:
             else:
                 audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
             parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-            step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
+            cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
             if music_path:
-                step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-            step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
-                      '-map', '[v]', '-map', '[a]',
-                      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                      '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-            subprocess.run(step1, capture_output=True, timeout=600)
+                cmd += ['-stream_loop', '-1', '-i', music_path_ff]
+            cmd += ['-t', str(duration), '-threads', '4',
+                    '-filter_complex', ';'.join(parts),
+                    '-map', '[v]', '-map', '[a]',
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+                    '-preset', 'ultrafast', '-crf', '22',
+                    '-b:v', '500k', '-maxrate', '1000k', '-bufsize', '2000k',
+                    '-c:a', 'aac', '-b:a', '128k',
+                    '-movflags', '+faststart', '-y', no_subs]
+            print(f"FFMPEG: clip{i+1} render: {' '.join(cmd)}")
+            subprocess.run(cmd, capture_output=True, timeout=300)
 
-            if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                # Step 2: burn subtitles onto the rendered video
-                srt_path_ff = srt_path.replace('\\', '/')
-                step2 = ['ffmpeg', '-i', no_subs,
-                         '-vf', f"subtitles={srt_path_ff}",
-                         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                         '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                subprocess.run(step2, capture_output=True, timeout=300)
-                if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                    shutil.copy2(no_subs, output_path)
-            else:
-                # Fallback: render at 720p (lower memory)
-                vid_filter = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
-                parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-                step1 = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-                if music_path:
-                    step1 += ['-stream_loop', '-1', '-i', music_path_ff]
-                step1 += ['-t', str(duration), '-filter_complex', ';'.join(parts),
-                          '-map', '[v]', '-map', '[a]',
-                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                          '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-y', no_subs]
-                subprocess.run(step1, capture_output=True, timeout=600)
-                if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                    srt_path_ff = srt_path.replace('\\', '/')
-                    step2 = ['ffmpeg', '-i', no_subs,
-                             '-vf', f"subtitles={srt_path_ff}",
-                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast',
-                             '-c:a', 'copy', '-movflags', '+faststart', '-y', output_path]
-                    subprocess.run(step2, capture_output=True, timeout=300)
-                    if not os.path.exists(output_path) or os.path.getsize(output_path) < 1024:
-                        shutil.copy2(no_subs, output_path)
-                else:
-                    subprocess.run(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
-                                    '-vf', 'scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280',
-                                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', '-y', output_path],
-                                   capture_output=True, timeout=300)
+            if not (os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024):
+                cmd_fb = ['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                          '-threads', '4',
+                          '-vf', f'scale={scale_target}:force_original_aspect_ratio=increase:flags=lanczos,crop={scale_target}',
+                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
+                          '-b:v', '400k', '-maxrate', '800k', '-bufsize', '1600k',
+                          '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', '-y', no_subs]
+                print(f"FFMPEG: clip{i+1} fallback: {' '.join(cmd_fb)}")
+                subprocess.run(cmd_fb, capture_output=True, timeout=300)
+                if not (os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024):
+                    print(f"CLIP {i+1}: render failed, skipping")
+                    continue
 
-            local_files.append(output_path)
-
+            # Upload video (no subs burned)
             storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
             clip_storage_url = upload_with_verification(
-                supabase, "clips", output_path, storage_path, "video/mp4"
+                supabase, "clips", no_subs, storage_path, "video/mp4"
             ) or ""
+
+            # Upload SRT separately
+            srt_storage_url = ""
+            srt_content = ""
+            if os.path.exists(srt_path) and os.path.getsize(srt_path) > 0:
+                srt_storage_path = f"{job_id}/{job_id}_clip{i+1}.srt"
+                srt_storage_url = upload_with_verification(
+                    supabase, "clips", srt_path, srt_storage_path, "text/plain"
+                ) or ""
+                try:
+                    with open(srt_path, 'r', encoding='utf-8') as _sf:
+                        srt_content = _sf.read()
+                except Exception:
+                    srt_content = ""
 
             thumb_storage_path = f"thumbnails/{job_id}.jpg"
             thumb_storage_url = upload_with_verification(
@@ -1985,17 +2241,29 @@ Return JSON with this exact format:
                 print(f"Skipping clip {i+1} insert because upload verification failed.")
                 continue
 
-            supabase.table("clips").insert({
+            clip_row = {
                 "user_id": user_id,
                 "title": clip["title"],
                 "status": "done",
                 "video_url": clip_storage_url,
+                "srt_url": srt_storage_url or None,
+                "subtitles_srt": srt_content or None,
+                "words_json": json.dumps(words_data) if words_data else None,
                 "thumbnail_url": thumb_storage_url,
                 "duration": round(duration, 1),
                 "start_time": clip_start,
-                "end_time": clip["end"],
-                "transcript": json.dumps(words_data)
-            }).execute()
+                "end_time": clip["end"]
+            }
+            try:
+                supabase.table("clips").insert(clip_row).execute()
+            except Exception as _db_err:
+                msg = str(_db_err)
+                if "words_json" in msg or "Could not find" in msg:
+                    clip_row.pop("words_json", None)
+                    supabase.table("clips").insert(clip_row).execute()
+                    print(f"CLIP {i+1}: inserted without words_json (schema cache lag)")
+                else:
+                    raise
 
             output_clips.append({
                 "clip": i + 1,
@@ -2006,6 +2274,7 @@ Return JSON with this exact format:
                 "end": clip["end"],
                 "hook_score": clip.get("hook_score", 5),
                 "file": clip_storage_url,
+                "srt_url": srt_storage_url or "",
                 "thumbnail_url": thumb_storage_url
             })
 
@@ -2030,6 +2299,46 @@ Return JSON with this exact format:
         "clips": output_clips,
         "total": len(output_clips)
     }
+
+
+@app.get("/admin/oauth-status")
+async def admin_oauth_status(request: Request):
+    auth = request.headers.get('X-Admin-Key', '')
+    if auth != os.environ.get('ADMIN_KEY', 'peakclip-admin-2026'):
+        raise HTTPException(403, "Unauthorized")
+    if not os.path.exists(OAUTH_TOKEN_PATH):
+        return {"status": "no_tokens", "message": "No OAuth2 tokens configured. Set YOUTUBE_OAUTH_TOKENS_B64"}
+    try:
+        with open(OAUTH_TOKEN_PATH, 'r') as f:
+            tokens = json.load(f)
+        expires = tokens.get('expires', 0)
+        expires_in = int(expires - time.time())
+        return {
+            "status": "expired" if expires_in <= 0 else "valid",
+            "expires_in_seconds": max(0, expires_in),
+            "has_refresh_token": bool(tokens.get('refresh_token')),
+            "has_access_token": bool(tokens.get('access_token')),
+            "can_auto_refresh": bool(tokens.get('refresh_token')),
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/admin/refresh-oauth")
+async def admin_refresh_oauth(request: Request):
+    auth = request.headers.get('X-Admin-Key', '')
+    if auth != os.environ.get('ADMIN_KEY', 'peakclip-admin-2026'):
+        raise HTTPException(403, "Unauthorized")
+    setup_oauth2_tokens()
+    if not os.path.exists(OAUTH_TOKEN_PATH):
+        raise HTTPException(400, "No OAuth2 tokens configured. Set YOUTUBE_OAUTH_TOKENS_B64")
+    success = refresh_oauth2_tokens()
+    if success:
+        with open(OAUTH_TOKEN_PATH, 'r') as f:
+            tokens = json.load(f)
+        expires_in = max(0, int(tokens.get('expires', 0) - time.time()))
+        return {"success": True, "message": "OAuth2 token refreshed", "expires_in_seconds": expires_in}
+    raise HTTPException(500, "Token refresh failed. Re-run oauth_setup.py and update YOUTUBE_OAUTH_TOKENS_B64")
 
 
 @app.get("/create-portal-session")
