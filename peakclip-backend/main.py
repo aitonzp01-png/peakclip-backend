@@ -1999,15 +1999,25 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             supabase, "clips", output_path, storage_path, f"video/{output_ext}"
         ) or ""
 
+        # Generate signed URL (works whether bucket is public or not)
+        signed_url = public_url
+        if supabase and storage_path:
+            try:
+                signed = supabase.storage.from_("clips").create_signed_url(storage_path, 3600)
+                if signed and isinstance(signed, dict) and signed.get("signedURL"):
+                    signed_url = signed["signedURL"]
+            except Exception as e:
+                print(f"Export: signed URL fallback to public: {e}")
+
         # Update clip record
         supabase.table("clips").update({
-            "video_url": public_url,
+            "video_url": signed_url,
             "status": "done"
         }).eq("id", req.clip_id).eq("user_id", user_id).execute()
 
         return {
             "success": True,
-            "video_url": public_url,
+            "video_url": signed_url,
             "message": "Clip exported successfully"
         }
     finally:
