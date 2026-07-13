@@ -39,6 +39,138 @@ from contextlib import asynccontextmanager
 # Set at startup if the bgutil PO token server is reachable
 BGUTIL_POT_AVAILABLE = False
 
+# ── OAuth2 auto-refresh ───────────────────────────────────────
+YOUTUBE_OAUTH_CLIENT_ID = "861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com"
+YOUTUBE_OAUTH_CLIENT_SECRET = "SboVhoG9s0rNafixCSGGKXAT"
+
+OAUTH_TOKEN_CACHE_DIR = os.path.expanduser('~/.cache/yt-dlp')
+OAUTH_TOKEN_PATH = os.path.join(OAUTH_TOKEN_CACHE_DIR, 'youtube_oauth2.json')
+
+
+def setup_oauth2_tokens() -> str | None:
+    """Load tokens from YOUTUBE_OAUTH_TOKENS_B64 env var and write to disk."""
+    oauth_b64 = os.environ.get('YOUTUBE_OAUTH_TOKENS_B64', '').strip()
+    if not oauth_b64:
+        print("OAUTH: no YOUTUBE_OAUTH_TOKENS_B64 env var — OAuth2 disabled")
+        return None
+    try:
+        data = base64.b64decode(oauth_b64).decode('utf-8')
+        os.makedirs(OAUTH_TOKEN_CACHE_DIR, exist_ok=True)
+        with open(OAUTH_TOKEN_PATH, 'w', encoding='utf-8') as f:
+            f.write(data)
+        print(f"OAUTH: tokens written to {OAUTH_TOKEN_PATH} ({len(data)} bytes)")
+        return OAUTH_TOKEN_PATH
+    except Exception as e:
+        print(f"OAUTH: failed to load tokens from env: {e}")
+        return None
+
+
+def refresh_oauth2_tokens(token_path: str | None = None) -> bool:
+    """Refresh the access_token using the refresh_token.
+
+    Returns True on success, False if a full re-auth is needed.
+    """
+    path = token_path or OAUTH_TOKEN_PATH
+    if not path or not os.path.exists(path):
+        print("OAUTH REFRESH: token file not found")
+        return False
+    try:
+        with open(path, 'r') as f:
+            tokens = json.load(f)
+    except Exception as e:
+        print(f"OAUTH REFRESH: failed to read tokens: {e}")
+        return False
+
+    refresh_token = tokens.get('refresh_token')
+    if not refresh_token:
+        print("OAUTH REFRESH: no refresh_token in file, need full re-auth")
+        return False
+
+    print("OAUTH REFRESH: requesting new access_token...")
+    try:
+        import urllib.request, urllib.parse
+        data = urllib.parse.urlencode({
+            'client_id': YOUTUBE_OAUTH_CLIENT_ID,
+            'client_secret': YOUTUBE_OAUTH_CLIENT_SECRET,
+            'refresh_token': refresh_token,
+            'grant_type': 'refresh_token',
+        }).encode()
+        req = urllib.request.Request(
+            'https://oauth2.googleapis.com/token',
+            data=data,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        )
+        resp = json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
+    except Exception as e:
+        print(f"OAUTH REFRESH: HTTP error: {e}")
+        return False
+
+    if 'access_token' not in resp:
+        print(f"OAUTH REFRESH: unexpected response: {resp.get('error', 'unknown')}")
+        return False
+
+    tokens['access_token'] = resp['access_token']
+    tokens['expires'] = time.time() + resp.get('expires_in', 3600)
+    if 'refresh_token' in resp:
+        tokens['refresh_token'] = resp['refresh_token']
+
+    try:
+        with open(path, 'w') as f:
+            json.dump(tokens, f, indent=2)
+        print(f"OAUTH REFRESH: access_token refreshed, expires in {resp.get('expires_in', 3600)}s")
+        return True
+    except Exception as e:
+        print(f"OAUTH REFRESH: failed to write updated tokens: {e}")
+        return False
+
+
+def is_oauth_token_expired(token_path: str | None = None) -> bool:
+    """Check if the access_token is expired or will expire within 5 min."""
+    path = token_path or OAUTH_TOKEN_PATH
+    if not path or not os.path.exists(path):
+        return True
+    try:
+        with open(path, 'r') as f:
+            tokens = json.load(f)
+        expires = tokens.get('expires', 0)
+        return time.time() > (expires - 300)
+    except Exception:
+        return True
+
+
+def ensure_valid_oauth_token() -> str | None:
+    """Check expiry, refresh if needed, fall back to env reload on failure.
+
+    Returns the token file path if valid, None otherwise.
+    """
+    if not os.path.exists(OAUTH_TOKEN_PATH):
+        setup_oauth2_tokens()
+
+    if os.path.exists(OAUTH_TOKEN_PATH) and is_oauth_token_expired():
+        print("OAUTH: token expired, attempting refresh...")
+        if not refresh_oauth2_tokens():
+            print("OAUTH: refresh failed, reloading from env var...")
+            setup_oauth2_tokens()
+
+    return OAUTH_TOKEN_PATH if os.path.exists(OAUTH_TOKEN_PATH) else None
+
+
+async def oauth_token_monitor():
+    """Background task: check & refresh OAuth2 token every 30 minutes."""
+    print("OAUTH MONITOR: started (interval=1800s)")
+    while True:
+        try:
+            await asyncio.sleep(1800)
+            path = ensure_valid_oauth_token()
+            if path:
+                print("OAUTH MONITOR: token OK")
+            else:
+                print("OAUTH MONITOR: no tokens available")
+        except Exception as e:
+            print(f"OAUTH MONITOR: error: {e}")
+
+# ────────────────────────────────────────────────────────────────
+
 
 def upload_with_verification(supabase, bucket, file_path, storage_path, content_type):
     """Upload a file to Supabase Storage and verify it is reachable."""
@@ -107,21 +239,15 @@ async def lifespan(app: FastAPI):
             print("COOKIES: no YOUTUBE_COOKIES_B64 env var")
     except Exception as e:
         print(f"COOKIES: failed to write: {e}")
-    # Write YouTube OAuth tokens from env var if provided
+    # Load OAuth2 tokens from env and start background refresh monitor
+    token_path = setup_oauth2_tokens()
+    if token_path:
+        ensure_valid_oauth_token()
+    # Start background token refresh monitor
     try:
-        oauth_b64 = os.environ.get('YOUTUBE_OAUTH_TOKENS_B64')
-        if oauth_b64:
-            oauth_data = base64.b64decode(oauth_b64).decode('utf-8', errors='replace')
-            cache_dir = os.path.expanduser('~/.cache/yt-dlp')
-            os.makedirs(cache_dir, exist_ok=True)
-            oauth_path = os.path.join(cache_dir, 'youtube_oauth2.json')
-            with open(oauth_path, 'w', encoding='utf-8') as f:
-                f.write(oauth_data)
-            print(f"OAUTH: written {len(oauth_data)} bytes to {oauth_path}")
-        else:
-            print("OAUTH: no YOUTUBE_OAUTH_TOKENS_B64 env var")
+        asyncio.create_task(oauth_token_monitor())
     except Exception as e:
-        print(f"OAUTH: failed to write: {e}")
+        print(f"OAUTH MONITOR: failed to start: {e}")
     await run_migrations()
     await fetch_jwks()
     # Check if bgutil PO token server is reachable (started by Dockerfile CMD)
@@ -1015,9 +1141,9 @@ def process_video_background(job_id: str, user_id: str, url: str):
         proxy_url = os.environ.get('YOUTUBE_PROXY')
         # Optional cookies file written by lifespan from YOUTUBE_COOKIES_B64
         cookies_file = 'cookies.txt' if os.path.exists('cookies.txt') else None
-        # Optional OAuth2 token file written by lifespan from YOUTUBE_OAUTH_TOKENS_B64
-        oauth_token_file = os.path.expanduser('~/.cache/yt-dlp/youtube_oauth2.json')
-        has_oauth = os.path.exists(oauth_token_file)
+        # Optional OAuth2 token with auto-refresh
+        oauth_path = ensure_valid_oauth_token()
+        has_oauth = oauth_path is not None
         # Optional PO token and visitor data to bypass bot checks
         po_token = os.environ.get('YOUTUBE_PO_TOKEN')
         visitor_data = os.environ.get('YOUTUBE_VISITOR_DATA')
@@ -1066,7 +1192,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     ydl_opts['impersonate'] = imp
                 if proxy_url and not proxy_disabled and not has_oauth:
                     ydl_opts['proxy'] = proxy_url
-                if cookies_file:
+                if cookies_file and not has_oauth:
                     ydl_opts['cookies'] = cookies_file
                 if has_oauth:
                     ydl_opts['username'] = 'oauth2'
@@ -1081,7 +1207,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     extractor_args['youtubepot-bgutilhttp'] = {}
                 if extractor_args['youtube'] or 'youtubepot-bgutilhttp' in extractor_args:
                     ydl_opts['extractor_args'] = extractor_args
-                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled and not has_oauth else 'no'} cookies={'yes' if cookies_file else 'no'} oauth={'yes' if has_oauth else 'no'}")
+                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled and not has_oauth else 'no'} cookies={'yes' if cookies_file and not has_oauth else 'no'} oauth={'yes' if has_oauth else 'no'}")
                 # Run yt-dlp in a subprocess so we can hard-kill it on timeout
                 ytdlp_script = os.path.join(os.path.dirname(__file__), 'ytdlp_download.py')
                 sub_opts = dict(ydl_opts)
@@ -2123,6 +2249,46 @@ Return JSON with this exact format:
         "clips": output_clips,
         "total": len(output_clips)
     }
+
+
+@app.get("/admin/oauth-status")
+async def admin_oauth_status(request: Request):
+    auth = request.headers.get('X-Admin-Key', '')
+    if auth != os.environ.get('ADMIN_KEY', 'peakclip-admin-2026'):
+        raise HTTPException(403, "Unauthorized")
+    if not os.path.exists(OAUTH_TOKEN_PATH):
+        return {"status": "no_tokens", "message": "No OAuth2 tokens configured. Set YOUTUBE_OAUTH_TOKENS_B64"}
+    try:
+        with open(OAUTH_TOKEN_PATH, 'r') as f:
+            tokens = json.load(f)
+        expires = tokens.get('expires', 0)
+        expires_in = int(expires - time.time())
+        return {
+            "status": "expired" if expires_in <= 0 else "valid",
+            "expires_in_seconds": max(0, expires_in),
+            "has_refresh_token": bool(tokens.get('refresh_token')),
+            "has_access_token": bool(tokens.get('access_token')),
+            "can_auto_refresh": bool(tokens.get('refresh_token')),
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/admin/refresh-oauth")
+async def admin_refresh_oauth(request: Request):
+    auth = request.headers.get('X-Admin-Key', '')
+    if auth != os.environ.get('ADMIN_KEY', 'peakclip-admin-2026'):
+        raise HTTPException(403, "Unauthorized")
+    setup_oauth2_tokens()
+    if not os.path.exists(OAUTH_TOKEN_PATH):
+        raise HTTPException(400, "No OAuth2 tokens configured. Set YOUTUBE_OAUTH_TOKENS_B64")
+    success = refresh_oauth2_tokens()
+    if success:
+        with open(OAUTH_TOKEN_PATH, 'r') as f:
+            tokens = json.load(f)
+        expires_in = max(0, int(tokens.get('expires', 0) - time.time()))
+        return {"success": True, "message": "OAuth2 token refreshed", "expires_in_seconds": expires_in}
+    raise HTTPException(500, "Token refresh failed. Re-run oauth_setup.py and update YOUTUBE_OAUTH_TOKENS_B64")
 
 
 @app.get("/create-portal-session")
