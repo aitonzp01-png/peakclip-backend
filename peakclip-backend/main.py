@@ -477,7 +477,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ
             elif update_res.status_code == 400:
                 create_res = await client.post(
                     f"https://{project_ref}.supabase.co/storage/v1/bucket",
-                    json={"id": "clips", "name": "clips", "public": True, "file_size_limit": 524288000, "allowed_mime_types": ["video/mp4", "video/webm", "video/quicktime", "image/jpeg", "image/png"]},
+                    json={"id": "clips", "name": "clips", "public": True, "file_size_limit": 524288000, "allowed_mime_types": ["video/mp4", "video/webm", "video/quicktime", "image/jpeg", "image/png", "text/plain", "application/json"]},
                     headers={"Authorization": f"Bearer {service_key}", "Content-Type": "application/json"},
                 )
                 if create_res.status_code in (200, 201):
@@ -1635,8 +1635,7 @@ Return JSON with this exact format:
                     audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
 
                 render_attempts = [
-                    {"scale": "720:1280", "preset": "ultrafast", "crf": "22", "label": "ufast_720p", "b_v": "2000k", "maxrate": "3000k", "bufsize": "6000k"},
-                    {"scale": "720:1280", "preset": "ultrafast", "crf": "24", "label": "ufast_720p_low", "b_v": "1500k", "maxrate": "2000k", "bufsize": "4000k"},
+                    {"scale": "540:960", "preset": "ultrafast", "crf": "22", "label": "ufast_540p", "b_v": "1500k", "maxrate": "2000k", "bufsize": "4000k"},
                 ]
                 rendered = False
                 for att in render_attempts:
@@ -1650,7 +1649,7 @@ Return JSON with this exact format:
                     if os.path.exists(srt_path):
                         cmd += ['-i', srt_path]
                     sub_map = f"-map {2 if music_path else 1}:s" if os.path.exists(srt_path) else ""
-                    cmd += ['-threads', '4',
+                    cmd += ['-threads', '2',
                             '-filter_complex', ';'.join(parts),
                             '-map', '[v]', '-map', '[a]']
                     if sub_map:
@@ -1675,14 +1674,14 @@ Return JSON with this exact format:
                     if os.path.exists(srt_path):
                         cmd += ['-i', srt_path]
                     sub_map = f"-map {1}:s" if os.path.exists(srt_path) else ""
-                    cmd += ['-threads', '4',
-                            '-vf', 'scale=720:1280:force_original_aspect_ratio=increase:flags=lanczos,crop=720:1280',
+                    cmd += ['-threads', '2',
+                            '-vf', 'scale=540:960:force_original_aspect_ratio=increase:flags=lanczos,crop=540:960',
                             '-map', '0:v', '-map', '0:a']
                     if sub_map:
                         cmd += sub_map.split()
                     cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
-                            '-b:v', '1500k', '-maxrate', '2000k', '-bufsize', '4000k',
-                            '-c:a', 'aac', '-b:a', '128k']
+                            '-b:v', '1200k', '-maxrate', '1500k', '-bufsize', '3000k',
+                            '-c:a', 'aac', '-b:a', '96k']
                     if sub_map:
                         cmd += ['-c:s', 'mov_text', '-disposition:s:0', 'default']
                     cmd += ['-movflags', '+faststart', '-y', no_subs]
@@ -1723,17 +1722,11 @@ Return JSON with this exact format:
                     supabase, "clips", thumb_path, thumb_storage_path, "image/jpeg"
                 ) or ""
 
-                if not clip_storage_url:
-                    print(f"CLIP {i+1}: SKIP — clip_storage_url is empty. upload_with_verification returned None for {storage_path}")
-                    supabase_url_check = os.getenv("SUPABASE_URL", "")
-                    print(f"CLIP {i+1}: SUPABASE_URL is set: {bool(supabase_url_check)}, bucket='clips', file_size={os.path.getsize(output_path) if os.path.exists(output_path) else 'N/A'}")
-                    continue
-
                 clip_row = {
                     "user_id": user_id,
                     "title": clip["title"],
-                    "status": "done",
-                    "video_url": clip_storage_url,
+                    "status": "done" if clip_storage_url else "render_failed",
+                    "video_url": clip_storage_url or "",
                     "srt_url": srt_storage_url or None,
                     "subtitles_srt": srt_content or None,
                     "words_json": json.dumps(words_data) if words_data else None,
@@ -1753,6 +1746,10 @@ Return JSON with this exact format:
                         print(f"CLIP {i+1}: inserted with words_json after retry")
                     else:
                         raise
+
+                if not clip_storage_url:
+                    print(f"CLIP {i+1}: SKIP — clip_storage_url is empty (transcript stored anyway)")
+                    continue
 
                 output_clips.append({
                     "clip": i + 1,
