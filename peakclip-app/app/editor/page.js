@@ -73,6 +73,7 @@ export default function EditorPage() {
   const [displayVideoSrc, setDisplayVideoSrc] = useState(null)
   const [videoError, setVideoError] = useState(null)
   const [duration, setDuration] = useState(60)
+  const [clipStart, setClipStart] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
 
@@ -270,6 +271,8 @@ export default function EditorPage() {
             clipDuration = parseFloat(clipData.duration) || 39
             setDuration(clipDuration)
             setClipDate(clipData.created_at ? new Date(clipData.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '')
+            const clipOffset = parseFloat(clipData.start_time) || 0
+            setClipStart(clipOffset)
 
             // Setup multi-lingual transcription (check transcript or words_json or subtitles_srt or srt_url)
             let rawTranscript = []
@@ -280,8 +283,8 @@ export default function EditorPage() {
                 rawTranscript = parsed.map((w, i) => ({
                   id: `w-${i}`,
                   word: w.word || '',
-                  startTime: w.startTime ?? w.start ?? 0,
-                  endTime: w.endTime ?? w.end ?? 0,
+                  startTime: (w.startTime ?? w.start ?? 0) - clipOffset,
+                  endTime: (w.endTime ?? w.end ?? 0) - clipOffset,
                   deleted: false,
                   favorite: false
                 }))
