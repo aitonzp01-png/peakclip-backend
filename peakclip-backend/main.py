@@ -1869,9 +1869,10 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             borderw = s.get('strokeWidth', 3) if s.get('stroke') else 0
             stroke_color = s.get('strokeColor', '#000000')
             bg = s.get('backgroundColor', 'transparent')
-            # Build force_style with escaped commas
-            force_parts = [f"FontName=DejaVu Sans", f"FontSize={fs}"]
-            # ASS color format: &HAABBGGRR (A=00 for opaque)
+            font_family = s.get('fontFamily', 'DejaVu Sans')
+            # Build force_style — values are inside single quotes, so commas are fine
+            force_parts = [f"Fontname={font_family}", f"Fontsize={fs}"]
+            # ASS color format: &HAABBGGRR (opaque = &H00BBGGRR)
             c = color.lstrip('#')
             if len(c) == 6:
                 force_parts.append(f"PrimaryColour=&H00{c[4:6]}{c[2:4]}{c[0:2]}&")
@@ -1895,7 +1896,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                     force_parts.append(f"BackColour=&H{alpha:02X}000000&")
                 force_parts.append("BorderStyle=4")
             force_parts.append("Alignment=2")
-            force_str = "\\,".join(force_parts)  # backslash-comma for ffmpeg filter escaping
+            force_str = ",".join(force_parts)
             sub_path = srt_path.replace("\\", "/")
             vf = f"{vf},subtitles='{sub_path}':force_style='{force_str}'"
 
