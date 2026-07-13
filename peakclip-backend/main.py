@@ -1602,7 +1602,7 @@ Return JSON with this exact format:
                     print(f"Skipping clip {i+1} insert because upload verification failed.")
                     continue
 
-                supabase.table("clips").insert({
+                clip_row = {
                     "user_id": user_id,
                     "title": clip["title"],
                     "status": "done",
@@ -1614,7 +1614,17 @@ Return JSON with this exact format:
                     "duration": round(duration, 1),
                     "start_time": clip_start,
                     "end_time": clip["end"]
-                }).execute()
+                }
+                try:
+                    supabase.table("clips").insert(clip_row).execute()
+                except Exception as _db_err:
+                    msg = str(_db_err)
+                    if "words_json" in msg or "Could not find" in msg:
+                        clip_row.pop("words_json", None)
+                        supabase.table("clips").insert(clip_row).execute()
+                        print(f"CLIP {i+1}: inserted without words_json (schema cache lag)")
+                    else:
+                        raise
 
                 output_clips.append({
                     "clip": i + 1,
@@ -2209,7 +2219,7 @@ Return JSON with this exact format:
                 print(f"Skipping clip {i+1} insert because upload verification failed.")
                 continue
 
-            supabase.table("clips").insert({
+            clip_row = {
                 "user_id": user_id,
                 "title": clip["title"],
                 "status": "done",
@@ -2221,7 +2231,17 @@ Return JSON with this exact format:
                 "duration": round(duration, 1),
                 "start_time": clip_start,
                 "end_time": clip["end"]
-            }).execute()
+            }
+            try:
+                supabase.table("clips").insert(clip_row).execute()
+            except Exception as _db_err:
+                msg = str(_db_err)
+                if "words_json" in msg or "Could not find" in msg:
+                    clip_row.pop("words_json", None)
+                    supabase.table("clips").insert(clip_row).execute()
+                    print(f"CLIP {i+1}: inserted without words_json (schema cache lag)")
+                else:
+                    raise
 
             output_clips.append({
                 "clip": i + 1,
