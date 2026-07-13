@@ -1743,14 +1743,10 @@ Return JSON with this exact format:
                 except Exception as _db_err:
                     msg = str(_db_err)
                     if "words_json" in msg or "Could not find" in msg:
-                        print(f"CLIP {i+1}: schema cache lag, inserting without words_json then updating...")
+                        print(f"CLIP {i+1}: schema cache lag, inserting without words_json...")
                         row_no_words = {k: v for k, v in clip_row.items() if k != "words_json"}
                         supabase.table("clips").insert(row_no_words).execute()
-                        if words_json_value:
-                            supabase.table("clips").update({"words_json": words_json_value}).eq("id", clip_id).execute()
-                            print(f"CLIP {i+1}: inserted, then updated words_json")
-                        else:
-                            print(f"CLIP {i+1}: inserted without words_json (no data)")
+                        print(f"CLIP {i+1}: inserted (frontend will load from subtitles_srt fallback)")
                     else:
                         raise
 
@@ -2406,14 +2402,10 @@ Return JSON with this exact format:
             except Exception as _db_err:
                 msg = str(_db_err)
                 if "words_json" in msg or "Could not find" in msg:
-                    print(f"CLIP {i+1}: schema cache lag, inserting without words_json then updating...")
+                    print(f"CLIP {i+1}: schema cache lag, inserting without words_json...")
                     row_no_words = {k: v for k, v in clip_row.items() if k != "words_json"}
                     supabase.table("clips").insert(row_no_words).execute()
-                    if words_json_value:
-                        supabase.table("clips").update({"words_json": words_json_value}).eq("id", clip_id).execute()
-                        print(f"CLIP {i+1}: inserted, then updated words_json")
-                    else:
-                        print(f"CLIP {i+1}: inserted without words_json (no data)")
+                    print(f"CLIP {i+1}: inserted (frontend will load from subtitles_srt fallback)")
                 else:
                     raise
 
