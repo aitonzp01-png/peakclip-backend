@@ -1507,10 +1507,10 @@ Return JSON with this exact format:
                 else:
                     audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
 
-                # Try increasingly aggressive settings; 1080p skipped (OOM on Railway)
+                # Use source-native resolution (640x360) to save RAM
                 render_attempts = [
-                    {"scale": "720:1280", "preset": "fast", "crf": "20", "label": "fast_720p", "b_v": "2500k", "maxrate": "3000k", "bufsize": "6000k"},
-                    {"scale": "720:1280", "preset": "ultrafast", "crf": "24", "label": "ultrafast_720p", "b_v": "2000k", "maxrate": "2500k", "bufsize": "5000k"},
+                    {"scale": "640:360", "preset": "ultrafast", "crf": "22", "label": "ufast_360p", "b_v": "500k", "maxrate": "1000k", "bufsize": "2000k"},
+                    {"scale": "640:360", "preset": "ultrafast", "crf": "24", "label": "ufast_360p_low", "b_v": "400k", "maxrate": "800k", "bufsize": "1600k"},
                 ]
                 rendered = False
                 for att in render_attempts:
@@ -1539,10 +1539,10 @@ Return JSON with this exact format:
                 if not rendered:
                     _ffmpeg(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
                              '-threads', '4',
-                             '-vf', 'scale=720:1280:force_original_aspect_ratio=increase:flags=lanczos,crop=720:1280',
+                             '-vf', 'scale=640:360:force_original_aspect_ratio=increase:flags=lanczos,crop=640:360',
                              '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
-                             '-b:v', '1500k', '-maxrate', '2000k', '-bufsize', '4000k',
-                             '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', no_subs],
+                             '-b:v', '400k', '-maxrate', '800k', '-bufsize', '1600k',
+                             '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', '-y', no_subs],
                             f"clip{i+1}_raw", timeout=300)
 
                 # Use rendered video as-is (subtitles uploaded separately, NOT burned)
@@ -2124,7 +2124,7 @@ Return JSON with this exact format:
             music_path = resolve_music_path(clip_mood)
             
             # Render video (no subtitles burned — uploaded separately)
-            scale_target = "720:1280"
+            scale_target = "640:360"
             scale_flags = f"scale={scale_target}:force_original_aspect_ratio=increase:flags=lanczos"
             vid_filter = f"{scale_flags},crop={scale_target},setsar=1,format=yuv420p"
             no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
@@ -2143,8 +2143,8 @@ Return JSON with this exact format:
                     '-filter_complex', ';'.join(parts),
                     '-map', '[v]', '-map', '[a]',
                     '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-                    '-preset', 'fast', '-crf', '20',
-                    '-b:v', '2500k', '-maxrate', '3000k', '-bufsize', '6000k',
+                    '-preset', 'ultrafast', '-crf', '22',
+                    '-b:v', '500k', '-maxrate', '1000k', '-bufsize', '2000k',
                     '-c:a', 'aac', '-b:a', '128k',
                     '-movflags', '+faststart', '-y', no_subs]
             print(f"FFMPEG: clip{i+1} render: {' '.join(cmd)}")
@@ -2154,9 +2154,9 @@ Return JSON with this exact format:
                 cmd_fb = ['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
                           '-threads', '4',
                           '-vf', f'scale={scale_target}:force_original_aspect_ratio=increase:flags=lanczos,crop={scale_target}',
-                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '24',
-                          '-b:v', '2000k', '-maxrate', '2500k', '-bufsize', '5000k',
-                          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', no_subs]
+                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
+                          '-b:v', '400k', '-maxrate', '800k', '-bufsize', '1600k',
+                          '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', '-y', no_subs]
                 print(f"FFMPEG: clip{i+1} fallback: {' '.join(cmd_fb)}")
                 subprocess.run(cmd_fb, capture_output=True, timeout=300)
                 if not (os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024):
