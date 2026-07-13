@@ -175,46 +175,65 @@ async def oauth_token_monitor():
 
 
 def upload_with_verification(supabase, bucket, file_path, storage_path, content_type):
-    """Upload a file to Supabase Storage and verify it is reachable."""
+    """Upload a file to Supabase Storage via direct HTTP PUT and verify it."""
     try:
         file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
-        print(f"UPLOAD: starting {bucket}/{storage_path} ({file_size} bytes)")
-        upload_ok = []
-        def _upload():
-            try:
-                with open(file_path, 'rb') as f:
-                    supabase.storage.from_(bucket).upload(storage_path, f, {"content-type": content_type, "upsert": "true"})
-                upload_ok.append(True)
-            except Exception as e:
-                upload_ok.append(e)
-        ut = threading.Thread(target=_upload, daemon=True)
-        ut.start()
-        ut.join(timeout=120)
-        if not upload_ok:
-            print(f"UPLOAD: timed out after 120s for {bucket}/{storage_path}")
-            return None
-        r = upload_ok[0]
-        if isinstance(r, Exception):
-            print(f"UPLOAD: failed for {bucket}/{storage_path}: {r}")
-            return None
-        # Build URL manually to avoid supabase-py get_public_url() doubling the bucket name
         supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-        public_url = f"{supabase_url}/storage/v1/object/public/{bucket}/{storage_path}"
+        service_key = os.getenv("SUPABASE_SERVICE_KEY", "")
+        print(f"UPLOAD: starting {bucket}/{storage_path} ({file_size} bytes)")
+        if not supabase_url or not service_key:
+            print(f"UPLOAD: missing SUPABASE_URL or SUPABASE_SERVICE_KEY")
+            return None
+        # Read file
+        with open(file_path, 'rb') as f:
+            file_bytes = f.read()
+        print(f"UPLOAD: read {len(file_bytes)} bytes")
+        # Upload via direct HTTP PUT (bypasses supabase-py)
+        put_url = f"{supabase_url}/storage/v1/object/{bucket}/{storage_path}"
+        headers = {
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": content_type,
+            "x-upsert": "true",
+        }
+        try:
+            resp = httpx.put(put_url, content=file_bytes, headers=headers, timeout=120)
+            print(f"UPLOAD: PUT {put_url} -> {resp.status_code}")
+            if resp.status_code not in (200, 201):
+                print(f"UPLOAD: PUT failed: {resp.text[:500]}")
+                # Try with upsert=false
+                headers.pop("x-upsert", None)
+                resp2 = httpx.put(put_url, content=file_bytes, headers=headers, timeout=120)
+                print(f"UPLOAD: PUT (no upsert) {put_url} -> {resp2.status_code}")
+                if resp2.status_code not in (200, 201):
+                    print(f"UPLOAD: PUT (no upsert) failed: {resp2.text[:500]}")
+                    return None
+        except Exception as e:
+            print(f"UPLOAD: PUT exception: {type(e).__name__}: {e}")
+            return None
 
-        # Verify the uploaded object is accessible and non-empty
-        for attempt in range(2):
+        public_url = f"{supabase_url}/storage/v1/object/public/{bucket}/{storage_path}"
+        # Verify the uploaded object is accessible
+        for attempt in range(3):
             try:
                 r = httpx.head(public_url, timeout=15, follow_redirects=True)
-                if r.status_code < 400 and (r.headers.get('content-length') is None or int(r.headers.get('content-length', 1)) > 0):
-                    return public_url
-                print(f"Upload verification attempt {attempt + 1} failed for {public_url}: status={r.status_code} size={r.headers.get('content-length')}")
+                if r.status_code < 400:
+                    cl = r.headers.get('content-length')
+                    if cl is None or int(cl) > 0:
+                        print(f"UPLOAD: verified OK (status={r.status_code}, size={cl})")
+                        return public_url
+                    else:
+                        print(f"UPLOAD: verification {attempt+1} - zero content-length")
+                else:
+                    print(f"UPLOAD: verification {attempt+1} - status={r.status_code}")
             except Exception as e:
-                print(f"Upload verification error attempt {attempt + 1} for {public_url}: {e}")
-            time.sleep(1)
-        print(f"Upload verification failed after retries, accepting anyway: {public_url}")
+                print(f"UPLOAD: verification {attempt+1} error: {e}")
+            time.sleep(2)
+        print(f"UPLOAD: verification failed, accepting anyway")
         return public_url
     except Exception as e:
-        print(f"Storage upload failed: {e}")
+        print(f"UPLOAD: outer error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
