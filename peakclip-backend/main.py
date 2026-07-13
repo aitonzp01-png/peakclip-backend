@@ -249,6 +249,14 @@ def upload_with_verification(supabase, bucket, file_path, storage_path, content_
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    # First: pip uninstall the OAuth2 plugin so upgrades don't revive it
+    try:
+        result = subprocess.run([sys.executable, '-m', 'pip', 'uninstall', '-y', 'yt-dlp-youtube-oauth2'],
+                                capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            print(f"OAUTH2: pip uninstalled yt-dlp-youtube-oauth2")
+    except Exception as e:
+        print(f"OAUTH2: pip uninstall failed: {e}")
     # Try to update yt-dlp to latest nightly/master version first, then stable
     try:
         result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall',
@@ -264,14 +272,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
     # Patch was already applied at module import (before yt_dlp import).
-    # Pip uninstall the plugin package so it doesn't come back on upgrades
-    try:
-        result = subprocess.run([sys.executable, '-m', 'pip', 'uninstall', '-y', 'yt-dlp-youtube-oauth2'],
-                                capture_output=True, text=True, timeout=30)
-        if result.returncode == 0:
-            print(f"OAUTH2: pip uninstalled yt-dlp-youtube-oauth2")
-    except Exception as e:
-        print(f"OAUTH2: pip uninstall failed: {e}")
     # Clear the extractor cache one more time to be safe
     try:
         import yt_dlp_plugins.extractor
@@ -1234,13 +1234,12 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     'noplaylist': True,
                     'sleep_interval': 1,
                     'sleep_interval_requests': 1,
-                    'extractor_retries': 1,
-                    'file_access_retries': 2,
-                    'throttledratelimit': 100000,
+                    'extractor_retries': 3,
+                    'file_access_retries': 3,
                     'ignore_no_formats_error': True,
                     'allow_unplayable_formats': True,
                     'no_check_certificate': True,
-                    'socket_timeout': 30,
+                    'socket_timeout': 60,
                     'overwrites': True,
                     'http_headers': {
                         'User-Agent': ua,
@@ -1273,7 +1272,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         [sys.executable, ytdlp_script, json.dumps(sub_opts)],
                         capture_output=True,
                         text=True,
-                        timeout=60,
+                        timeout=300,
                     )
                     if result.returncode != 0:
                         stderr_tail = (result.stderr or '')[-1000:]
