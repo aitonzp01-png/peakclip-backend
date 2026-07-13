@@ -239,15 +239,8 @@ async def lifespan(app: FastAPI):
             print("COOKIES: no YOUTUBE_COOKIES_B64 env var")
     except Exception as e:
         print(f"COOKIES: failed to write: {e}")
-    # Load OAuth2 tokens from env and start background refresh monitor
-    token_path = setup_oauth2_tokens()
-    if token_path:
-        ensure_valid_oauth_token()
-    # Start background token refresh monitor
-    try:
-        asyncio.create_task(oauth_token_monitor())
-    except Exception as e:
-        print(f"OAUTH MONITOR: failed to start: {e}")
+    # Load OAuth2 tokens from env (legacy, not used for download but may be useful)
+    setup_oauth2_tokens()
     await run_migrations()
     await fetch_jwks()
     # Check if bgutil PO token server is reachable (started by Dockerfile CMD)
@@ -1137,14 +1130,9 @@ def process_video_background(job_id: str, user_id: str, url: str):
         ]
         impersonate_profiles = [None, 'chrome', 'safari', 'chrome-120', 'chrome-119', 'safari-17']
 
-        # Optional proxy (residential/rotating proxy can bypass IP blocks)
+        # Auth strategy: cookies (from browser) > proxy (residential IP) > fallback downloaders
         proxy_url = os.environ.get('YOUTUBE_PROXY')
-        # Optional cookies file written by lifespan from YOUTUBE_COOKIES_B64
         cookies_file = 'cookies.txt' if os.path.exists('cookies.txt') else None
-        # Optional OAuth2 token with auto-refresh
-        oauth_path = ensure_valid_oauth_token()
-        has_oauth = oauth_path is not None
-        # Optional PO token and visitor data to bypass bot checks
         po_token = os.environ.get('YOUTUBE_PO_TOKEN')
         visitor_data = os.environ.get('YOUTUBE_VISITOR_DATA')
 
@@ -1190,31 +1178,20 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 }
                 if imp:
                     ydl_opts['impersonate'] = imp
-                if proxy_url and not proxy_disabled and not has_oauth:
+                if proxy_url and not proxy_disabled:
                     ydl_opts['proxy'] = proxy_url
-                if cookies_file and not has_oauth:
+                if cookies_file:
                     ydl_opts['cookies'] = cookies_file
-                if has_oauth:
-                    try:
-                        with open(oauth_path, 'r') as f:
-                            oat = json.load(f)
-                        oat_token = oat.get('access_token', '')
-                        oat_type = oat.get('token_type', 'Bearer')
-                        if oat_token:
-                            ydl_opts['http_headers']['Authorization'] = f'{oat_type} {oat_token}'
-                    except Exception as e:
-                        print(f"OAUTH: failed to read token for header: {e}")
                 extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
                 if po_token:
                     extractor_args['youtube']['po_token'] = po_token
                 if visitor_data:
                     extractor_args['youtube']['visitor_data'] = visitor_data
-                # Enable bgutil PO token HTTP provider if its server is running
                 if BGUTIL_POT_AVAILABLE:
                     extractor_args['youtubepot-bgutilhttp'] = {}
                 if extractor_args['youtube'] or 'youtubepot-bgutilhttp' in extractor_args:
                     ydl_opts['extractor_args'] = extractor_args
-                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled and not has_oauth else 'no'} cookies={'yes' if cookies_file and not has_oauth else 'no'} token={'yes' if has_oauth else 'no'}")
+                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled else 'no'} cookies={'yes' if cookies_file else 'no'}")
                 # Run yt-dlp in a subprocess so we can hard-kill it on timeout
                 ytdlp_script = os.path.join(os.path.dirname(__file__), 'ytdlp_download.py')
                 sub_opts = dict(ydl_opts)
@@ -1255,7 +1232,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                             time.sleep(2)
                             continue
                 if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small", "proxy", "tunnel connection"]):
-                    if attempt >= 1 and proxy_url and not proxy_disabled and not has_oauth:
+                    if attempt >= 1 and proxy_url and not proxy_disabled:
                         print(f"Proxy failing repeatedly ({err_lower[:80]}). Disabling proxy to try direct connection.")
                         proxy_disabled = True
                         if attempt < max_attempts - 1:
@@ -1291,10 +1268,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
             if not fallback_success or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
                 print(f"Job {job_id}: all fallback downloaders failed")
                 ytdlp_err = str(last_err)[:200] if last_err else "unknown"
-                if has_oauth:
-                    jobs_store[job_id] = {"status": "error", "message": "No se pudo descargar el video. El video puede ser privado, tener restricción regional, o requerir membresía. Probá con otro video público."}
-                else:
-                    jobs_store[job_id] = {"status": "error", "message": "Download failed: YouTube está bloqueando el servidor. Configurar YOUTUBE_OAUTH_TOKENS_B64 (recomendado) o YOUTUBE_PROXY con proxies residenciales."}
+                jobs_store[job_id] = {"status": "error", "message": "Download failed. Railway's IP is blocked by YouTube. Solutions: (1) Export fresh cookies from your browser and set YOUTUBE_COOKIES_B64. (2) Set YOUTUBE_PROXY with residential proxy credentials. (3) Self-host the backend on a residential connection."}
                 return
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
