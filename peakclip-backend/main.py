@@ -82,6 +82,19 @@ async def lifespan(app: FastAPI):
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
+    # Patch yt-dlp-youtube-oauth2 plugin with fixes
+    try:
+        import yt_dlp_plugins.extractor.youtubeoauth as target_module
+        patch_path = os.path.join(os.path.dirname(__file__), 'ytdlp_oauth2_patch.py')
+        if os.path.exists(patch_path):
+            target_path = os.path.dirname(target_module.__file__)
+            target_file = os.path.join(target_path, 'youtubeoauth.py')
+            shutil.copy2(patch_path, target_file)
+            print(f"OAUTH2 PLUGIN: patched {target_file}")
+        else:
+            print(f"OAUTH2 PLUGIN: patch file not found at {patch_path}")
+    except Exception as e:
+        print(f"OAUTH2 PLUGIN: patch failed ({e})")
     # Write YouTube cookies from env var if provided
     try:
         cookie_b64 = os.environ.get('YOUTUBE_COOKIES_B64')
@@ -101,9 +114,10 @@ async def lifespan(app: FastAPI):
             oauth_data = base64.b64decode(oauth_b64).decode('utf-8', errors='replace')
             cache_dir = os.path.expanduser('~/.cache/yt-dlp')
             os.makedirs(cache_dir, exist_ok=True)
-            with open(os.path.join(cache_dir, 'tokens.json'), 'w', encoding='utf-8') as f:
+            oauth_path = os.path.join(cache_dir, 'youtube_oauth2.json')
+            with open(oauth_path, 'w', encoding='utf-8') as f:
                 f.write(oauth_data)
-            print(f"OAUTH: written {len(oauth_data)} bytes to tokens.json")
+            print(f"OAUTH: written {len(oauth_data)} bytes to {oauth_path}")
         else:
             print("OAUTH: no YOUTUBE_OAUTH_TOKENS_B64 env var")
     except Exception as e:
@@ -1001,8 +1015,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
         proxy_url = os.environ.get('YOUTUBE_PROXY')
         # Optional cookies file written by lifespan from YOUTUBE_COOKIES_B64
         cookies_file = 'cookies.txt' if os.path.exists('cookies.txt') else None
-        # Optional OAuth token file written by lifespan from YOUTUBE_OAUTH_TOKENS_B64
-        oauth_token_file = os.path.expanduser('~/.cache/yt-dlp/tokens.json')
+        # Optional OAuth2 token file written by lifespan from YOUTUBE_OAUTH_TOKENS_B64
+        oauth_token_file = os.path.expanduser('~/.cache/yt-dlp/youtube_oauth2.json')
         has_oauth = os.path.exists(oauth_token_file)
         # Optional PO token and visitor data to bypass bot checks
         po_token = os.environ.get('YOUTUBE_PO_TOKEN')
@@ -1055,7 +1069,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 if cookies_file:
                     ydl_opts['cookies'] = cookies_file
                 if has_oauth:
-                    ydl_opts['username'] = 'oauth'
+                    ydl_opts['username'] = 'oauth2'
+                    ydl_opts['password'] = ''
                 extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
                 if po_token:
                     extractor_args['youtube']['po_token'] = po_token
@@ -1143,7 +1158,10 @@ def process_video_background(job_id: str, user_id: str, url: str):
             if not fallback_success or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
                 print(f"Job {job_id}: all fallback downloaders failed")
                 ytdlp_err = str(last_err)[:200] if last_err else "unknown"
-                jobs_store[job_id] = {"status": "error", "message": f"Download failed: {ytdlp_err}. YouTube is blocking our server. Options: fix YOUTUBE_PROXY credentials, set YOUTUBE_OAUTH_TOKENS_B64, set YOUTUBE_PO_TOKEN+YOUTUBE_VISITOR_DATA, or self-host on a residential IP."}
+                if has_oauth:
+                    jobs_store[job_id] = {"status": "error", "message": "No se pudo descargar el video. El video puede ser privado, tener restricción regional, o requerir membresía. Probá con otro video público."}
+                else:
+                    jobs_store[job_id] = {"status": "error", "message": "Download failed: YouTube está bloqueando el servidor. Configurar YOUTUBE_OAUTH_TOKENS_B64 (recomendado) o YOUTUBE_PROXY con proxies residenciales."}
                 return
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
