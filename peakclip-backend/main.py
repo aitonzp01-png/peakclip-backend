@@ -1978,7 +1978,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         if vcodec == 'libx264':
             cmd.extend(['-pix_fmt', 'yuv420p', '-movflags', '+faststart'])
         cmd.extend([
-            '-preset', 'fast',
+            '-preset', 'ultrafast',
+            '-threads', '2',
             '-c:a', acodec,
         ])
         if af_filter:
@@ -1987,9 +1988,9 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            full_err = result.stderr[:2000] or result.stdout[:500]
-            print(f"Export ffmpeg failed. stderr:\n{result.stderr}")
-            raise HTTPException(status_code=400, detail=f"Export error: {full_err}")
+            full_err = (result.stderr or "")[:2000] or (result.stdout or "")[:500]
+            print(f"Export ffmpeg failed (rc={result.returncode}). stderr:\n{result.stderr}")
+            raise HTTPException(status_code=400, detail=f"Export error (rc={result.returncode}): {full_err}")
         local_files.append(output_path)
 
         # Upload to Supabase Storage
