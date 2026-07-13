@@ -1497,7 +1497,20 @@ Return JSON with this exact format:
                 # ── Resolve music track (silently skip if missing) ──
                 music_path = resolve_music_path(clip_mood)
 
-                # Step 1: render video+audio (no subs) — try low-memory settings first
+                # Step 1: extract raw clip segment via stream copy (no re-encode, <10MB RAM)
+                raw_clip = f"outputs/{job_id}_clip{i+1}_raw.mp4"
+                local_files.append(raw_clip)
+                # Use -noaccurate_seek for faster seeking with -c copy
+                _ffmpeg(['ffmpeg', '-ss', str(clip_start), '-i', video_path,
+                         '-t', str(duration),
+                         '-c', 'copy', '-avoid_negative_ts', '1',
+                         '-y', raw_clip],
+                        f"clip{i+1}_extract", timeout=300)
+                if not (os.path.exists(raw_clip) and os.path.getsize(raw_clip) >= 1024):
+                    print(f"CLIP {i+1}: stream copy failed, falling back to re-encode only")
+                    raw_clip = video_path  # fallback: use full video as input
+
+                # Step 2: re-encode just the short clip at target resolution
                 no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
                 local_files.append(no_subs)
                 audio_filter = ""
@@ -1507,20 +1520,19 @@ Return JSON with this exact format:
                 else:
                     audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
 
-                # Use source-native resolution (640x360) to save RAM
                 render_attempts = [
-                    {"scale": "640:360", "preset": "ultrafast", "crf": "22", "label": "ufast_360p", "b_v": "500k", "maxrate": "1000k", "bufsize": "2000k"},
-                    {"scale": "640:360", "preset": "ultrafast", "crf": "24", "label": "ufast_360p_low", "b_v": "400k", "maxrate": "800k", "bufsize": "1600k"},
+                    {"scale": "720:1280", "preset": "ultrafast", "crf": "22", "label": "ufast_720p", "b_v": "2000k", "maxrate": "3000k", "bufsize": "6000k"},
+                    {"scale": "720:1280", "preset": "ultrafast", "crf": "24", "label": "ufast_720p_low", "b_v": "1500k", "maxrate": "2000k", "bufsize": "4000k"},
                 ]
                 rendered = False
                 for att in render_attempts:
                     scale_flags = f"scale={att['scale']}:force_original_aspect_ratio=increase:flags=lanczos"
                     vid_filter = f"{scale_flags},crop={att['scale']},setsar=1,format=yuv420p"
                     parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-                    cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
+                    cmd = ['ffmpeg', '-i', raw_clip]
                     if music_path:
                         cmd += ['-stream_loop', '-1', '-i', music_path_ff]
-                    cmd += ['-t', str(duration), '-threads', '4',
+                    cmd += ['-threads', '4',
                             '-filter_complex', ';'.join(parts),
                             '-map', '[v]', '-map', '[a]',
                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
@@ -1537,15 +1549,14 @@ Return JSON with this exact format:
                         break
 
                 if not rendered:
-                    _ffmpeg(['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
+                    _ffmpeg(['ffmpeg', '-i', raw_clip,
                              '-threads', '4',
-                             '-vf', 'scale=640:360:force_original_aspect_ratio=increase:flags=lanczos,crop=640:360',
+                             '-vf', 'scale=720:1280:force_original_aspect_ratio=increase:flags=lanczos,crop=720:1280',
                              '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
-                             '-b:v', '400k', '-maxrate', '800k', '-bufsize', '1600k',
-                             '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', '-y', no_subs],
+                             '-b:v', '1500k', '-maxrate', '2000k', '-bufsize', '4000k',
+                             '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', no_subs],
                             f"clip{i+1}_raw", timeout=300)
 
-                # Use rendered video as-is (subtitles uploaded separately, NOT burned)
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     output_path = no_subs
                 else:
