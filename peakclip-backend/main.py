@@ -1460,18 +1460,28 @@ def process_video_background(job_id: str, user_id: str, url: str):
             jobs_store[job_id] = {"status": "processing", "message": "Transcription unavailable, generating clips without subtitles..."}
         else:
             words_data = []
-            if hasattr(transcript, 'words') and transcript.words:
-                for w in transcript.words:
-                    word_text = getattr(w, 'word', '') or ''
-                    w_start = getattr(w, 'start', None)
-                    w_end = getattr(w, 'end', None)
-                    if w_start is not None and w_end is not None and word_text.strip():
-                        words_data.append({"word": word_text, "start": w_start, "end": w_end})
+            # Handle both object-attribute and dict access for Groq/OpenAI responses
+            def _get(obj, key, default=None):
+                try:
+                    return getattr(obj, key, None) or (obj[key] if isinstance(obj, dict) else None) or default
+                except Exception:
+                    return default
+            raw_words = getattr(transcript, 'words', None) or (transcript.get('words') if isinstance(transcript, dict) else None) or []
+            for w in raw_words:
+                word_text = _get(w, 'word', '')
+                w_start = _get(w, 'start', None)
+                w_end = _get(w, 'end', None)
+                if w_start is not None and w_end is not None and word_text.strip():
+                    words_data.append({"word": word_text, "start": w_start, "end": w_end})
 
-            segments_text = "\n".join([
-                f"[{s.start:.1f}s - {s.end:.1f}s]: {s.text}"
-                for s in transcript.segments
-            ])
+            raw_segments = getattr(transcript, 'segments', None) or (transcript.get('segments') if isinstance(transcript, dict) else None) or []
+            segments_lines = []
+            for s in raw_segments:
+                s_start = _get(s, 'start', 0)
+                s_end = _get(s, 'end', 0)
+                s_text = _get(s, 'text', '')
+                segments_lines.append(f"[{s_start:.1f}s - {s_end:.1f}s]: {s_text}")
+            segments_text = "\n".join(segments_lines)
             print(f"TRANSCRIBE: done, {len(words_data)} words")
 
         check_deadline("ai-analysis")
