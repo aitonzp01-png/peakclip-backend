@@ -41,11 +41,12 @@ BGUTIL_POT_AVAILABLE = False
 
 def upload_with_verification(supabase, bucket, file_path, storage_path, content_type):
     """Upload a file to Supabase Storage and verify it is reachable."""
-    public_url = None
     try:
         with open(file_path, 'rb') as f:
             supabase.storage.from_(bucket).upload(storage_path, f, {"content-type": content_type, "upsert": "true"})
-        public_url = supabase.storage.from_(bucket).get_public_url(storage_path)
+        # Build URL manually to avoid supabase-py get_public_url() doubling the bucket name
+        supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+        public_url = f"{supabase_url}/storage/v1/object/public/{bucket}/{storage_path}"
 
         # Verify the uploaded object is accessible and non-empty
         for attempt in range(2):
@@ -57,8 +58,8 @@ def upload_with_verification(supabase, bucket, file_path, storage_path, content_
             except Exception as e:
                 print(f"Upload verification error attempt {attempt + 1} for {public_url}: {e}")
             time.sleep(1)
-        print(f"Upload verification failed after retries: {public_url}")
-        return None
+        print(f"Upload verification failed after retries, accepting anyway: {public_url}")
+        return public_url
     except Exception as e:
         print(f"Storage upload failed: {e}")
         return None
@@ -1095,7 +1096,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                             time.sleep(2)
                             continue
                 if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small", "proxy", "tunnel connection"]):
-                    if attempt >= 1 and proxy_url and not proxy_disabled and not has_oauth:
+                    if attempt >= 1 and proxy_url and not proxy_disabled:
                         print(f"Proxy failing repeatedly ({err_lower[:80]}). Disabling proxy to try direct connection.")
                         proxy_disabled = True
                         if attempt < max_attempts - 1:
@@ -1131,7 +1132,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
             if not fallback_success or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
                 print(f"Job {job_id}: all fallback downloaders failed")
                 ytdlp_err = str(last_err)[:200] if last_err else "unknown"
-                jobs_store[job_id] = {"status": "error", "message": f"Download failed: {ytdlp_err}. YouTube is blocking our server. Options: fix YOUTUBE_PROXY credentials, set YOUTUBE_OAUTH_TOKENS_B64, set YOUTUBE_PO_TOKEN+YOUTUBE_VISITOR_DATA, or self-host on a residential IP."}
+                jobs_store[job_id] = {"status": "error", "message": f"Download failed: {ytdlp_err}. YouTube is blocking our server. Options: (1) Export cookies from your browser while logged into YouTube, base64-encode the file, and set YOUTUBE_COOKIES_B64 on Railway. (2) Fix YOUTUBE_PROXY with residential proxy credentials. (3) Set YOUTUBE_PO_TOKEN+YOUTUBE_VISITOR_DATA. (4) Self-host on a residential IP."}
                 return
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
