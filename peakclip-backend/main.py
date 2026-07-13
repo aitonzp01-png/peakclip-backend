@@ -399,6 +399,12 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ
                     res = await client.post(url, json={"query": alter_sql}, headers=headers)
                     if res.status_code == 200:
                         print("SQL MIGRATION: added columns (OK)")
+                        # Refresh PostgREST schema cache so columns are visible immediately
+                        try:
+                            await client.post(url, json={"query": "NOTIFY pgrst, 'reload schema'"}, headers=headers)
+                            print("SQL MIGRATION: schema cache reloaded")
+                        except Exception:
+                            pass
                         break
                 except Exception:
                     pass
