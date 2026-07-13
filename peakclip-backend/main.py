@@ -1747,9 +1747,11 @@ Return JSON with this exact format:
                 except Exception as _db_err:
                     msg = str(_db_err)
                     if "words_json" in msg or "Could not find" in msg:
-                        clip_row.pop("words_json", None)
+                        print(f"CLIP {i+1}: schema cache lag, retrying with full data...")
+                        import time
+                        time.sleep(1)
                         supabase.table("clips").insert(clip_row).execute()
-                        print(f"CLIP {i+1}: inserted without words_json (schema cache lag)")
+                        print(f"CLIP {i+1}: inserted with words_json after retry")
                     else:
                         raise
 
@@ -2398,9 +2400,11 @@ Return JSON with this exact format:
             except Exception as _db_err:
                 msg = str(_db_err)
                 if "words_json" in msg or "Could not find" in msg:
-                    clip_row.pop("words_json", None)
+                    print(f"CLIP {i+1}: schema cache lag, retrying with full data...")
+                    import time
+                    time.sleep(1)
                     supabase.table("clips").insert(clip_row).execute()
-                    print(f"CLIP {i+1}: inserted without words_json (schema cache lag)")
+                    print(f"CLIP {i+1}: inserted with words_json after retry")
                 else:
                     raise
 

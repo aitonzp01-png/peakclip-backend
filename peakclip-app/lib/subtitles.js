@@ -17,25 +17,26 @@ export function parseSRT(srtContent) {
   const blocks = srtContent.trim().split(/\n\s*\n/)
   let idx = 1
   for (const block of blocks) {
-    const lines = block.split('\n').map(l => l.trim()).filter(l => l)
+    const lines = block.trim().split('\n')
     if (lines.length < 2) continue
-    // First line may be index number
+    // Skip optional index line (1, 2, 3...)
     let timeLineIdx = 0
-    if (/^\d+$/.test(lines[0])) {
+    if (/^\d+$/.test(lines[0].trim())) {
       timeLineIdx = 1
     }
     const timeLine = lines[timeLineIdx]
-    const textLines = lines.slice(timeLineIdx + 1)
-    const match = timeLine.match(/(.+)\s*-->\s*(.+)/)
-    if (!match || textLines.length === 0) continue
-    const start = parseSRTTime(match[1])
-    const end = parseSRTTime(match[2])
+    if (!timeLine || !timeLine.includes('-->')) continue
+    const textLines = lines.slice(timeLineIdx + 1).map(l => l.trim()).filter(l => l)
+    if (textLines.length === 0) continue
+    const [startStr, endStr] = timeLine.split('-->').map(s => s.trim())
+    const start = parseSRTTime(startStr)
+    const end = parseSRTTime(endStr)
     if (isNaN(start) || isNaN(end) || end <= start) continue
     segments.push({
       id: `sub-${idx}`,
       start,
       end,
-      text: textLines.join('\n'),
+      text: textLines.join(' '),
       style: {},
     })
     idx++

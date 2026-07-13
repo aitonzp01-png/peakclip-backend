@@ -271,7 +271,7 @@ export default function EditorPage() {
             setDuration(clipDuration)
             setClipDate(clipData.created_at ? new Date(clipData.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '')
 
-            // Setup multi-lingual transcription (check transcript or words_json column)
+            // Setup multi-lingual transcription (check transcript or words_json or subtitles_srt or srt_url)
             let rawTranscript = []
             const transcriptSource = clipData.transcript || clipData.words_json
             if (transcriptSource) {
@@ -287,6 +287,57 @@ export default function EditorPage() {
                 }))
               }
             }
+            // Fallback: parse subtitles_srt if words_json was empty/null
+            if (rawTranscript.length === 0 && clipData.subtitles_srt) {
+              try {
+                const { parseSRT } = require('../../../lib/subtitles')
+                const subs = parseSRT(clipData.subtitles_srt)
+                subs.forEach((seg, idx) => {
+                  const words = seg.text.split(/\s+/).filter(w => w)
+                  const wordDuration = (seg.end - seg.start) / Math.max(words.length, 1)
+                  words.forEach((w, wIdx) => {
+                    rawTranscript.push({
+                      id: `w-${idx}-${wIdx}`,
+                      word: w,
+                      startTime: seg.start + wIdx * wordDuration,
+                      endTime: Math.min(seg.end, seg.start + (wIdx + 1) * wordDuration),
+                      deleted: false,
+                      favorite: false
+                    })
+                  })
+                })
+              } catch (e) {
+                console.warn('Failed to parse subtitles_srt fallback:', e)
+              }
+            }
+            // Fallback 2: fetch SRT from srt_url if both words_json and subtitles_srt are null
+            if (rawTranscript.length === 0 && clipData.srt_url) {
+              try {
+                const res = await fetch(clipData.srt_url)
+                if (res.ok) {
+                  const srtText = await res.text()
+                  const { parseSRT } = require('../../../lib/subtitles')
+                  const subs = parseSRT(srtText)
+                  subs.forEach((seg, idx) => {
+                    const words = seg.text.split(/\s+/).filter(w => w)
+                    const wordDuration = (seg.end - seg.start) / Math.max(words.length, 1)
+                    words.forEach((w, wIdx) => {
+                      rawTranscript.push({
+                        id: `w-${idx}-${wIdx}`,
+                        word: w,
+                        startTime: seg.start + wIdx * wordDuration,
+                        endTime: Math.min(seg.end, seg.start + (wIdx + 1) * wordDuration),
+                        deleted: false,
+                        favorite: false
+                      })
+                    })
+                  })
+                }
+              } catch (e) {
+                console.warn('Failed to fetch srt_url fallback:', e)
+              }
+            }
+            console.log('TRANSCRIPT LOAD:', { words_json: clipData.words_json, subtitles_srt_len: clipData.subtitles_srt?.length, srt_url: clipData.srt_url, rawTranscriptLen: rawTranscript.length })
             if (rawTranscript.length > 0) {
               setTranscriptEN(rawTranscript)
               setTranscriptES(generateSpanishTranscript(rawTranscript))
@@ -1015,36 +1066,23 @@ export default function EditorPage() {
 
   const handleImportSrt = () => {
     if (!srtInputText) return
-    const segments = srtInputText.split(/\n\s*\n/)
+    const { parseSRT } = require('../../../lib/subtitles')
+    const segments = parseSRT(srtInputText)
     const parsedWords = []
     
     segments.forEach((seg, index) => {
-      const lines = seg.split('\n').filter(l => l.trim() !== '')
-      if (lines.length >= 3) {
-        const timeLine = lines[1]
-        const text = lines.slice(2).join(' ')
-        const times = timeLine.split('-->')
-        if (times.length === 2) {
-          const parseSrtTime = (tStr) => {
-            const parts = tStr.trim().split(':')
-            const secsParts = parts[2].split(',')
-            return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(secsParts[0]) + parseInt(secsParts[1]) / 1000
-          }
-          const start = parseSrtTime(times[0])
-          const end = parseSrtTime(times[1])
-          
-          text.split(/\s+/).forEach((w, wIdx) => {
-            parsedWords.push({
-              id: `imported-${index}-${wIdx}`,
-              word: w,
-              startTime: start + wIdx * 0.35,
-              endTime: Math.min(end, start + (wIdx + 1) * 0.35),
-              deleted: false,
-              favorite: false
-            })
-          })
-        }
-      }
+      const words = seg.text.split(/\s+/).filter(w => w)
+      const wordDuration = (seg.end - seg.start) / Math.max(words.length, 1)
+      words.forEach((w, wIdx) => {
+        parsedWords.push({
+          id: `imported-${index}-${wIdx}`,
+          word: w,
+          startTime: seg.start + wIdx * wordDuration,
+          endTime: Math.min(seg.end, seg.start + (wIdx + 1) * wordDuration),
+          deleted: false,
+          favorite: false
+        })
+      })
     })
 
     if (parsedWords.length > 0) {
@@ -1507,7 +1545,7 @@ export default function EditorPage() {
             </div>
 
             {/* Scrollable list of transcript lines */}
-            <div style={{ flex: 1, padding: '16px', overflowY: 'auto', lineHeight: '2.3' }}>
+            <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'baseline' }}>
               {activeTranscript.map((w, idx) => {
                 const isActive = currentTime >= w.startTime && currentTime <= w.endTime
                 const matchesSearch = searchTerm ? w.word.toLowerCase().includes(searchTerm.toLowerCase()) : true
@@ -1519,7 +1557,7 @@ export default function EditorPage() {
                 const showBadge = idx % 5 === 0
 
                 return (
-                  <span key={w.id} style={{ display: 'inline-block', marginRight: '6px' }}>
+                  <span key={w.id} style={{ display: 'inline-flex', alignItems: 'baseline', gap: '4px' }}>
                     {showBadge && (
                       <span
                         onClick={() => seekTo(w.startTime)}
@@ -1529,9 +1567,9 @@ export default function EditorPage() {
                           color: 'var(--cream-text-secondary)',
                           padding: '1px 4px',
                           borderRadius: '4px',
-                          marginRight: '6px',
                           cursor: 'pointer',
-                          fontWeight: '600'
+                          fontWeight: '600',
+                          whiteSpace: 'nowrap'
                         }}
                       >
                         {w.startTime.toFixed(2)}s
