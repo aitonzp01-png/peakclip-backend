@@ -1195,8 +1195,15 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 if cookies_file and not has_oauth:
                     ydl_opts['cookies'] = cookies_file
                 if has_oauth:
-                    ydl_opts['username'] = 'oauth2'
-                    ydl_opts['password'] = ''
+                    try:
+                        with open(oauth_path, 'r') as f:
+                            oat = json.load(f)
+                        oat_token = oat.get('access_token', '')
+                        oat_type = oat.get('token_type', 'Bearer')
+                        if oat_token:
+                            ydl_opts['http_headers']['Authorization'] = f'{oat_type} {oat_token}'
+                    except Exception as e:
+                        print(f"OAUTH: failed to read token for header: {e}")
                 extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
                 if po_token:
                     extractor_args['youtube']['po_token'] = po_token
@@ -1207,7 +1214,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     extractor_args['youtubepot-bgutilhttp'] = {}
                 if extractor_args['youtube'] or 'youtubepot-bgutilhttp' in extractor_args:
                     ydl_opts['extractor_args'] = extractor_args
-                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled and not has_oauth else 'no'} cookies={'yes' if cookies_file and not has_oauth else 'no'} oauth={'yes' if has_oauth else 'no'}")
+                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled and not has_oauth else 'no'} cookies={'yes' if cookies_file and not has_oauth else 'no'} token={'yes' if has_oauth else 'no'}")
                 # Run yt-dlp in a subprocess so we can hard-kill it on timeout
                 ytdlp_script = os.path.join(os.path.dirname(__file__), 'ytdlp_download.py')
                 sub_opts = dict(ydl_opts)
