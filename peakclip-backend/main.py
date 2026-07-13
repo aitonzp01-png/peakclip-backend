@@ -1157,6 +1157,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     'format': fmt,
                     'outtmpl': video_path,
                     'quiet': True,
+                    'verbose': True if attempt == 0 else False,
                     'no_warnings': True,
                     'extract_flat': False,
                     'noplaylist': True,
@@ -1201,17 +1202,26 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         [sys.executable, ytdlp_script, json.dumps(sub_opts)],
                         capture_output=True,
                         text=True,
-                        timeout=30,
+                        timeout=60,
                     )
                     if result.returncode != 0:
-                        stderr_tail = (result.stderr or '')[-500:]
-                        print(f"yt-dlp attempt {attempt+1} stderr: {stderr_tail}")
-                        raise Exception(f"yt-dlp exited {result.returncode}: {stderr_tail}")
+                        stderr_tail = (result.stderr or '')[-1000:]
+                        stdout_tail = (result.stdout or '')[-500:]
+                        print(f"yt-dlp attempt {attempt+1} exit={result.returncode}")
+                        if stderr_tail:
+                            print(f"  stderr[-1000]: {stderr_tail}")
+                        if stdout_tail:
+                            print(f"  stdout[-500]: {stdout_tail}")
+                        raise Exception(f"yt-dlp exited {result.returncode}: {stderr_tail[:200]}")
                 except subprocess.TimeoutExpired as e:
                     stderr_tail = (e.stderr or '')[-300:] if hasattr(e, 'stderr') else ''
                     print(f"yt-dlp attempt {attempt+1} timed out. stderr: {stderr_tail}")
                     raise TimeoutError(f"Download attempt {attempt+1} timed out")
                 if not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
+                    if os.path.exists(video_path):
+                        with open(video_path, 'rb') as _f:
+                            _head = _f.read(500)
+                        print(f"yt-dlp output too small ({os.path.getsize(video_path)} bytes): {_head[:200]}")
                     raise Exception("File not downloaded or too small")
                 last_err = None
                 break
