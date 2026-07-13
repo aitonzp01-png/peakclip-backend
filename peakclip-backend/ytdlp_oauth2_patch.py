@@ -1,22 +1,37 @@
-"""DISABLED yt-dlp-youtube-oauth2 plugin.
+"""BLACKLIST yt-dlp-youtube-oauth2 plugin entirely.
 
-This patch replaces the plugin file to make it a transparent pass-through
-to the standard youtube extractor. The OAuth2 plugin creates a youtube+oauth2
-extractor that takes priority over the standard youtube extractor and causes
-'No video formats found!' errors. This patch makes it do nothing extra.
+The OAuth2 plugin creates a youtube+oauth2 extractor that takes priority
+over the standard youtube extractor and causes 'No video formats found!'
+errors even when OAuth tokens are valid. This patch forces yt-dlp to
+skip the plugin entirely by deleting the plugin file from disk.
 """
-import importlib
-import inspect
+import os
+import sys
+import shutil
 
-from yt_dlp.extractor.youtube import YoutubeBaseInfoExtractor
+# Find and delete the yt-dlp-youtube-oauth2 plugin
+try:
+    import yt_dlp_plugins
+    ie_dir = os.path.join(os.path.dirname(yt_dlp_plugins.__file__), 'extractor')
+    target = os.path.join(ie_dir, 'youtubeoauth.py')
+    if os.path.exists(target):
+        os.remove(target)
+        print(f"OAUTH2 PATCH: deleted {target}")
+    # Clear __pycache__
+    pycache = os.path.join(ie_dir, '__pycache__')
+    if os.path.isdir(pycache):
+        for fname in os.listdir(pycache):
+            if 'youtubeoauth' in fname:
+                os.remove(os.path.join(pycache, fname))
+                print(f"OAUTH2 PATCH: deleted cache {fname}")
+    # Also check for the plugin package dir
+    pkg_dir = os.path.join(os.path.dirname(yt_dlp_plugins.__file__), '..', 'yt_dlp_plugins_youtube_oauth2')
+    if os.path.isdir(pkg_dir):
+        shutil.rmtree(pkg_dir)
+        print(f"OAUTH2 PATCH: removed {pkg_dir}")
+except Exception as e:
+    print(f"OAUTH2 PATCH: error finding plugin: {e}")
 
-YOUTUBE_IES = filter(
-    lambda member: issubclass(member[1], YoutubeBaseInfoExtractor),
-    inspect.getmembers(importlib.import_module('yt_dlp.extractor.youtube'), inspect.isclass)
-)
-
-for _, ie in YOUTUBE_IES:
-    class _YouTubeOAuthDisabled(ie, plugin_name='oauth2'):
-        _NETRC_MACHINE = 'youtube'
-        _use_oauth2 = False
-        # No overrides — everything delegates to parent (standard youtube extractor)
+# Ensure the module isn't cached
+if 'yt_dlp_plugins.extractor.youtubeoauth' in sys.modules:
+    del sys.modules['yt_dlp_plugins.extractor.youtubeoauth']

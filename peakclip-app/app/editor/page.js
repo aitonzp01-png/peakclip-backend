@@ -300,6 +300,9 @@ export default function EditorPage() {
 
             if (clipData.subtitle_style) {
               setSubtitleStyle(prev => ({ ...prev, ...clipData.subtitle_style }))
+              if (clipData.subtitle_style.presetId) {
+                setSelectedPresetId(clipData.subtitle_style.presetId)
+              }
             }
           }
         } else {
@@ -434,7 +437,7 @@ export default function EditorPage() {
     const currentHist = history.slice(0, historyIndex + 1)
     const state = {
       title: newState.title || clipTitle,
-      subtitleStyle: newState.subtitleStyle ? { ...newState.subtitleStyle } : { ...subtitleStyle },
+      subtitleStyle: newState.subtitleStyle ? { ...newState.subtitleStyle, presetId: selectedPresetId } : { ...subtitleStyle, presetId: selectedPresetId },
       transcript: newState.transcript ? [...newState.transcript] : [...activeTranscript],
       textOverlays: newState.textOverlays ? [...newState.textOverlays] : [...textOverlays]
     }
@@ -486,29 +489,26 @@ export default function EditorPage() {
     try {
       const trimStartPct = duration ? (trimStart / duration) * 100 : 0
       const trimEndPct = duration ? (effectiveTrimEnd / duration) * 100 : 100
-      const activeWord = activeTranscript.find(w => !w.deleted && currentTime >= w.startTime && currentTime <= w.endTime)
-      const subtitleText = activeWord ? activeWord.word : activeTranscript.filter(w => !w.deleted).map(w => w.word).join(' ')
+      const subtitleText = activeTranscript.filter(w => !w.deleted).map(w => w.word).join(' ')
 
-      const styleMap = {
-        karaoke: 'bold-yellow',
-        beasty: 'tiktok-style',
-        popline: 'tiktok-style',
-        deepdiver: 'minimal-white',
-        youshaei: 'white-outline',
-        podp: 'white-outline',
-        mozi: 'white-outline',
-        typewriter: 'bold-yellow'
-      }
       const position = subtitleStyle.positionY < 40 ? 'top' : subtitleStyle.positionY > 60 ? 'bottom' : 'middle'
       const trackMap = { m1: 'chill', m2: 'hype', m3: 'epic' }
 
+      const subtitleWords = activeTranscript.filter(w => !w.deleted).map(w => ({
+        word: w.word,
+        start: w.startTime,
+        end: w.endTime,
+        id: w.id
+      }))
       const response = await exportClip(clipId, {
         video_url: videoSrc,
         trim_start: Math.max(0, Math.min(100, trimStartPct)),
         trim_end: Math.max(0, Math.min(100, trimEndPct)),
         subtitle_text: subtitleText || 'PeakClip',
-        subtitle_style: styleMap[selectedPresetId] || 'bold-yellow',
+        subtitle_style: selectedPresetId === 'none' ? 'none' : 'custom',
         subtitle_position: position,
+        subtitle_style_obj: subtitleStyle,
+        subtitle_words: subtitleWords,
         font_size: subtitleStyle.fontSize,
         watermark_text: '',
         watermark_position: 'top-right',
@@ -776,26 +776,34 @@ export default function EditorPage() {
     }
   }
 
+  // Use refs to avoid 60fps re-renders from setCurrentTime in animation loop
+  const drawSubtitlesRef = useRef(drawSubtitles)
+  drawSubtitlesRef.current = drawSubtitles
+  const lastTimeUpdateRef = useRef(0)
   // --- RENDER PLAYBACK LOOP ---
   useEffect(() => {
     let animId
     const update = async () => {
       const isMobile = window.innerWidth <= 768
+      let time = 0
       if (isMobile && mobileVideoRef.current) {
-        setCurrentTime(mobileVideoRef.current.currentTime)
-        drawSubtitles()
+        time = mobileVideoRef.current.currentTime
       } else if (videoRef.current) {
-        setCurrentTime(videoRef.current.currentTime)
-        drawSubtitles()
-        if (faceTrackingEnabled) {
-          await detectFace()
-        }
+        time = videoRef.current.currentTime
+      }
+      drawSubtitlesRef.current()
+      if (Math.abs(time - lastTimeUpdateRef.current) > 0.05) {
+        setCurrentTime(time)
+        lastTimeUpdateRef.current = time
+      }
+      if (time > 0 && !isMobile && videoRef.current && faceTrackingEnabled) {
+        await detectFace()
       }
       animId = requestAnimationFrame(update)
     }
     animId = requestAnimationFrame(update)
     return () => cancelAnimationFrame(animId)
-  }, [currentTime, faceTrackingEnabled, drawSubtitles, modelsLoaded])
+  }, [faceTrackingEnabled, modelsLoaded])
 
   // --- WAVEFORM TIMELINE GENERATOR ---
   useEffect(() => {
@@ -2071,7 +2079,7 @@ export default function EditorPage() {
               <div style={{ flex: 1, height: '36px', backgroundColor: 'var(--cream-panel)', border: '1px solid var(--cream-panel-border)', borderRadius: '8px', position: 'relative', overflow: 'hidden' }}>
                 {timelineItems.filter(x => x.track === track).length === 0 && (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: 'var(--cream-placeholder)' }}>
-                    {track === 'video' ? 'Drag a video here' : track === 'text' ? 'Add text from the panel' : 'Add music from Audio'}
+                    {track === 'video' ? 'Drag a video here' : track === 'text' ? 'Add text from the panel' : track === 'subtitle' ? 'Words from transcript appear here' : 'Add music from Audio'}
                   </div>
                 )}
                 {timelineItems.filter(x => x.track === track).map((item) => {
@@ -2538,7 +2546,7 @@ export default function EditorPage() {
                   <button
                     key={w.id}
                     className={`editor-mobile-list-item ${activeSubtitleId === w.id ? 'active' : ''} ${w.deleted ? 'deleted' : ''}`}
-                    onClick={() => setSelectedSubtitleId(w.id)}
+                        onClick={() => { setSelectedSubtitleId(w.id); setCurrentTime(w.startTime); }}
                   >
                     <span className='editor-mobile-time-badge'>{w.startTime.toFixed(1)}s</span>
                     <span className='editor-mobile-list-text'>{w.deleted ? '[removed]' : w.word}</span>

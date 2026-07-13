@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
+from typing import Any
 from pydantic import BaseModel
 from supabase import create_client
 import yt_dlp
@@ -28,6 +29,7 @@ import traceback
 import base64
 import shutil
 import concurrent.futures
+import threading
 from collections import defaultdict
 from urllib.parse import urlparse
 import jwt as pyjwt
@@ -40,8 +42,8 @@ from contextlib import asynccontextmanager
 BGUTIL_POT_AVAILABLE = False
 
 # ── OAuth2 auto-refresh ───────────────────────────────────────
-YOUTUBE_OAUTH_CLIENT_ID = "861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com"
-YOUTUBE_OAUTH_CLIENT_SECRET = "SboVhoG9s0rNafixCSGGKXAT"
+YOUTUBE_OAUTH_CLIENT_ID = os.environ.get("YOUTUBE_OAUTH_CLIENT_ID", "861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com")
+YOUTUBE_OAUTH_CLIENT_SECRET = os.environ.get("YOUTUBE_OAUTH_CLIENT_SECRET", "SboVhoG9s0rNafixCSGGKXAT")
 
 OAUTH_TOKEN_CACHE_DIR = os.path.expanduser('~/.cache/yt-dlp')
 OAUTH_TOKEN_PATH = os.path.join(OAUTH_TOKEN_CACHE_DIR, 'youtube_oauth2.json')
@@ -175,8 +177,26 @@ async def oauth_token_monitor():
 def upload_with_verification(supabase, bucket, file_path, storage_path, content_type):
     """Upload a file to Supabase Storage and verify it is reachable."""
     try:
-        with open(file_path, 'rb') as f:
-            supabase.storage.from_(bucket).upload(storage_path, f, {"content-type": content_type, "upsert": "true"})
+        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+        print(f"UPLOAD: starting {bucket}/{storage_path} ({file_size} bytes)")
+        upload_ok = []
+        def _upload():
+            try:
+                with open(file_path, 'rb') as f:
+                    supabase.storage.from_(bucket).upload(storage_path, f, {"content-type": content_type, "upsert": "true"})
+                upload_ok.append(True)
+            except Exception as e:
+                upload_ok.append(e)
+        ut = threading.Thread(target=_upload, daemon=True)
+        ut.start()
+        ut.join(timeout=120)
+        if not upload_ok:
+            print(f"UPLOAD: timed out after 120s for {bucket}/{storage_path}")
+            return None
+        r = upload_ok[0]
+        if isinstance(r, Exception):
+            print(f"UPLOAD: failed for {bucket}/{storage_path}: {r}")
+            return None
         # Build URL manually to avoid supabase-py get_public_url() doubling the bucket name
         supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
         public_url = f"{supabase_url}/storage/v1/object/public/{bucket}/{storage_path}"
@@ -217,15 +237,26 @@ async def lifespan(app: FastAPI):
         print(f"yt-dlp upgrade skipped: {e}")
     # Patch yt-dlp-youtube-oauth2 plugin to disable it (causes 'No video formats found!')
     try:
-        import yt_dlp_plugins.extractor.youtubeoauth as target_module
+        # Import to find the file path, then delete it
+        import yt_dlp_plugins
+        ie_dir = os.path.join(os.path.dirname(yt_dlp_plugins.__file__), 'extractor')
+        target = os.path.join(ie_dir, 'youtubeoauth.py')
+        if os.path.exists(target):
+            os.remove(target)
+            print(f"OAUTH2: deleted {target}")
+        pycache = os.path.join(ie_dir, '__pycache__')
+        for fname in os.listdir(pycache):
+            if 'youtubeoauth' in fname:
+                os.remove(os.path.join(pycache, fname))
+                print(f"OAUTH2: deleted cache {fname}")
+        # Also run the patch module for extra safety
         patch_path = os.path.join(os.path.dirname(__file__), 'ytdlp_oauth2_patch.py')
         if os.path.exists(patch_path):
-            target_path = os.path.dirname(target_module.__file__)
-            target_file = os.path.join(target_path, 'youtubeoauth.py')
-            shutil.copy2(patch_path, target_file)
-            print(f"OAUTH2 PLUGIN: patched (DISABLED) {target_file}")
-            # Remove the __pycache__ so subprocess doesn't load cached bytecode
-            pycache = os.path.join(target_path, '__pycache__')
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("ytdlp_oauth2_patch", patch_path)
+            patch_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(patch_mod)
+            print(f"OAUTH2 PATCH: applied {patch_path}")
             if os.path.exists(pycache):
                 shutil.rmtree(pycache, ignore_errors=True)
         else:
@@ -599,6 +630,8 @@ class ExportRequest(BaseModel):
     subtitle_style: str = "bold-yellow"
     subtitle_position: str = "bottom"
     font_size: int = 14
+    subtitle_style_obj: dict = {}
+    subtitle_words: list[dict[str, Any]] = []
     watermark_text: str = ""
     watermark_position: str = "top-right"
     music_track: str = "none"
@@ -650,19 +683,25 @@ def generate_thumbnail(video_path, output_path, timestamp=5):
 
 
 def dedent_credits(user_id):
-    result = supabase.table("users").select("credits").eq("id", user_id).execute()
-    if result.data and result.data[0]["credits"] > 0:
-        new_credits = result.data[0]["credits"] - 1
-        supabase.table("users").update({"credits": new_credits}).eq("id", user_id).execute()
-        try:
-            supabase.table("credit_transactions").insert({
-                "user_id": user_id,
-                "amount": -1,
-                "type": "consume",
-            }).execute()
-        except Exception as e:
-            print(f"credit_transactions insert failed (non-fatal): {e}")
-        return new_credits
+    """Decrement credits with optimistic locking to avoid race conditions."""
+    for attempt in range(3):
+        result = supabase.table("users").select("credits").eq("id", user_id).execute()
+        if not result.data or result.data[0]["credits"] <= 0:
+            return 0
+        old_credits = result.data[0]["credits"]
+        new_credits = old_credits - 1
+        update = supabase.table("users").update({"credits": new_credits}).eq("id", user_id).eq("credits", old_credits).execute()
+        if update.data:
+            try:
+                supabase.table("credit_transactions").insert({
+                    "user_id": user_id,
+                    "amount": -1,
+                    "type": "consume",
+                }).execute()
+            except Exception as e:
+                print(f"credit_transactions insert failed (non-fatal): {e}")
+            return new_credits
+        # Race: credits changed between read and write, retry
     return 0
 
 
@@ -1074,7 +1113,7 @@ async def process_video(req: VideoRequest, background_tasks: BackgroundTasks, us
     if user_data["plan"] != "pro":
         dedent_credits(user_id)
 
-    jobs_store[job_id] = {"status": "processing", "message": "Starting download..."}
+    jobs_store[job_id] = {"status": "processing", "message": "Starting download...", "user_id": user_id}
     background_tasks.add_task(process_video_background, job_id, user_id, req.url)
     return {"status": "processing", "job_id": job_id}
 
@@ -1292,7 +1331,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 jobs_store[job_id] = {"status": "error", "message": "Download failed. Railway's IP is blocked by YouTube. Solutions: (1) Export fresh cookies from your browser and set YOUTUBE_COOKIES_B64. (2) Set YOUTUBE_PROXY with residential proxy credentials. (3) Self-host the backend on a residential connection."}
                 return
 
-        jobs_store[job_id] = {"status": "processing", "message": "Extracting audio..."}
+        jobs_store[job_id] = {"status": "processing", "message": "Extracting audio...", "user_id": user_id}
         # Extract audio at low bitrate to stay under Whisper's 25MB limit
         ffmpeg_result = subprocess.run([
             'ffmpeg', '-i', video_path, '-vn', '-ar', '16000', '-ac', '1', '-b:a', '24k', audio_path, '-y'
@@ -1358,24 +1397,59 @@ def process_video_background(job_id: str, user_id: str, url: str):
 
         t = threading.Thread(target=_openai_thread, daemon=True)
         t.start()
-        t.join(timeout=240)
+        t.join(timeout=360)
         if t.is_alive():
-            print(f"TRANSCRIBE: OpenAI Whisper did not finish within 240s")
+            print(f"TRANSCRIBE: OpenAI Whisper did not finish within 360s, trying Groq...")
+            if groq_client:
+                try:
+                    jobs_store[job_id] = {"status": "processing", "message": "Transcribing with Groq (OpenAI timed out)..."}
+                    # Run Groq in a thread with 300s timeout
+                    groq_result = []
+                    def _groq_thread():
+                        try:
+                            groq_result.append(_do_transcribe(groq_client, "whisper-large-v3-turbo"))
+                        except Exception as e:
+                            groq_result.append(e)
+                    gt = threading.Thread(target=_groq_thread, daemon=True)
+                    gt.start()
+                    gt.join(timeout=300)
+                    if gt.is_alive():
+                        print(f"TRANSCRIBE: Groq also timed out after 300s")
+                    elif groq_result:
+                        r = groq_result[0]
+                        if isinstance(r, Exception):
+                            print(f"TRANSCRIBE: Groq also failed: {r}")
+                        else:
+                            transcript = r
+                except Exception as groq_err:
+                    print(f"TRANSCRIBE: Groq also failed: {groq_err}")
         elif openai_result:
             transcript = openai_result[0]
         elif openai_error:
             print(f"TRANSCRIBE: OpenAI Whisper error: {openai_error[0]}")
-            # Try Groq fallback
+            # Try Groq fallback with timeout
             if groq_client:
                 jobs_store[job_id] = {"status": "processing", "message": "Transcribing with Groq..."}
-                try:
-                    print(f"TRANSCRIBE: Groq Whisper starting...")
-                    t0 = time.time()
-                    transcript = _do_transcribe(groq_client, "whisper-large-v3-turbo")
-                    elapsed = time.time() - t0
-                    print(f"TRANSCRIBE: Groq Whisper OK in {elapsed:.1f}s")
-                except Exception as groq_err:
-                    print(f"TRANSCRIBE: Groq also failed: {groq_err}")
+                print(f"TRANSCRIBE: Groq Whisper starting...")
+                t0 = time.time()
+                groq_result = []
+                def _groq_thread2():
+                    try:
+                        groq_result.append(_do_transcribe(groq_client, "whisper-large-v3-turbo"))
+                    except Exception as e:
+                        groq_result.append(e)
+                gt = threading.Thread(target=_groq_thread2, daemon=True)
+                gt.start()
+                gt.join(timeout=300)
+                if gt.is_alive():
+                    print(f"TRANSCRIBE: Groq also timed out after 300s")
+                elif groq_result:
+                    r = groq_result[0]
+                    if isinstance(r, Exception):
+                        print(f"TRANSCRIBE: Groq also failed: {r}")
+                    else:
+                        transcript = r
+                        print(f"TRANSCRIBE: Groq Whisper OK in {time.time()-t0:.1f}s")
         else:
             print(f"TRANSCRIBE: OpenAI thread finished without result or error (timeout?)")
 
@@ -1621,7 +1695,9 @@ Return JSON with this exact format:
                 ) or ""
 
                 if not clip_storage_url:
-                    print(f"Skipping clip {i+1} insert because upload verification failed.")
+                    print(f"CLIP {i+1}: SKIP — clip_storage_url is empty. upload_with_verification returned None for {storage_path}")
+                    supabase_url_check = os.getenv("SUPABASE_URL", "")
+                    print(f"CLIP {i+1}: SUPABASE_URL is set: {bool(supabase_url_check)}, bucket='clips', file_size={os.path.getsize(output_path) if os.path.exists(output_path) else 'N/A'}")
                     continue
 
                 clip_row = {
@@ -1690,6 +1766,19 @@ Return JSON with this exact format:
 async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)):
     await check_rate_limit(f"export:{user['sub']}")
     user_id = user["sub"]
+
+    # Check credits
+    user_result = supabase.table("users").select("credits,plan").eq("id", user_id).execute()
+    if not user_result.data:
+        supabase.table("users").insert({"id": user_id, "credits": 3, "plan": "free"}).execute()
+        supabase.table("credit_transactions").insert({"user_id": user_id, "amount": 3, "type": "free_grant"}).execute()
+        user_data = {"plan": "free", "credits": 3}
+    else:
+        user_data = user_result.data[0]
+    if user_data["plan"] != "pro" and user_data["credits"] <= 0:
+        raise HTTPException(status_code=402, detail="No credits remaining")
+    dedent_credits(user_id)
+
     job_id = str(uuid.uuid4())
     output_ext = req.format if req.format in ("mov", "webm") else "mp4"
     output_filename = f"{job_id}_export.{output_ext}"
@@ -1701,7 +1790,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
     source_path = f"downloads/{job_id}_source.mp4"
     subprocess.run([
         'ffmpeg', '-i', req.video_url, '-c', 'copy', source_path, '-y'
-    ], capture_output=True)
+    ], capture_output=True, timeout=120)
 
     if not os.path.exists(source_path):
         raise HTTPException(status_code=400, detail="Could not download source video")
@@ -1710,7 +1799,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
     probe = subprocess.run([
         'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
         '-of', 'default=noprint_wrappers=1:nokey=1', source_path
-    ], capture_output=True, text=True)
+    ], capture_output=True, text=True, timeout=30)
 
     total_duration = float(probe.stdout.strip() or 30)
     trim_s = req.trim_start / 100 * total_duration
@@ -1738,28 +1827,47 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         elif req.filter_style == "cool":
             vf = f"{vf},colorbalance=rs=-.2:gs=.1:bs=.3"
 
-        # Subtitles via textfile
-        subtitle_text = req.subtitle_text or "PeakClip"
-        if req.subtitle_style != "none" and subtitle_text:
-            fs = req.font_size
-            style_configs = {
-                "bold-yellow": f"fontsize={fs}:fontcolor=yellow:borderw=3:bordercolor=black",
-                "white-outline": f"fontsize={fs}:fontcolor=white:borderw=3:bordercolor=black",
-                "neon-green": f"fontsize={fs}:fontcolor=#00ff88:borderw=2:bordercolor=#003322",
-                "minimal-white": f"fontsize={fs}:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=8",
-                "tiktok-style": f"fontsize={fs}:fontcolor=white:borderw=4:bordercolor=#fe2c55",
-            }
-            dt_params = style_configs.get(req.subtitle_style, style_configs["bold-yellow"])
-            pos_map = {"top": "y=20", "middle": "y=(h-text_h)/2", "bottom": "y=h-text_h-80"}
-            y_pos = pos_map.get(req.subtitle_position, pos_map["bottom"])
-            safe_text = sanitize_drawtext(subtitle_text)
-            textfile = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-            textfile.write(safe_text)
-            textfile.close()
-            temp_files.append(textfile.name)
-            sub_path = textfile.name.replace("\\", "/")
-            dt_filter = f"drawtext=textfile='{sub_path}':{dt_params}:{y_pos}:enable='between(t,0,{trim_d})'"
-            vf = f"{vf},{dt_filter}"
+        # Subtitles: generate SRT from timed words and burn with subtitles filter
+        srt_path = None
+        if req.subtitle_style != "none" and req.subtitle_words:
+            srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_subs.srt")
+            generate_srt_subtitle(req.subtitle_words, trim_s, trim_s + trim_d, srt_path)
+            temp_files.append(srt_path)
+            s = req.subtitle_style_obj or {}
+            fs = s.get('fontSize', req.font_size or 28)
+            color = s.get('color', '#ffffff')
+            borderw = s.get('strokeWidth', 3) if s.get('stroke') else 0
+            stroke_color = s.get('strokeColor', '#000000')
+            bg = s.get('backgroundColor', 'transparent')
+            # Build force_style with escaped commas
+            force_parts = [f"FontName=DejaVu Sans", f"FontSize={fs}"]
+            # ASS color format: &HAABBGGRR (A=00 for opaque)
+            c = color.lstrip('#')
+            if len(c) == 6:
+                force_parts.append(f"PrimaryColour=&H00{c[4:6]}{c[2:4]}{c[0:2]}&")
+            else:
+                force_parts.append("PrimaryColour=&H00ffffff&")
+            if borderw > 0:
+                sc = stroke_color.lstrip('#')
+                if len(sc) == 6:
+                    force_parts.append(f"OutlineColour=&H00{sc[4:6]}{sc[2:4]}{sc[0:2]}&")
+                else:
+                    force_parts.append("OutlineColour=&H00000000&")
+                force_parts.append(f"Outline={borderw}")
+                force_parts.append("BorderStyle=1")
+            if bg and bg != 'transparent':
+                b = bg.lstrip('#')
+                bo = s.get('backgroundOpacity', 70)
+                alpha = int(255 * (100 - bo) / 100)
+                if len(b) == 6:
+                    force_parts.append(f"BackColour=&H{alpha:02X}{b[4:6]}{b[2:4]}{b[0:2]}&")
+                else:
+                    force_parts.append(f"BackColour=&H{alpha:02X}000000&")
+                force_parts.append("BorderStyle=4")
+            force_parts.append("Alignment=2")
+            force_str = "\\,".join(force_parts)  # backslash-comma for ffmpeg filter escaping
+            sub_path = srt_path.replace("\\", "/")
+            vf = f"{vf},subtitles='{sub_path}':force_style='{force_str}'"
 
         # Watermark via textfile
         if req.watermark_text:
@@ -1826,8 +1934,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
 
         cmd = [
             'ffmpeg',
-            '-ss', str(trim_s),
             '-i', source_path,
+            '-ss', str(trim_s),
         ]
         if music_path and os.path.exists(music_path):
             cmd.extend(['-i', music_path])
@@ -2029,6 +2137,8 @@ async def get_job_status(job_id: str, user: dict = Depends(get_current_user)):
     job = jobs_store.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if job.get("user_id") and job["user_id"] != user["sub"]:
+        raise HTTPException(status_code=403, detail="Job does not belong to this user")
     return job
 
 
