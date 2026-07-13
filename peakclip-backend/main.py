@@ -8,6 +8,16 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from typing import Any
 from pydantic import BaseModel
 from supabase import create_client
+import os
+
+# ── OAuth2 plugin purge: MUST run before any yt-dlp import ──
+import importlib.util
+_patch_path = os.path.join(os.path.dirname(__file__), 'ytdlp_oauth2_patch.py')
+if os.path.exists(_patch_path):
+    _spec = importlib.util.spec_from_file_location("ytdlp_oauth2_patch", _patch_path)
+    if _spec and _spec.loader:
+        _spec.loader.exec_module(importlib.util.module_from_spec(_spec))
+
 import yt_dlp
 import openai
 try:
@@ -15,7 +25,6 @@ try:
 except ImportError:
     Groq = None
 import subprocess
-import os
 import uuid
 import json
 import stripe
@@ -254,34 +263,27 @@ async def lifespan(app: FastAPI):
         print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
     except Exception as e:
         print(f"yt-dlp upgrade skipped: {e}")
-    # Patch yt-dlp-youtube-oauth2 plugin to disable it (causes 'No video formats found!')
+    # Patch was already applied at module import (before yt_dlp import).
+    # Pip uninstall the plugin package so it doesn't come back on upgrades
     try:
-        # Import to find the file path, then delete it
-        import yt_dlp_plugins
-        ie_dir = os.path.join(os.path.dirname(yt_dlp_plugins.__file__), 'extractor')
-        target = os.path.join(ie_dir, 'youtubeoauth.py')
-        if os.path.exists(target):
-            os.remove(target)
-            print(f"OAUTH2: deleted {target}")
-        pycache = os.path.join(ie_dir, '__pycache__')
-        for fname in os.listdir(pycache):
-            if 'youtubeoauth' in fname:
-                os.remove(os.path.join(pycache, fname))
-                print(f"OAUTH2: deleted cache {fname}")
-        # Also run the patch module for extra safety
-        patch_path = os.path.join(os.path.dirname(__file__), 'ytdlp_oauth2_patch.py')
-        if os.path.exists(patch_path):
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("ytdlp_oauth2_patch", patch_path)
-            patch_mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(patch_mod)
-            print(f"OAUTH2 PATCH: applied {patch_path}")
-            if os.path.exists(pycache):
-                shutil.rmtree(pycache, ignore_errors=True)
-        else:
-            print(f"OAUTH2 PLUGIN: patch file not found at {patch_path}")
+        result = subprocess.run([sys.executable, '-m', 'pip', 'uninstall', '-y', 'yt-dlp-youtube-oauth2'],
+                                capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            print(f"OAUTH2: pip uninstalled yt-dlp-youtube-oauth2")
     except Exception as e:
-        print(f"OAUTH2 PLUGIN: patch failed ({e})")
+        print(f"OAUTH2: pip uninstall failed: {e}")
+    # Clear the extractor cache one more time to be safe
+    try:
+        import yt_dlp_plugins.extractor
+        cache_dir = os.path.join(os.path.dirname(yt_dlp_plugins.extractor.__file__), '__pycache__')
+        if os.path.isdir(cache_dir):
+            for fname in os.listdir(cache_dir):
+                if 'youtubeoauth' in fname:
+                    os.remove(os.path.join(cache_dir, fname))
+                    print(f"OAUTH2: deleted cache {fname}")
+            shutil.rmtree(cache_dir, ignore_errors=True)
+    except Exception as e:
+        print(f"OAUTH2 CACHE CLEAR: {e}")
     # Write YouTube cookies from env var if provided
     try:
         cookie_b64 = os.environ.get('YOUTUBE_COOKIES_B64')
