@@ -1542,14 +1542,22 @@ Return JSON with this exact format:
                     cmd = ['ffmpeg', '-i', raw_clip]
                     if music_path:
                         cmd += ['-stream_loop', '-1', '-i', music_path_ff]
+                    # Add SRT as subtitle track (last input so audio indices don't shift)
+                    if os.path.exists(srt_path):
+                        cmd += ['-i', srt_path]
+                    sub_map = f"-map {2 if music_path else 1}:s" if os.path.exists(srt_path) else ""
                     cmd += ['-threads', '4',
                             '-filter_complex', ';'.join(parts),
-                            '-map', '[v]', '-map', '[a]',
-                            '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+                            '-map', '[v]', '-map', '[a]']
+                    if sub_map:
+                        cmd += sub_map.split()
+                    cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p',
                             '-preset', att['preset'], '-crf', att['crf'],
                             '-b:v', att['b_v'], '-maxrate', att['maxrate'], '-bufsize', att['bufsize'],
-                            '-c:a', 'aac', '-b:a', '128k',
-                            '-movflags', '+faststart', '-y', no_subs]
+                            '-c:a', 'aac', '-b:a', '128k']
+                    if sub_map:
+                        cmd += ['-c:s', 'mov_text', '-disposition:s:0', 'default']
+                    cmd += ['-movflags', '+faststart', '-y', no_subs]
                     try:
                         _ffmpeg(cmd, f"clip{i+1}_{att['label']}", timeout=300)
                     except subprocess.TimeoutExpired:
@@ -1559,13 +1567,22 @@ Return JSON with this exact format:
                         break
 
                 if not rendered:
-                    _ffmpeg(['ffmpeg', '-i', raw_clip,
-                             '-threads', '4',
-                             '-vf', 'scale=720:1280:force_original_aspect_ratio=increase:flags=lanczos,crop=720:1280',
-                             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
-                             '-b:v', '1500k', '-maxrate', '2000k', '-bufsize', '4000k',
-                             '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', no_subs],
-                            f"clip{i+1}_raw", timeout=300)
+                    cmd = ['ffmpeg', '-i', raw_clip]
+                    if os.path.exists(srt_path):
+                        cmd += ['-i', srt_path]
+                    sub_map = f"-map {1}:s" if os.path.exists(srt_path) else ""
+                    cmd += ['-threads', '4',
+                            '-vf', 'scale=720:1280:force_original_aspect_ratio=increase:flags=lanczos,crop=720:1280',
+                            '-map', '0:v', '-map', '0:a']
+                    if sub_map:
+                        cmd += sub_map.split()
+                    cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
+                            '-b:v', '1500k', '-maxrate', '2000k', '-bufsize', '4000k',
+                            '-c:a', 'aac', '-b:a', '128k']
+                    if sub_map:
+                        cmd += ['-c:s', 'mov_text', '-disposition:s:0', 'default']
+                    cmd += ['-movflags', '+faststart', '-y', no_subs]
+                    _ffmpeg(cmd, f"clip{i+1}_raw", timeout=300)
 
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     output_path = no_subs

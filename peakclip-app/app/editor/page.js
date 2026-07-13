@@ -270,10 +270,11 @@ export default function EditorPage() {
             setDuration(clipDuration)
             setClipDate(clipData.created_at ? new Date(clipData.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '')
 
-            // Setup multi-lingual transcription
+            // Setup multi-lingual transcription (check transcript or words_json column)
             let rawTranscript = []
-            if (clipData.transcript) {
-              const parsed = typeof clipData.transcript === 'string' ? JSON.parse(clipData.transcript) : clipData.transcript
+            const transcriptSource = clipData.transcript || clipData.words_json
+            if (transcriptSource) {
+              const parsed = typeof transcriptSource === 'string' ? JSON.parse(transcriptSource) : transcriptSource
               if (Array.isArray(parsed) && parsed.length > 0) {
                 rawTranscript = parsed.map((w, i) => ({
                   id: `w-${i}`,
@@ -426,19 +427,20 @@ export default function EditorPage() {
     try {
       const supabase = getSupabaseClient()
       if (clipId) {
-        const { error } = await supabase
-          .from('clips')
-          .update({
-            title: clipTitle,
-            transcript: activeTranscript,
-            subtitle_style: subtitleStyle,
-            brand_settings: {
-              primary: brandColorPrimary,
-              secondary: brandColorSecondary,
-              logoPosition: brandLogoPosition
-            }
-          })
-          .eq('id', clipId)
+          const { error } = await supabase
+            .from('clips')
+            .update({
+              title: clipTitle,
+              transcript: activeTranscript,
+              words_json: activeTranscript,
+              subtitle_style: subtitleStyle,
+              brand_settings: {
+                primary: brandColorPrimary,
+                secondary: brandColorSecondary,
+                logoPosition: brandLogoPosition
+              }
+            })
+            .eq('id', clipId)
         if (error) throw error
       }
       setSaveSuccess(true)
