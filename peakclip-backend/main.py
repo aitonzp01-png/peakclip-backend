@@ -1987,7 +1987,9 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            raise HTTPException(status_code=400, detail=f"Export error: {result.stderr[:500]}")
+            full_err = result.stderr[:2000] or result.stdout[:500]
+            print(f"Export ffmpeg failed. stderr:\n{result.stderr}")
+            raise HTTPException(status_code=400, detail=f"Export error: {full_err}")
         local_files.append(output_path)
 
         # Upload to Supabase Storage
