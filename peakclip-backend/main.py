@@ -1722,14 +1722,17 @@ Return JSON with this exact format:
                     supabase, "clips", thumb_path, thumb_storage_path, "image/jpeg"
                 ) or ""
 
+                clip_id = str(uuid.uuid4())
+                words_json_value = json.dumps(words_data) if words_data else None
                 clip_row = {
+                    "id": clip_id,
                     "user_id": user_id,
                     "title": clip["title"],
                     "status": "done" if clip_storage_url else "render_failed",
                     "video_url": clip_storage_url or "",
                     "srt_url": srt_storage_url or None,
                     "subtitles_srt": srt_content or None,
-                    "words_json": json.dumps(words_data) if words_data else None,
+                    "words_json": words_json_value,
                     "thumbnail_url": thumb_storage_url,
                     "duration": round(duration, 1),
                     "start_time": clip_start,
@@ -1740,10 +1743,14 @@ Return JSON with this exact format:
                 except Exception as _db_err:
                     msg = str(_db_err)
                     if "words_json" in msg or "Could not find" in msg:
-                        print(f"CLIP {i+1}: schema cache lag, retrying with full data...")
-                        time.sleep(1)
-                        supabase.table("clips").insert(clip_row).execute()
-                        print(f"CLIP {i+1}: inserted with words_json after retry")
+                        print(f"CLIP {i+1}: schema cache lag, inserting without words_json then updating...")
+                        row_no_words = {k: v for k, v in clip_row.items() if k != "words_json"}
+                        supabase.table("clips").insert(row_no_words).execute()
+                        if words_json_value:
+                            supabase.table("clips").update({"words_json": words_json_value}).eq("id", clip_id).execute()
+                            print(f"CLIP {i+1}: inserted, then updated words_json")
+                        else:
+                            print(f"CLIP {i+1}: inserted without words_json (no data)")
                     else:
                         raise
 
@@ -2378,14 +2385,17 @@ Return JSON with this exact format:
                 print(f"Skipping clip {i+1} insert because upload verification failed.")
                 continue
 
+            clip_id = str(uuid.uuid4())
+            words_json_value = json.dumps(words_data) if words_data else None
             clip_row = {
+                "id": clip_id,
                 "user_id": user_id,
                 "title": clip["title"],
                 "status": "done",
                 "video_url": clip_storage_url,
                 "srt_url": srt_storage_url or None,
                 "subtitles_srt": srt_content or None,
-                "words_json": json.dumps(words_data) if words_data else None,
+                "words_json": words_json_value,
                 "thumbnail_url": thumb_storage_url,
                 "duration": round(duration, 1),
                 "start_time": clip_start,
@@ -2396,10 +2406,14 @@ Return JSON with this exact format:
             except Exception as _db_err:
                 msg = str(_db_err)
                 if "words_json" in msg or "Could not find" in msg:
-                    print(f"CLIP {i+1}: schema cache lag, retrying with full data...")
-                    time.sleep(1)
-                    supabase.table("clips").insert(clip_row).execute()
-                    print(f"CLIP {i+1}: inserted with words_json after retry")
+                    print(f"CLIP {i+1}: schema cache lag, inserting without words_json then updating...")
+                    row_no_words = {k: v for k, v in clip_row.items() if k != "words_json"}
+                    supabase.table("clips").insert(row_no_words).execute()
+                    if words_json_value:
+                        supabase.table("clips").update({"words_json": words_json_value}).eq("id", clip_id).execute()
+                        print(f"CLIP {i+1}: inserted, then updated words_json")
+                    else:
+                        print(f"CLIP {i+1}: inserted without words_json (no data)")
                 else:
                     raise
 
