@@ -166,6 +166,7 @@ export default function EditorPage() {
   ])
   const [selectedTimelineItemId, setSelectedTimelineItemId] = useState('vid-main')
   const [draggingTimelineItem, setDraggingTimelineItem] = useState(null)
+  const timelineDragMoved = useRef(false)
 
   // Text overlays
   const [textOverlays, setTextOverlays] = useState([])
@@ -345,6 +346,25 @@ export default function EditorPage() {
     }
     init()
   }, [])
+
+  // Sync activeTranscript to timeline subtitle items
+  useEffect(() => {
+    if (!activeTranscript.length) return
+    const words = activeTranscript.filter(w => !w.deleted)
+    const items = words.map((w, i) => ({
+      id: `sub-${w.id}`,
+      track: 'subtitle',
+      start: w.startTime,
+      duration: Math.max(0.5, w.endTime - w.startTime),
+      title: w.word,
+      color: '#ff1f1f',
+      type: 'subtitle'
+    }))
+    setTimelineItems(prev => {
+      const filtered = prev.filter(x => x.track !== 'subtitle')
+      return [...filtered, ...items]
+    })
+  }, [activeTranscript])
 
   // --- TRANSCRIPT GENERATORS ---
   const generateEnglishTranscript = (dur) => {
@@ -809,6 +829,7 @@ export default function EditorPage() {
   const handleTimelineMouseDown = (e, item, dragType) => {
     e.stopPropagation()
     setSelectedTimelineItemId(item.id)
+    timelineDragMoved.current = false
     setDraggingTimelineItem({
       id: item.id,
       initialStart: item.start,
@@ -821,6 +842,9 @@ export default function EditorPage() {
   const handleTimelineMouseMove = (e) => {
     if (!draggingTimelineItem) return
     const deltaX = e.clientX - draggingTimelineItem.startX
+    if (Math.abs(deltaX) > 3) {
+      timelineDragMoved.current = true
+    }
     const pixelsPerSecond = (timelineZoom / 100) * 15 + 5
     const deltaTime = deltaX / pixelsPerSecond
 
@@ -835,12 +859,14 @@ export default function EditorPage() {
     } else if (draggingTimelineItem.dragType === 'resize-left') {
       const targetStart = draggingTimelineItem.initialStart + deltaTime
       const targetDuration = draggingTimelineItem.initialDuration - deltaTime
-      if (targetStart >= 0 && targetDuration >= 1) {
+      const minDur = item.track === 'subtitle' ? 0.3 : 1
+      if (targetStart >= 0 && targetDuration >= minDur) {
         nextStart = targetStart
         nextDuration = targetDuration
       }
     } else if (draggingTimelineItem.dragType === 'resize-right') {
-      nextDuration = Math.max(1, Math.min(duration - item.start, draggingTimelineItem.initialDuration + deltaTime))
+      const minDur = item.track === 'subtitle' ? 0.3 : 1
+      nextDuration = Math.max(minDur, Math.min(duration - item.start, draggingTimelineItem.initialDuration + deltaTime))
     }
 
     setTimelineItems(prev => prev.map(x => x.id === draggingTimelineItem.id ? { ...x, start: nextStart, duration: nextDuration } : x))
@@ -848,8 +874,22 @@ export default function EditorPage() {
 
   const handleTimelineMouseUp = () => {
     if (draggingTimelineItem) {
+      const item = timelineItems.find(x => x.id === draggingTimelineItem.id)
+      if (item && item.track === 'subtitle') {
+        if (timelineDragMoved.current) {
+          const wordId = item.id.replace('sub-', '')
+          setActiveTranscript(prev => prev.map(w =>
+            w.id === wordId ? { ...w, startTime: item.start, endTime: item.start + item.duration } : w
+          ))
+          saveToHistory({ title: clipTitle })
+        } else {
+          setCurrentTime(item.start)
+        }
+      } else if (timelineDragMoved.current) {
+        saveToHistory({ title: clipTitle })
+      }
+      timelineDragMoved.current = false
       setDraggingTimelineItem(null)
-      saveToHistory({ title: clipTitle })
     }
   }
 
@@ -2025,9 +2065,9 @@ export default function EditorPage() {
             <div style={{ position: 'absolute', top: 0, left: '-4px', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '8px solid var(--cream-playhead)' }} />
           </div>
 
-          {['video', 'text', 'audio'].map(track => (
+          {['video', 'text', 'subtitle', 'audio'].map(track => (
             <div key={track} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '10px', fontWeight: '800', color: 'var(--cream-text-secondary)', width: '50px', textTransform: 'uppercase', textAlign: 'right' }}>{track === 'video' ? 'Video' : track === 'text' ? 'Text' : 'Audio'}</span>
+              <span style={{ fontSize: '10px', fontWeight: '800', color: 'var(--cream-text-secondary)', width: '50px', textTransform: 'uppercase', textAlign: 'right' }}>{track === 'video' ? 'Video' : track === 'text' ? 'Text' : track === 'subtitle' ? 'Subtitles' : 'Audio'}</span>
               <div style={{ flex: 1, height: '36px', backgroundColor: 'var(--cream-panel)', border: '1px solid var(--cream-panel-border)', borderRadius: '8px', position: 'relative', overflow: 'hidden' }}>
                 {timelineItems.filter(x => x.track === track).length === 0 && (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: 'var(--cream-placeholder)' }}>
