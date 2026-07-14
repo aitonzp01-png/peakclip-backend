@@ -1537,7 +1537,7 @@ Return JSON with this exact format:
             )
         except Exception as e:
             err_msg = str(e).lower()
-            if ("insufficient_quota" in err_msg or "429" in err_msg or "exceeded" in err_msg) and groq_client:
+            if ("insufficient_quota" in err_msg or "429" in err_msg or "exceeded" in err_msg or "incorrect api key" in err_msg or "401" in err_msg or "invalid_api_key" in err_msg) and groq_client:
                 print(f"Job {job_id}: OpenAI quota exceeded for analysis, using Groq...")
                 try:
                     response = groq_client.chat.completions.create(
