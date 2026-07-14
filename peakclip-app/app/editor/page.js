@@ -32,14 +32,20 @@ const FONTS = [
 
 const SUBTITLE_PRESETS = [
   { id: 'none', name: 'No captions', isNone: true },
-  { id: 'karaoke', name: 'Karaoke', color: '#ffffff', highlightColor: '#ff1f1f', fontWeight: '800' },
+  { id: 'karaoke', name: 'Karaoke', color: '#ffffff', highlightColor: '#ff1f1f', fontWeight: '800', karaokeHighlight: true },
   { id: 'beasty', name: 'Beasty', color: '#0a0a0a', backgroundColor: '#ff1f1f', backgroundOpacity: 100, fontWeight: '900', textTransform: 'uppercase' },
-  { id: 'deepdiver', name: 'Deep Diver', color: '#ffffff', backgroundColor: 'rgba(24,24,27,0.7)', backgroundOpacity: 70, fontWeight: '600' },
+  { id: 'deepdiver', name: 'Deep Diver', color: '#ffffff', backgroundColor: '#18181b', backgroundOpacity: 70, fontWeight: '600' },
   { id: 'youshaei', name: 'Youshaei', color: '#ff1f1f', fontWeight: '800', fontStyle: 'italic', textTransform: 'uppercase' },
-  { id: 'podp', name: 'Pod P', color: '#ffffff', fontWeight: '700', lineHeight: 1.4 },
+  { id: 'podp', name: 'Pod P', color: '#ffffff', fontWeight: '700', lineHeight: 1.4, backgroundColor: '#000000', backgroundOpacity: 50 },
   { id: 'mozi', name: 'Mozi', color: '#ffffff', stroke: true, strokeColor: '#0a0a0a', strokeWidth: 3, fontWeight: '800' },
   { id: 'popline', name: 'Popline', color: '#0a0a0a', backgroundColor: '#ff1f1f', backgroundOpacity: 100, fontWeight: '800', textTransform: 'uppercase' },
-  { id: 'typewriter', name: 'Typewriter 1-by-1', color: '#ff1f1f', highlightColor: '#ff1f1f', fontWeight: '900', textTransform: 'uppercase', stroke: true, strokeColor: '#0a0a0a', strokeWidth: 5 }
+  { id: 'typewriter', name: 'Typewriter 1-by-1', color: '#ff1f1f', highlightColor: '#ff1f1f', fontWeight: '900', textTransform: 'uppercase', stroke: true, strokeColor: '#0a0a0a', strokeWidth: 5 },
+  { id: 'gradient', name: 'Gradient', color: '#ffffff', fontWeight: '800', fontStyle: 'normal', shadow: true, shadowColor: '#000000', shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, stroke: true, strokeColor: '#000000', strokeWidth: 2 },
+  { id: 'neon', name: 'Neon Glow', color: '#00ff88', fontWeight: '900', shadow: true, shadowColor: '#00ff88', shadowBlur: 12, shadowOffsetX: 0, shadowOffsetY: 0, stroke: true, strokeColor: '#003322', strokeWidth: 2 },
+  { id: 'minimal', name: 'Minimal', color: '#ffffff', fontWeight: '300', letterSpacing: 2, textTransform: 'uppercase' },
+  { id: 'boldpod', name: 'Bold Pod', color: '#ffffff', fontWeight: '900', fontSize: 36, backgroundColor: '#000000', backgroundOpacity: 60, backgroundBorderRadius: 12, stroke: true, strokeColor: '#000000', strokeWidth: 1 },
+  { id: 'retro', name: 'Retro', color: '#ffcc00', fontFamily: 'Impact', fontWeight: '900', stroke: true, strokeColor: '#cc0000', strokeWidth: 4, textTransform: 'uppercase', letterSpacing: 1 },
+  { id: 'elegant', name: 'Elegant', color: '#d4af37', fontFamily: 'Playfair Display', fontWeight: '700', fontStyle: 'italic', lineHeight: 1.1, letterSpacing: 0.5, stroke: true, strokeColor: '#1a1a2e', strokeWidth: 1 }
 ]
 
 const VIRAL_HOOKS = [
@@ -151,7 +157,7 @@ export default function EditorPage() {
   })
 
   // Face Tracking
-  const [faceTrackingEnabled, setFaceTrackingEnabled] = useState(false)
+  const [faceTrackingEnabled, setFaceTrackingEnabled] = useState(true)
   const [faceTrackingSmoothness, setFaceTrackingSmoothness] = useState(50)
   const [faceTrackingZoom, setFaceTrackingZoom] = useState(120)
   const [showFaceBox, setShowFaceBox] = useState(true)
@@ -626,10 +632,23 @@ export default function EditorPage() {
     if (selectedPresetId === 'none') return
 
     const time = currentTime
-    const activeWordIndex = activeTranscript.findIndex(w => !w.deleted && time >= w.startTime && time <= w.endTime)
-    if (activeWordIndex === -1) return
+    const activeWord = activeTranscript.find(w => !w.deleted && time >= w.startTime && time <= w.endTime)
+    if (!activeWord) {
+      let foundAny = false
+      for (let i = activeTranscript.length - 1; i >= 0; i--) {
+        const w = activeTranscript[i]
+        if (!w.deleted && time >= w.startTime && time <= w.endTime) { foundAny = true; break }
+      }
+      if (!foundAny) return
+    }
 
-    const activeWord = activeTranscript[activeWordIndex]
+    const phrases = groupWordsIntoPhrases(activeTranscript)
+    const activePhraseIdx = phrases.findIndex(p => p.some(w => !w.deleted && time >= w.startTime && time <= w.endTime))
+    if (activePhraseIdx === -1) return
+
+    const activePhrase = phrases[activePhraseIdx]
+    const wordsToDraw = activePhrase.filter(w => !w.deleted)
+    if (!wordsToDraw.length) return
 
     const font = subtitleStyle.fontFamily
     const fontSize = subtitleStyle.fontSize
@@ -637,127 +656,165 @@ export default function EditorPage() {
     const textTransform = subtitleStyle.textTransform
     const baseY = (canvas.height * subtitleStyle.positionY) / 100
 
-    ctx.font = `${subtitleStyle.fontStyle || 'normal'} ${fontWeight} ${fontSize}px ${font}`
-
     // 1-by-1 Typewriter style
     if (selectedPresetId === 'typewriter') {
       ctx.save()
       const wordText = textTransform === 'uppercase' ? activeWord.word.toUpperCase() :
                        textTransform === 'lowercase' ? activeWord.word.toLowerCase() : activeWord.word
-      
       ctx.font = `${subtitleStyle.fontStyle || 'normal'} ${fontWeight} ${fontSize * 1.45}px ${font}`
       const wordW = ctx.measureText(wordText).width
       const textX = (canvas.width - wordW) / 2
-
       ctx.strokeStyle = '#000000'
       ctx.lineWidth = 7
       ctx.lineJoin = 'round'
       ctx.strokeText(wordText, textX, baseY)
-
       ctx.fillStyle = subtitleStyle.highlightColor || '#ff1f1f'
       ctx.fillText(wordText, textX, baseY)
       ctx.restore()
       return
     }
 
-    // Standard grouped display
-    const startIndex = Math.max(0, activeWordIndex - 1)
-    const endIndex = Math.min(activeTranscript.length - 1, activeWordIndex + 1)
-    const wordsToDraw = activeTranscript.slice(startIndex, endIndex + 1).filter(w => !w.deleted)
+    // Group words into display lines for multi-line support
+    const charWidth = ctx.measureText('A').width || fontSize * 0.6
+    const displayLines = []
+    let line = []
+    let lineWidth = 0
+    const maxLineWidth = canvas.width * (subtitleStyle.maxWidth || 85) / 100
 
-    if (!wordsToDraw.length) return
-
-    const wordWidths = wordsToDraw.map(w => {
-      let wordText = w.word
-      if (textTransform === 'uppercase') wordText = wordText.toUpperCase()
-      if (textTransform === 'lowercase') wordText = wordText.toLowerCase()
-
-      const isActive = time >= w.startTime && time <= w.endTime
-      const isShortsStyle = ['beasty', 'popline', 'youshaei'].includes(selectedPresetId)
-      const scale = (isActive && isShortsStyle) ? 1.3 : 1.0
-      ctx.font = `${subtitleStyle.fontStyle || 'normal'} ${fontWeight} ${fontSize * scale}px ${font}`
-      const wWidth = ctx.measureText(wordText + ' ').width
-      return { text: wordText, width: wWidth, isActive, scale, wordObj: w }
-    })
-
-    const totalWidth = wordWidths.reduce((acc, cur) => acc + cur.width, 0)
-    const maxWidth = canvas.width * 0.85
-    const autoScale = totalWidth > maxWidth ? maxWidth / totalWidth : 1
-    let startX = (canvas.width - totalWidth * autoScale) / 2
-
-    wordWidths.forEach((ww, index) => {
-      ctx.save()
-      const textX = startX + ww.width * autoScale / 2
-      ctx.translate(textX, baseY)
-
-      let scale = ww.scale * autoScale
-      let color = subtitleStyle.color
-      let stroke = subtitleStyle.stroke
-      let strokeColor = subtitleStyle.strokeColor
-      let strokeWidth = subtitleStyle.strokeWidth
-
-      // Presets — sin fondos, solo colores
-      if (selectedPresetId === 'beasty') {
-        color = ww.isActive ? '#000000' : '#ffffff'
-      } else if (selectedPresetId === 'youshaei') {
-        color = ww.isActive ? '#ff1f1f' : '#ffffff'
-      } else if (selectedPresetId === 'popline') {
-        color = ww.isActive ? '#000000' : '#ffffff'
-        stroke = true
-        strokeColor = '#000000'
-        strokeWidth = 2
-      } else if (selectedPresetId === 'mozi') {
-        color = '#ffffff'
-        stroke = true
-        strokeColor = '#000000'
-        strokeWidth = 4
-      } else if (selectedPresetId === 'deepdiver') {
-        color = '#ffffff'
-        stroke = true
-        strokeColor = 'rgba(0,0,0,0.5)'
-        strokeWidth = 2
-      } else if (selectedPresetId === 'karaoke') {
-        color = ww.isActive ? (subtitleStyle.highlightColor || '#ff1f1f') : '#ffffff'
-        stroke = ww.isActive
-        strokeColor = '#000000'
-        strokeWidth = 3
+    for (const w of wordsToDraw) {
+      let wt = w.word
+      if (textTransform === 'uppercase') wt = wt.toUpperCase()
+      if (textTransform === 'lowercase') wt = wt.toLowerCase()
+      ctx.font = `${subtitleStyle.fontStyle || 'normal'} ${fontWeight} ${fontSize}px ${font}`
+      const ww = ctx.measureText(wt + ' ').width
+      if (lineWidth + ww > maxLineWidth && line.length > 0) {
+        displayLines.push(line)
+        line = [{ word: w, text: wt, width: ww }]
+        lineWidth = ww
+      } else {
+        line.push({ word: w, text: wt, width: ww })
+        lineWidth += ww
       }
+    }
+    if (line.length > 0) displayLines.push(line)
 
-      ctx.font = `${subtitleStyle.fontStyle || 'normal'} ${fontWeight} ${fontSize * scale}px ${font}`
+    const lineHeight = fontSize * (subtitleStyle.lineHeight || 1.3)
+    const totalTextHeight = displayLines.length * lineHeight
+    const startY = baseY - totalTextHeight / 2 + lineHeight / 2
 
-      const tw = ctx.measureText(ww.text).width
+    // Draw each line
+    for (let li = 0; li < displayLines.length; li++) {
+      const lineWords = displayLines[li]
+      const totalLineWidth = lineWords.reduce((a, w) => a + w.width, 0)
+      const autoScale = totalLineWidth > maxLineWidth ? maxLineWidth / totalLineWidth : 1
+      const letterSpacing = (subtitleStyle.letterSpacing || 0)
+      const lineY = startY + li * lineHeight
 
+      // Background for entire line
       if (subtitleStyle.backgroundColor && subtitleStyle.backgroundColor !== 'transparent') {
         const bgOpacity = subtitleStyle.backgroundOpacity != null ? subtitleStyle.backgroundOpacity / 100 : 1
         const bgColor = hexToRgba(subtitleStyle.backgroundColor, bgOpacity)
-        const pad = 10 * scale
-        const bgH = fontSize * scale * 1.3
+        const pad = (subtitleStyle.backgroundPadding || 10) * autoScale
+        const bgH = fontSize * autoScale * 1.3
+        const lineW = totalLineWidth * autoScale + (lineWords.length - 1) * letterSpacing * 0.5
+        let lineX = 0
+        if (subtitleStyle.textAlign === 'left') lineX = pad
+        else if (subtitleStyle.textAlign === 'right') lineX = canvas.width - lineW - pad
+        else lineX = (canvas.width - lineW) / 2
+        ctx.save()
         ctx.fillStyle = bgColor
         ctx.beginPath()
-        ctx.roundRect(-tw / 2 - pad, -bgH * 0.8, tw + pad * 2, bgH + pad * 2, subtitleStyle.backgroundBorderRadius || 6)
+        ctx.roundRect(lineX - pad, lineY - bgH * 0.8, lineW + pad * 2, bgH + pad * 2, subtitleStyle.backgroundBorderRadius || 6)
         ctx.fill()
+        ctx.restore()
       }
 
-      if (subtitleStyle.shadow) {
-        ctx.shadowColor = subtitleStyle.shadowColor || '#000000'
-        ctx.shadowBlur = subtitleStyle.shadowBlur || 4
-        ctx.shadowOffsetX = subtitleStyle.shadowOffsetX || 2
-        ctx.shadowOffsetY = subtitleStyle.shadowOffsetY || 2
+      let startX = 0
+      if (subtitleStyle.textAlign === 'left') startX = 20
+      else if (subtitleStyle.textAlign === 'right') startX = canvas.width - totalLineWidth * autoScale - 20
+      else startX = (canvas.width - totalLineWidth * autoScale) / 2
+
+      for (const lw of lineWords) {
+        ctx.save()
+        const isActive = time >= lw.word.startTime && time <= lw.word.endTime
+        const tw = ctx.measureText(lw.text).width * autoScale
+
+        let color = subtitleStyle.color
+        let stroke = subtitleStyle.stroke
+        let strokeColor = subtitleStyle.strokeColor
+        let strokeWidth = subtitleStyle.strokeWidth
+
+        if (selectedPresetId === 'beasty') {
+          color = isActive ? '#000000' : '#ffffff'
+        } else if (selectedPresetId === 'youshaei') {
+          color = isActive ? '#ff1f1f' : '#ffffff'
+        } else if (selectedPresetId === 'popline') {
+          color = isActive ? '#000000' : '#ffffff'
+          stroke = true
+          strokeColor = '#000000'
+          strokeWidth = 2
+        } else if (selectedPresetId === 'mozi') {
+          color = '#ffffff'
+          stroke = true
+          strokeColor = '#000000'
+          strokeWidth = 4
+        } else if (selectedPresetId === 'deepdiver') {
+          color = '#ffffff'
+          stroke = true
+          strokeColor = 'rgba(0,0,0,0.5)'
+          strokeWidth = 2
+        } else if (selectedPresetId === 'karaoke') {
+          color = isActive ? (subtitleStyle.highlightColor || '#ff1f1f') : '#ffffff'
+          stroke = isActive
+          strokeColor = '#000000'
+          strokeWidth = 3
+        }
+
+        if (subtitleStyle.karaokeHighlight) {
+          color = isActive ? (subtitleStyle.highlightColor || '#ff1f1f') : subtitleStyle.color
+          if (isActive) {
+            stroke = true
+            strokeColor = '#000000'
+            strokeWidth = 3
+          }
+        }
+
+        ctx.font = `${subtitleStyle.fontStyle || 'normal'} ${fontWeight} ${fontSize * autoScale}px ${font}`
+
+        ctx.translate(startX, lineY)
+
+        if (subtitleStyle.shadow) {
+          ctx.shadowColor = subtitleStyle.shadowColor || '#000000'
+          ctx.shadowBlur = subtitleStyle.shadowBlur || 4
+          ctx.shadowOffsetX = subtitleStyle.shadowOffsetX || 2
+          ctx.shadowOffsetY = subtitleStyle.shadowOffsetY || 2
+        }
+
+        if (stroke) {
+          ctx.strokeStyle = strokeColor
+          ctx.lineWidth = strokeWidth
+          ctx.lineJoin = 'round'
+          ctx.strokeText(lw.text, 0, 0)
+        }
+
+        // Active word highlight bar
+        if (isActive && subtitleStyle.highlightColor && selectedPresetId !== 'karaoke') {
+          ctx.fillStyle = subtitleStyle.highlightColor
+          ctx.globalAlpha = 0.2
+          const barPad = 4
+          ctx.beginPath()
+          ctx.roundRect(-barPad, -fontSize * autoScale * 0.65, tw + barPad * 2, fontSize * autoScale * 1.15, 4)
+          ctx.fill()
+          ctx.globalAlpha = 1
+        }
+
+        ctx.fillStyle = color
+        ctx.fillText(lw.text, 0, 0)
+        ctx.restore()
+
+        startX += lw.width * autoScale + (letterSpacing * 0.5)
       }
-
-      if (stroke) {
-        ctx.strokeStyle = strokeColor
-        ctx.lineWidth = strokeWidth
-        ctx.lineJoin = 'round'
-        ctx.strokeText(ww.text, -tw / 2, 0)
-      }
-
-      ctx.fillStyle = color
-      ctx.fillText(ww.text, -tw / 2, 0)
-
-      ctx.restore()
-      startX += ww.width * autoScale
-    })
+    }
   }
 
   const drawSubtitles = useCallback(() => {
@@ -1008,18 +1065,72 @@ export default function EditorPage() {
       color: preset.color || '#ffffff',
       backgroundColor: preset.backgroundColor || 'transparent',
       backgroundOpacity: preset.backgroundOpacity || 0,
+      backgroundBorderRadius: preset.backgroundBorderRadius ?? 6,
       fontWeight: preset.fontWeight || '800',
       textTransform: preset.textTransform || 'none',
       stroke: preset.stroke || false,
       strokeColor: preset.strokeColor || '#000000',
       strokeWidth: preset.strokeWidth || 2,
+      fontFamily: preset.fontFamily || subtitleStyle.fontFamily,
+      fontSize: preset.fontSize || subtitleStyle.fontSize,
       fontStyle: preset.fontStyle || 'normal',
       karaokeHighlight: preset.karaokeHighlight || false,
-      highlightColor: preset.highlightColor || '#ff1f1f'
+      highlightColor: preset.highlightColor || '#ff1f1f',
+      shadow: preset.shadow || false,
+      shadowColor: preset.shadowColor || '#000000',
+      shadowBlur: preset.shadowBlur || 4,
+      shadowOffsetX: preset.shadowOffsetX || 2,
+      shadowOffsetY: preset.shadowOffsetY || 2,
+      lineHeight: preset.lineHeight || 1.2,
+      letterSpacing: preset.letterSpacing ?? 0,
+      textAlign: preset.textAlign || 'center',
     }
     setSubtitleStyle(nextStyle)
     saveToHistory({ subtitleStyle: nextStyle })
   }
+
+  // --- PHRASE GROUPING FOR SUBTITLE TRACKS ---
+  const groupWordsIntoPhrases = (words) => {
+    const active = words.filter(w => !w.deleted).sort((a, b) => a.startTime - b.startTime)
+    const phrases = []
+    let current = []
+    for (const w of active) {
+      if (current.length === 0) {
+        current.push(w)
+      } else {
+        const last = current[current.length - 1]
+        const gap = w.startTime - last.endTime
+        const currentDuration = last.endTime - current[0].startTime
+        if (gap < 1.2 && currentDuration < 8 && current.length < 8) {
+          current.push(w)
+        } else {
+          phrases.push(current)
+          current = [w]
+        }
+      }
+    }
+    if (current.length > 0) phrases.push(current)
+    return phrases
+  }
+
+  useEffect(() => {
+    const phrases = groupWordsIntoPhrases(activeTranscript)
+    const subtitleItems = phrases.map((phrase, i) => {
+      const first = phrase[0]
+      const last = phrase[phrase.length - 1]
+      return {
+        id: `phrase-${i}`,
+        track: 'subtitle',
+        start: first.startTime,
+        duration: last.endTime - first.startTime,
+        title: phrase.map(w => w.word).join(' '),
+        color: '#18181b',
+        type: 'subtitle',
+        words: phrase,
+      }
+    })
+    setTimelineItems(prev => [...prev.filter(x => x.track !== 'subtitle'), ...subtitleItems])
+  }, [activeTranscript])
 
   const handleWordClick = (w) => {
     seekTo(w.startTime)
@@ -1838,16 +1949,64 @@ export default function EditorPage() {
 
                   <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '12px' }}>
                     <h4 style={{ fontSize: '13px', fontWeight: '800', marginBottom: '10px' }}>Typography</h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Font</label>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Font family</label>
                         <select value={subtitleStyle.fontFamily} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, fontFamily: e.target.value })} style={{ width: '100%', backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', borderRadius: '6px', padding: '6px', fontSize: '12px', color: 'var(--cream-text-primary)' }}>
                           {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>
                       </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Size ({subtitleStyle.fontSize}px)</label>
+                          <input type="range" min="12" max="72" value={subtitleStyle.fontSize} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, fontSize: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Weight</label>
+                          <select value={subtitleStyle.fontWeight} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, fontWeight: e.target.value })} style={{ width: '100%', backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', borderRadius: '6px', padding: '6px', fontSize: '11px', color: 'var(--cream-text-primary)' }}>
+                            {['300', '400', '500', '600', '700', '800', '900'].map(w => <option key={w} value={w}>{w}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Style</label>
+                          <select value={subtitleStyle.fontStyle || 'normal'} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, fontStyle: e.target.value })} style={{ width: '100%', backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', borderRadius: '6px', padding: '6px', fontSize: '11px', color: 'var(--cream-text-primary)' }}>
+                            <option value="normal">Normal</option>
+                            <option value="italic">Italic</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Transform</label>
+                          <select value={subtitleStyle.textTransform || 'none'} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, textTransform: e.target.value })} style={{ width: '100%', backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', borderRadius: '6px', padding: '6px', fontSize: '11px', color: 'var(--cream-text-primary)' }}>
+                            <option value="none">None</option>
+                            <option value="uppercase">UPPERCASE</option>
+                            <option value="lowercase">lowercase</option>
+                            <option value="capitalize">Capitalize</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Align</label>
+                          <select value={subtitleStyle.textAlign || 'center'} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, textAlign: e.target.value })} style={{ width: '100%', backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', borderRadius: '6px', padding: '6px', fontSize: '11px', color: 'var(--cream-text-primary)' }}>
+                            <option value="left">Left</option>
+                            <option value="center">Center</option>
+                            <option value="right">Right</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Spacing ({subtitleStyle.letterSpacing}px)</label>
+                          <input type="range" min="0" max="8" step="0.5" value={subtitleStyle.letterSpacing || 0} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, letterSpacing: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                        </div>
+                      </div>
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Size ({subtitleStyle.fontSize}px)</label>
-                        <input type="range" min="12" max="60" value={subtitleStyle.fontSize} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, fontSize: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Line height ({subtitleStyle.lineHeight})</label>
+                        <input type="range" min="0.8" max="2.0" step="0.1" value={subtitleStyle.lineHeight || 1.2} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, lineHeight: parseFloat(e.target.value) })} style={{ width: '100%' }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Max width ({subtitleStyle.maxWidth}%)</label>
+                        <input type="range" min="50" max="100" value={subtitleStyle.maxWidth || 85} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, maxWidth: parseInt(e.target.value) })} style={{ width: '100%' }} />
                       </div>
                       <div>
                         <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Text color</label>
@@ -1855,21 +2014,60 @@ export default function EditorPage() {
                       </div>
                       <div>
                         <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Vertical position ({subtitleStyle.positionY}%)</label>
-                        <input type="range" min="10" max="90" value={subtitleStyle.positionY} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, positionY: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                        <input type="range" min="5" max="95" value={subtitleStyle.positionY} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, positionY: parseInt(e.target.value) })} style={{ width: '100%' }} />
                       </div>
                     </div>
                   </div>
 
                   <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '12px' }}>
                     <h4 style={{ fontSize: '13px', fontWeight: '800', marginBottom: '10px' }}>Effects</h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <div>
                         <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Stroke width ({subtitleStyle.strokeWidth}px)</label>
-                        <input type="range" min="0" max="8" value={subtitleStyle.strokeWidth} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, strokeWidth: parseInt(e.target.value), stroke: parseInt(e.target.value) > 0 })} style={{ width: '100%' }} />
+                        <input type="range" min="0" max="10" step="0.5" value={subtitleStyle.strokeWidth} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, strokeWidth: parseFloat(e.target.value), stroke: parseFloat(e.target.value) > 0 })} style={{ width: '100%' }} />
                       </div>
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Outline color</label>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Stroke color</label>
                         <input type="color" value={subtitleStyle.strokeColor} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, strokeColor: e.target.value })} style={{ width: '100%', height: '30px', border: 'none', cursor: 'pointer' }} />
+                      </div>
+                      <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '8px' }}>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Background color</label>
+                        <input type="color" value={subtitleStyle.backgroundColor === 'transparent' ? '#000000' : subtitleStyle.backgroundColor} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, backgroundColor: e.target.value })} style={{ width: '100%', height: '30px', border: 'none', cursor: 'pointer' }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Opacity ({subtitleStyle.backgroundOpacity}%)</label>
+                          <input type="range" min="0" max="100" value={subtitleStyle.backgroundOpacity} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, backgroundOpacity: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Radius ({subtitleStyle.backgroundBorderRadius}px)</label>
+                          <input type="range" min="0" max="24" value={subtitleStyle.backgroundBorderRadius || 6} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, backgroundBorderRadius: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                        </div>
+                      </div>
+                      <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '8px' }}>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>
+                          <input type="checkbox" checked={subtitleStyle.shadow || false} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, shadow: e.target.checked })} style={{ marginRight: '6px' }} />
+                          Shadow
+                        </label>
+                        {subtitleStyle.shadow && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                            <input type="color" value={subtitleStyle.shadowColor || '#000000'} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, shadowColor: e.target.value })} style={{ width: '100%', height: '25px', border: 'none', cursor: 'pointer' }} />
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                              <div>
+                                <label style={{ fontSize: '9px', color: 'var(--cream-text-secondary)' }}>Blur ({subtitleStyle.shadowBlur}px)</label>
+                                <input type="range" min="0" max="20" value={subtitleStyle.shadowBlur || 4} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, shadowBlur: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                              </div>
+                              <div>
+                                <label style={{ fontSize: '9px', color: 'var(--cream-text-secondary)' }}>Offset Y ({subtitleStyle.shadowOffsetY}px)</label>
+                                <input type="range" min="0" max="10" value={subtitleStyle.shadowOffsetY || 2} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, shadowOffsetY: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '8px' }}>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Highlight color (karaoke)</label>
+                        <input type="color" value={subtitleStyle.highlightColor || '#ff1f1f'} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, highlightColor: e.target.value, karaokeHighlight: true })} style={{ width: '100%', height: '30px', border: 'none', cursor: 'pointer' }} />
                       </div>
                     </div>
                   </div>
@@ -2217,7 +2415,19 @@ export default function EditorPage() {
         </div>
       )}
 
-      <ExportModal />
+      <ExportModal
+        show={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        clipId={clipId}
+        videoSrc={videoSrc}
+        activeTranscript={activeTranscript}
+        subtitleStyle={subtitleStyle}
+        trimStart={trimStart}
+        trimEnd={effectiveTrimEnd}
+        duration={duration}
+        musicTrack={activeMusicTrack}
+        musicVolume={musicVolume}
+      />
 
       {/* --- TOAST --- */}
       {toast && (
