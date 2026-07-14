@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from '../../lib/supabase'
 import { exportClip } from '../../lib/api'
+import ExportModal from './components/ExportModal'
 import ErrorBoundary from '../../lib/error-boundary'
 import './editor.css'
 
@@ -1096,24 +1097,21 @@ export default function EditorPage() {
   }
 
   // --- KEYBOARD LISTENERS ---
-  const handleKeyDown = useCallback((e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-    if (e.key === ' ') {
-      e.preventDefault()
-      togglePlay()
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault()
-      seekTo(currentTime - 2)
-    } else if (e.key === 'ArrowRight') {
-      e.preventDefault()
-      seekTo(currentTime + 2)
-    }
-  }, [currentTime])
-
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleKeyDown])
+    const h = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return
+      const ctrl = e.ctrlKey || e.metaKey
+      if (e.key === ' ') { e.preventDefault(); togglePlay() }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); seekTo(Math.max(0, currentTime - 5)) }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); seekTo(Math.min(duration, currentTime + 5)) }
+      else if (ctrl && (e.key === 'z' || e.key === 'Z') && e.shiftKey) { e.preventDefault(); handleRedo() }
+      else if (ctrl && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); handleUndo() }
+      else if (!ctrl && (e.key === 'Delete' || e.key === 'Backspace')) { e.preventDefault(); handleDeleteSelectedTimelineItem() }
+      else if (ctrl && (e.key === 's' || e.key === 'S')) { e.preventDefault(); handleSave() }
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  })
 
   const togglePlay = () => {
     if (!videoRef.current) return
@@ -1306,7 +1304,7 @@ export default function EditorPage() {
         {/* Left info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.back()}
             style={{
               background: 'none',
               border: 'none',
@@ -2219,60 +2217,7 @@ export default function EditorPage() {
         </div>
       )}
 
-      {/* --- EXPORT MODAL --- */}
-      {showExportModal && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          backdropFilter: 'blur(4px)',
-          zIndex: 200,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <div style={{
-            backgroundColor: 'var(--cream-panel)',
-            border: '1px solid var(--cream-panel-border)',
-            borderRadius: '20px',
-            maxWidth: '440px',
-            width: '90vw',
-            padding: '32px',
-            boxShadow: '0 24px 60px rgba(0,0,0,0.5)'
-          }}>
-            <h3 style={{ fontWeight: '900', fontSize: '20px', color: 'var(--cream-text-primary)', marginBottom: '4px' }}>Export clip</h3>
-            <p style={{ fontSize: '14px', color: 'var(--cream-text-secondary)', marginBottom: '24px' }}>Choose format and quality.</p>
-            
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '10px', fontWeight: '700', color: 'var(--cream-text-secondary)', display: 'block', marginBottom: '6px' }}>Quality</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                {['720p', '1080p', '4K'].map(res => (
-                  <button
-                    key={res} onClick={() => setExportResolution(res)}
-                    style={{
-                      padding: '8px',
-                      backgroundColor: exportResolution === res ? 'var(--cream-accent)' : 'var(--cream-surface)',
-                      color: exportResolution === res ? 'var(--cream-accent-btn-color)' : 'var(--cream-text-primary)',
-                      border: '1px solid var(--cream-panel-border)',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      fontWeight: '800',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {res}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', marginTop: '24px' }}>
-              <button onClick={() => setShowExportModal(false)} style={{ flex: 1, backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', color: 'var(--cream-text-secondary)', borderRadius: '12px', padding: '14px', cursor: 'pointer' }}>Cancel</button>
-              <button onClick={triggerExport} style={{ flex: 1, backgroundColor: 'var(--cream-accent)', color: 'var(--cream-accent-btn-color)', border: 'none', borderRadius: '12px', padding: '14px', fontWeight: '900', cursor: 'pointer' }}>Export</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ExportModal />
 
       {/* --- TOAST --- */}
       {toast && (
@@ -2299,7 +2244,7 @@ export default function EditorPage() {
       <header className='editor-mobile-header'>
         <button
           className='editor-mobile-back'
-          onClick={() => router.push('/dashboard')}
+          onClick={() => router.back()}
           aria-label='Back to dashboard'
         >
           <ArrowLeft size={22} strokeWidth={1.5} />

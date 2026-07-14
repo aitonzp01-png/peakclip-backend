@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { brand, brandGrad, brandDim, brandBorder, brandGlow, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, borderStrong, hoverBg, fonts } from '../../../lib/editor-tokens'
 import { formatTime, aspectRatios } from '../../../lib/utils'
 import useEditorStore from '../store/editorStore'
@@ -7,6 +8,7 @@ import icons from '../../../lib/icons'
 import { updateClip } from '../../../lib/api'
 
 export default function EditorTopBar({ videoRef }) {
+  const router = useRouter()
   const {
     clip, volume, playbackSpeed,
     aspectRatio, user,
@@ -93,7 +95,7 @@ export default function EditorTopBar({ videoRef }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
-        }} onClick={() => window.location.href = '/dashboard'}>
+        }} onClick={() => router.back()}>
           <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
             <rect width="28" height="28" rx="8" fill="url(#brand-grad)" />
             <path d="M14 6L14 22M6 14L22 14" stroke="#050505" strokeWidth="2.5" strokeLinecap="round" />
@@ -252,7 +254,7 @@ export default function EditorTopBar({ videoRef }) {
               }}>
                 <div style={{ fontSize: '12px', color: textPrimary, fontWeight: '600' }}>{user?.email}</div>
               </div>
-              <button onClick={() => { window.location.href = '/dashboard' }}
+              <button onClick={() => { router.push('/dashboard') }}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
                   padding: '10px 12px', border: 'none', background: 'none',

@@ -1,16 +1,15 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { brand, brandGrad, brandDim, brandBorder, bgSecondary, surface, textPrimary, textSecondary, textDim, borderSoft, fonts } from '../../../lib/editor-tokens'
 import useEditorStore from '../store/editorStore'
 import { getSupabaseClient } from '../../../lib/supabase'
-import { generateSRT } from '../../../lib/subtitles'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
 
 const resolutions = [
-  { id: '720p', label: '720p', res: '720×1280', desc: 'Fast export, good quality' },
-  { id: '1080p', label: '1080p', res: '1080×1920', desc: 'Standard HD quality' },
-  { id: '4k', label: '4K', res: '2160×3840', desc: 'Maximum quality' },
+  { id: '720p', label: '720p', res: '720x1280', desc: 'Fast export, good quality' },
+  { id: '1080p', label: '1080p', res: '1080x1920', desc: 'Standard HD quality' },
+  { id: '4k', label: '4K', res: '2160x3840', desc: 'Maximum quality' },
 ]
 
 const formats = [
@@ -20,70 +19,161 @@ const formats = [
 ]
 
 export default function ExportModal() {
-  const { showExportModal, setShowExportModal, saving, exportStatus, exportUrl, clip, user } = useEditorStore()
+  const { showExportModal, setShowExportModal, clip, user } = useEditorStore()
   const [resolution, setResolution] = useState('1080p')
   const [format, setFormat] = useState('mp4')
   const [fps, setFps] = useState(30)
+  const [exporting, setExporting] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [statusText, setStatusText] = useState('')
+  const [resultUrl, setResultUrl] = useState('')
+  const [elapsed, setElapsed] = useState(0)
+  const abortRef = useRef(null)
+  const timerRef = useRef(null)
+
+  useEffect(function cleanup() {
+    return function () {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [])
 
   if (!showExportModal) return null
 
-  const handleExport = async () => {
-    if (!clip?.id || !user) return
+  const formatTime = (s) => {
+    const m = Math.floor(s / 60)
+    const sec = Math.floor(s % 60)
+    return m + ':' + sec.toString().padStart(2, '0')
+  }
 
+  const handleExport = useCallback(async function handleExportFn() {
     const store = useEditorStore.getState()
-    store.setSaving(true)
-    store.setExportStatus('Processing export...')
-    store.setExportUrl('')
+    const {
+      transcript, subtitleStyle, trimStart, trimEnd,
+      musicTrack, musicVolume, activeFilter,
+    } = store
 
-    const { data: { session } } = await getSupabaseClient().auth.getSession()
-    if (!session) {
-      store.setExportStatus('Export failed: not authenticated')
-      store.setSaving(false)
+    const subtitleWords = transcript
+      .filter(function (w) { return !w.deleted && w.word })
+      .map(function (w) {
+        return { word: w.word, start: w.startTime, end: w.endTime, id: w.id }
+      })
+
+    setExporting(true)
+    setProgress(0)
+    setStatusText('Initializing export...')
+    setResultUrl('')
+    setElapsed(0)
+
+    timerRef.current = setInterval(function () {
+      setElapsed(function (prev) { return prev + 1 })
+    }, 1000)
+
+    var sessionResult = await getSupabaseClient().auth.getSession()
+    if (!sessionResult.data?.session) {
+      setStatusText('Not authenticated')
+      setExporting(false)
+      clearInterval(timerRef.current)
       return
     }
 
+    var controller = new AbortController()
+    abortRef.current = controller
+
+    var progressInterval = setInterval(function () {
+      setProgress(function (prev) { return Math.min(85, prev + Math.random() * 3) })
+    }, 2000)
+
     try {
-      const srtContent = generateSRT(store.subtitles || [])
-      const response = await fetch(`${BACKEND_URL}/export`, {
+      setStatusText('Sending video to server...')
+      var response = await fetch(BACKEND_URL + '/export', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + sessionResult.data.session.access_token,
+        },
         body: JSON.stringify({
           clip_id: clip.id,
           video_url: clip.video_url || '',
-          srt_content: srtContent,
-          trim_start: store.trimStart || 0,
-          trim_end: store.trimEnd || 100,
-          subtitle_text: '',
-          subtitle_style: store.subtitleStyle || 'bold-yellow',
-          subtitle_position: store.subtitlePosition || 'bottom',
-          font_size: store.fontSize || 20,
-          watermark_text: store.watermark || '',
-          watermark_position: store.watermarkPosition || 'top-right',
-          music_track: store.music || 'none',
-          music_volume: store.musicVolume || 30,
-          include_audio: store.includeAudio || false,
-          filter_style: store.activeFilter || 'none',
+          trim_start: Math.max(0, Math.min(100, trimStart || 0)),
+          trim_end: Math.max(0, Math.min(100, trimEnd || 100)),
+          subtitle_text: subtitleWords.map(function (w) { return w.word }).join(' '),
+          subtitle_style: 'custom',
+          subtitle_position: subtitleStyle.positionY < 40 ? 'top' : subtitleStyle.positionY > 60 ? 'bottom' : 'bottom',
+          subtitle_style_obj: subtitleStyle,
+          subtitle_words: subtitleWords,
+          font_size: subtitleStyle.fontSize || 28,
+          watermark_text: '',
+          watermark_position: 'top-right',
+          music_track: musicTrack || 'none',
+          music_volume: musicVolume || 30,
+          filter_style: activeFilter || 'none',
           resolution: resolution,
           format: format,
           fps: fps,
-          face_tracking: store.faceTracking || false,
-          face_data: store.faceData || null,
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        store.setExportStatus('Clip exported successfully!')
-        store.setExportUrl(data.video_url)
-      } else {
-        const err = await response.text()
-        store.setExportStatus(`Export failed: ${err.slice(0, 100)}`)
+      clearInterval(progressInterval)
+
+      if (!response.ok) {
+        var errText = await response.text().catch(function () { return 'Export failed' })
+        setStatusText('Export failed: ' + errText.slice(0, 150))
+        setProgress(0)
+        setExporting(false)
+        clearInterval(timerRef.current)
+        return
       }
-    } catch {
-      store.setExportStatus('Export server unavailable. Try again later.')
+
+      setProgress(90)
+      setStatusText('Processing complete, preparing download...')
+
+      var data = await response.json()
+      setProgress(100)
+      setStatusText('Export complete!')
+
+      var downloadUrl = data.video_url
+      setResultUrl(downloadUrl)
+
+      setTimeout(function () {
+        if (downloadUrl) {
+          var a = document.createElement('a')
+          a.href = downloadUrl
+          a.download = 'video_editado.mp4'
+          a.target = '_blank'
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+        }
+      }, 500)
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setStatusText('Export cancelled')
+      } else {
+        setStatusText('Error: ' + (err.message || 'Export failed').slice(0, 100))
+      }
+      setProgress(0)
+    } finally {
+      setExporting(false)
+      clearInterval(progressInterval)
+      clearInterval(timerRef.current)
+      abortRef.current = null
     }
-    store.setSaving(false)
+  }, [clip, resolution, format, fps])
+
+  const handleCancel = function handleCancelFn() {
+    if (abortRef.current) {
+      abortRef.current.abort()
+      abortRef.current = null
+    }
+    setExporting(false)
+    setProgress(0)
+    setStatusText('Cancelled')
+    clearInterval(timerRef.current)
   }
+
+  var estimatedTotal = format === 'mp4' ? 30 : format === 'mov' ? 45 : 60
+  var remaining = Math.max(0, estimatedTotal - elapsed)
 
   return (
     <div style={{
@@ -91,15 +181,14 @@ export default function ExportModal() {
       background: 'rgba(0,0,0,0.3)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       backdropFilter: 'blur(8px)',
-      animation: 'fadeIn 0.2s ease',
-    }} onClick={() => { if (!saving) setShowExportModal(false) }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: '#ffffff', border: `1px solid ${borderSoft}`,
+    }} onClick={function () { if (!exporting && !resultUrl) setShowExportModal(false) }}>
+      <div onClick={function (e) { e.stopPropagation() }} style={{
+        background: '#ffffff', border: '1px solid ' + borderSoft,
         borderRadius: '20px', width: '420px', maxWidth: '90vw',
-        overflow: 'hidden', animation: 'scaleIn 0.25s cubic-bezier(0.16,1,0.3,1)',
+        overflow: 'hidden',
       }}>
         <div style={{
-          padding: '24px', borderBottom: `1px solid ${borderSoft}`,
+          padding: '24px', borderBottom: '1px solid ' + borderSoft,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div>
@@ -107,14 +196,14 @@ export default function ExportModal() {
               Export Clip
             </div>
             <div style={{ fontSize: '11px', color: textDim, marginTop: '2px' }}>
-              Choose your export settings
+              {resultUrl ? 'Your video is ready' : exporting ? 'Processing your video...' : 'Choose your export settings'}
             </div>
           </div>
-          <button onClick={() => { if (!saving) setShowExportModal(false) }}
+          <button onClick={function () { if (!exporting) setShowExportModal(false) }}
             style={{
               width: '32px', height: '32px', borderRadius: '8px',
-              border: `1px solid ${borderSoft}`, background: 'transparent',
-              color: textDim, cursor: saving ? 'not-allowed' : 'pointer', fontSize: '16px',
+              border: '1px solid ' + borderSoft, background: 'transparent',
+              color: textDim, cursor: exporting ? 'not-allowed' : 'pointer', fontSize: '16px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -122,13 +211,13 @@ export default function ExportModal() {
         </div>
 
         <div style={{ padding: '24px' }}>
-          {exportUrl ? (
+          {resultUrl ? (
             <div style={{ textAlign: 'center', padding: '20px 0' }}>
               <div style={{ fontSize: '48px', marginBottom: '12px', color: brand }}>
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               </div>
               <div style={{ fontSize: '16px', fontWeight: '700', color: textPrimary, marginBottom: '8px' }}>Export Complete!</div>
-              <a href={exportUrl} target="_blank" rel="noopener noreferrer"
+              <a href={resultUrl} download="video_editado.mp4"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '8px',
                   padding: '10px 24px', borderRadius: '8px',
@@ -136,16 +225,51 @@ export default function ExportModal() {
                   textDecoration: 'none', fontSize: '13px',
                 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Download Clip
+                Download video_editado.mp4
               </a>
             </div>
-          ) : saving ? (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={brand} strokeWidth="2" className="spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+          ) : exporting ? (
+            <div style={{ padding: '20px 0' }}>
+              <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+                <div style={{
+                  width: '64px', height: '64px', borderRadius: '50%',
+                  border: '3px solid ' + borderSoft,
+                  borderTopColor: brand,
+                  margin: '0 auto 16px',
+                  animation: 'spin 0.8s linear infinite',
+                }} />
+                <div style={{ fontSize: '13px', color: textSecondary, fontWeight: '600' }}>{statusText}</div>
               </div>
-              <div style={{ fontSize: '13px', color: textSecondary }}>Exporting your clip...</div>
-              {exportStatus && <div style={{ fontSize: '11px', color: textDim, marginTop: '8px' }}>{exportStatus}</div>}
+              <div style={{
+                width: '100%', height: '6px', background: borderSoft,
+                borderRadius: '3px', overflow: 'hidden', marginBottom: '8px',
+              }}>
+                <div style={{
+                  width: progress + '%', height: '100%',
+                  background: 'linear-gradient(90deg, ' + brand + ', #a4df2d)',
+                  borderRadius: '3px',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between',
+                fontSize: '10px', color: textDim, fontFamily: fonts.mono,
+              }}>
+                <span>{Math.round(progress)}%</span>
+                <span>~{formatTime(remaining)} remaining</span>
+              </div>
+              <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                <button onClick={handleCancel}
+                  style={{
+                    padding: '8px 20px', borderRadius: '8px',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    background: 'rgba(239,68,68,0.05)',
+                    color: '#ef4444', cursor: 'pointer', fontSize: '11px',
+                    fontFamily: fonts.body, fontWeight: '600',
+                  }}>
+                  Cancel Export
+                </button>
+              </div>
             </div>
           ) : (
             <>
@@ -154,20 +278,22 @@ export default function ExportModal() {
                   Resolution
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {resolutions.map(r => (
-                    <button key={r.id} onClick={() => setResolution(r.id)}
-                      style={{
-                        flex: 1, background: resolution === r.id ? brandDim : bgSecondary,
-                        border: `1px solid ${resolution === r.id ? brand : borderSoft}`,
-                        borderRadius: '10px', padding: '12px 8px', cursor: 'pointer',
-                        textAlign: 'center', transition: 'all 0.15s',
-                      }}>
-                      <div style={{ fontSize: '14px', fontWeight: '700', color: resolution === r.id ? brand : textPrimary, fontFamily: fonts.display }}>
-                        {r.label}
-                      </div>
-                      <div style={{ fontSize: '10px', color: textDim, marginTop: '2px' }}>{r.res}</div>
-                    </button>
-                  ))}
+                  {resolutions.map(function (r) {
+                    return (
+                      <button key={r.id} onClick={function () { setResolution(r.id) }}
+                        style={{
+                          flex: 1, background: resolution === r.id ? brandDim : bgSecondary,
+                          border: '1px solid ' + (resolution === r.id ? brand : borderSoft),
+                          borderRadius: '10px', padding: '12px 8px', cursor: 'pointer',
+                          textAlign: 'center', transition: 'all 0.15s',
+                        }}>
+                        <div style={{ fontSize: '14px', fontWeight: '700', color: resolution === r.id ? brand : textPrimary, fontFamily: fonts.display }}>
+                          {r.label}
+                        </div>
+                        <div style={{ fontSize: '10px', color: textDim, marginTop: '2px' }}>{r.res}</div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -176,20 +302,22 @@ export default function ExportModal() {
                   Format
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {formats.map(f => (
-                    <button key={f.id} onClick={() => setFormat(f.id)}
-                      style={{
-                        flex: 1, background: format === f.id ? brandDim : bgSecondary,
-                        border: `1px solid ${format === f.id ? brand : borderSoft}`,
-                        borderRadius: '10px', padding: '12px 8px', cursor: 'pointer',
-                        textAlign: 'center', transition: 'all 0.15s',
-                      }}>
-                      <div style={{ fontSize: '14px', fontWeight: '700', color: format === f.id ? brand : textPrimary, fontFamily: fonts.display }}>
-                        {f.label}
-                      </div>
-                      <div style={{ fontSize: '10px', color: textDim, marginTop: '2px' }}>{f.desc}</div>
-                    </button>
-                  ))}
+                  {formats.map(function (f) {
+                    return (
+                      <button key={f.id} onClick={function () { setFormat(f.id) }}
+                        style={{
+                          flex: 1, background: format === f.id ? brandDim : bgSecondary,
+                          border: '1px solid ' + (format === f.id ? brand : borderSoft),
+                          borderRadius: '10px', padding: '12px 8px', cursor: 'pointer',
+                          textAlign: 'center', transition: 'all 0.15s',
+                        }}>
+                        <div style={{ fontSize: '14px', fontWeight: '700', color: format === f.id ? brand : textPrimary, fontFamily: fonts.display }}>
+                          {f.label}
+                        </div>
+                        <div style={{ fontSize: '10px', color: textDim, marginTop: '2px' }}>{f.desc}</div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -198,34 +326,34 @@ export default function ExportModal() {
                   Frame Rate
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {[24, 30, 60].map(f => (
-                    <button key={f} onClick={() => setFps(f)}
-                      style={{
-                        flex: 1, background: fps === f ? brandDim : bgSecondary,
-                        border: `1px solid ${fps === f ? brand : borderSoft}`,
-                        borderRadius: '8px', padding: '10px', cursor: 'pointer',
-                        textAlign: 'center', transition: 'all 0.15s',
-                      }}>
-                      <div style={{ fontSize: '14px', fontWeight: '700', color: fps === f ? brand : textPrimary, fontFamily: fonts.display }}>
-                        {f}
-                      </div>
-                      <div style={{ fontSize: '10px', color: textDim }}>fps</div>
-                    </button>
-                  ))}
+                  {[24, 30, 60].map(function (f) {
+                    return (
+                      <button key={f} onClick={function () { setFps(f) }}
+                        style={{
+                          flex: 1, background: fps === f ? brandDim : bgSecondary,
+                          border: '1px solid ' + (fps === f ? brand : borderSoft),
+                          borderRadius: '8px', padding: '10px', cursor: 'pointer',
+                          textAlign: 'center', transition: 'all 0.15s',
+                        }}>
+                        <div style={{ fontSize: '14px', fontWeight: '700', color: fps === f ? brand : textPrimary, fontFamily: fonts.display }}>
+                          {f}
+                        </div>
+                        <div style={{ fontSize: '10px', color: textDim }}>fps</div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
-              {exportStatus && (
+              {statusText && (
                 <div style={{
                   padding: '12px', borderRadius: '8px', marginBottom: '16px',
-                  background: exportStatus.includes('fail') || exportStatus.includes('Error') || exportStatus.includes('error') ? 'rgba(239,68,68,0.1)' : bgSecondary,
-                  border: `1px solid ${
-                    exportStatus.includes('fail') || exportStatus.includes('Error') || exportStatus.includes('error') ? 'rgba(239,68,68,0.2)' : borderSoft
-                  }`,
-                  fontSize: '12px', color: exportStatus.includes('fail') || exportStatus.includes('Error') || exportStatus.includes('error') ? '#ef4444' : textSecondary,
+                  background: statusText.toLowerCase().indexOf('fail') !== -1 || statusText.toLowerCase().indexOf('error') !== -1 ? 'rgba(239,68,68,0.1)' : bgSecondary,
+                  border: '1px solid ' + (statusText.toLowerCase().indexOf('fail') !== -1 || statusText.toLowerCase().indexOf('error') !== -1 ? 'rgba(239,68,68,0.2)' : borderSoft),
+                  fontSize: '12px', color: statusText.toLowerCase().indexOf('fail') !== -1 || statusText.toLowerCase().indexOf('error') !== -1 ? '#ef4444' : textSecondary,
                   display: 'flex', alignItems: 'center', gap: '8px',
                 }}>
-                  <span>{exportStatus}</span>
+                  <span>{statusText}</span>
                 </div>
               )}
             </>
@@ -233,18 +361,18 @@ export default function ExportModal() {
         </div>
 
         <div style={{
-          padding: '16px 24px', borderTop: `1px solid ${borderSoft}`,
+          padding: '16px 24px', borderTop: '1px solid ' + borderSoft,
           display: 'flex', gap: '10px', justifyContent: 'flex-end',
         }}>
-          <button onClick={() => setShowExportModal(false)}
+          <button onClick={function () { setShowExportModal(false) }}
             style={{
-              padding: '10px 20px', borderRadius: '8px', border: `1px solid ${borderSoft}`,
+              padding: '10px 20px', borderRadius: '8px', border: '1px solid ' + borderSoft,
               background: 'transparent', color: textSecondary, cursor: 'pointer',
               fontSize: '12px', fontFamily: fonts.body,
             }}>
-            {saving ? 'Close' : exportUrl ? 'Done' : 'Cancel'}
+            {resultUrl ? 'Done' : exporting ? 'Close' : 'Cancel'}
           </button>
-          {!exportUrl && !saving && (
+          {!resultUrl && !exporting && (
             <button onClick={handleExport}
               style={{
                 padding: '10px 24px', borderRadius: '8px', border: 'none',
