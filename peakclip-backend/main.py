@@ -1612,20 +1612,7 @@ Return JSON with this exact format:
                 # ── Resolve music track (silently skip if missing) ──
                 music_path = resolve_music_path(clip_mood)
 
-                # Step 1: extract raw clip segment via stream copy (no re-encode, <10MB RAM)
-                raw_clip = f"outputs/{job_id}_clip{i+1}_raw.mp4"
-                local_files.append(raw_clip)
-                # Use -noaccurate_seek for faster seeking with -c copy
-                _ffmpeg(['ffmpeg', '-ss', str(clip_start), '-i', video_path,
-                         '-t', str(duration),
-                         '-c', 'copy', '-avoid_negative_ts', '1',
-                         '-y', raw_clip],
-                        f"clip{i+1}_extract", timeout=300)
-                if not (os.path.exists(raw_clip) and os.path.getsize(raw_clip) >= 1024):
-                    print(f"CLIP {i+1}: stream copy failed, falling back to re-encode only")
-                    raw_clip = video_path  # fallback: use full video as input
-
-                # Step 2: re-encode just the short clip at target resolution
+                # -ss before -i seeks to keyframe, then decodes to exact clip_start (frame-accurate)
                 no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
                 local_files.append(no_subs)
                 audio_filter = ""
@@ -1636,6 +1623,7 @@ Return JSON with this exact format:
                     audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
 
                 render_attempts = [
+                    {"scale": "720:1280", "preset": "ultrafast", "crf": "22", "label": "ufast_720p", "b_v": "2000k", "maxrate": "3000k", "bufsize": "6000k"},
                     {"scale": "540:960", "preset": "ultrafast", "crf": "22", "label": "ufast_540p", "b_v": "1500k", "maxrate": "2000k", "bufsize": "4000k"},
                 ]
                 rendered = False
@@ -1643,23 +1631,23 @@ Return JSON with this exact format:
                     scale_flags = f"scale={att['scale']}:force_original_aspect_ratio=increase:flags=lanczos"
                     vid_filter = f"{scale_flags},crop={att['scale']},setsar=1,format=yuv420p"
                     parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-                    cmd = ['ffmpeg', '-i', raw_clip]
+                    cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
                     if music_path:
                         cmd += ['-stream_loop', '-1', '-i', music_path_ff]
-                    # Add SRT as subtitle track (last input so audio indices don't shift)
                     if os.path.exists(srt_path):
                         cmd += ['-i', srt_path]
-                    sub_map = f"-map {2 if music_path else 1}:s" if os.path.exists(srt_path) else ""
-                    cmd += ['-threads', '2',
+                    sub_idx = 2 if music_path else 1 if os.path.exists(srt_path) else None
+                    cmd += ['-t', str(duration),
+                            '-threads', '4',
                             '-filter_complex', ';'.join(parts),
                             '-map', '[v]', '-map', '[a]']
-                    if sub_map:
-                        cmd += sub_map.split()
+                    if sub_idx is not None:
+                        cmd += ['-map', f'{sub_idx}:s']
                     cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p',
                             '-preset', att['preset'], '-crf', att['crf'],
                             '-b:v', att['b_v'], '-maxrate', att['maxrate'], '-bufsize', att['bufsize'],
                             '-c:a', 'aac', '-b:a', '128k']
-                    if sub_map:
+                    if sub_idx is not None:
                         cmd += ['-c:s', 'mov_text', '-disposition:s:0', 'default']
                     cmd += ['-movflags', '+faststart', '-y', no_subs]
                     try:
@@ -1671,19 +1659,20 @@ Return JSON with this exact format:
                         break
 
                 if not rendered:
-                    cmd = ['ffmpeg', '-i', raw_clip]
+                    cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
                     if os.path.exists(srt_path):
                         cmd += ['-i', srt_path]
-                    sub_map = f"-map {1}:s" if os.path.exists(srt_path) else ""
-                    cmd += ['-threads', '2',
+                    sub_idx = 1 if os.path.exists(srt_path) else None
+                    cmd += ['-t', str(duration),
+                            '-threads', '4',
                             '-vf', 'scale=540:960:force_original_aspect_ratio=increase:flags=lanczos,crop=540:960',
                             '-map', '0:v', '-map', '0:a']
-                    if sub_map:
-                        cmd += sub_map.split()
+                    if sub_idx is not None:
+                        cmd += ['-map', f'{sub_idx}:s']
                     cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
                             '-b:v', '1200k', '-maxrate', '1500k', '-bufsize', '3000k',
                             '-c:a', 'aac', '-b:a', '96k']
-                    if sub_map:
+                    if sub_idx is not None:
                         cmd += ['-c:s', 'mov_text', '-disposition:s:0', 'default']
                     cmd += ['-movflags', '+faststart', '-y', no_subs]
                     _ffmpeg(cmd, f"clip{i+1}_raw", timeout=300)
