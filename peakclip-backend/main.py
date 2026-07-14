@@ -1828,48 +1828,12 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         elif req.filter_style == "cool":
             vf = f"{vf},colorbalance=rs=-.2:gs=.1:bs=.3"
 
-        # Subtitles: generate SRT from timed words and burn with subtitles filter
+        # Subtitles: generate SRT from timed words (embedded as track, not burned in)
         srt_path = None
         if req.subtitle_style != "none" and req.subtitle_words:
             srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_subs.srt")
             generate_srt_subtitle(req.subtitle_words, trim_s, trim_s + trim_d, srt_path)
             temp_files.append(srt_path)
-            s = req.subtitle_style_obj or {}
-            fs = s.get('fontSize', req.font_size or 28)
-            color = s.get('color', '#ffffff')
-            borderw = s.get('strokeWidth', 3) if s.get('stroke') else 0
-            stroke_color = s.get('strokeColor', '#000000')
-            bg = s.get('backgroundColor', 'transparent')
-            font_family = s.get('fontFamily', 'DejaVu Sans')
-            # Build force_style — values are inside single quotes, so commas are fine
-            force_parts = [f"Fontname={font_family}", f"Fontsize={fs}"]
-            # ASS color format: &HAABBGGRR (opaque = &H00BBGGRR)
-            c = color.lstrip('#')
-            if len(c) == 6:
-                force_parts.append(f"PrimaryColour=&H00{c[4:6]}{c[2:4]}{c[0:2]}&")
-            else:
-                force_parts.append("PrimaryColour=&H00ffffff&")
-            if borderw > 0:
-                sc = stroke_color.lstrip('#')
-                if len(sc) == 6:
-                    force_parts.append(f"OutlineColour=&H00{sc[4:6]}{sc[2:4]}{sc[0:2]}&")
-                else:
-                    force_parts.append("OutlineColour=&H00000000&")
-                force_parts.append(f"Outline={borderw}")
-                force_parts.append("BorderStyle=1")
-            if bg and bg != 'transparent':
-                b = bg.lstrip('#')
-                bo = s.get('backgroundOpacity', 70)
-                alpha = int(255 * (100 - bo) / 100)
-                if len(b) == 6:
-                    force_parts.append(f"BackColour=&H{alpha:02X}{b[4:6]}{b[2:4]}{b[0:2]}&")
-                else:
-                    force_parts.append(f"BackColour=&H{alpha:02X}000000&")
-                force_parts.append("BorderStyle=4")
-            force_parts.append("Alignment=2")
-            force_str = ",".join(force_parts)
-            sub_path = srt_path.replace("\\", "/")
-            vf = f"{vf},subtitles='{sub_path}':force_style='{force_str}'"
 
         # Watermark via textfile
         if req.watermark_text:
@@ -1941,10 +1905,16 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         ]
         if music_path and os.path.exists(music_path):
             cmd.extend(['-i', music_path])
+        if srt_path:
+            cmd.extend(['-i', srt_path])
+        srt_input_idx = 2 if (music_path and os.path.exists(music_path)) else 1
+
         cmd.extend([
             '-t', str(trim_d),
             '-vf', vf,
             '-r', str(req.fps),
+            '-map', '0:v:0',
+            '-map', '0:a:0?',
             '-c:v', vcodec,
         ])
         if vcodec == 'libx264':
@@ -1954,6 +1924,12 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             '-threads', '2',
             '-c:a', acodec,
         ])
+        if srt_path:
+            cmd.extend([
+                '-map', f'{srt_input_idx}:s:0',
+                '-c:s', 'mov_text',
+                '-disposition:s:0', 'default',
+            ])
         if af_filter:
             cmd.extend(['-filter_complex', af_filter])
         cmd.extend(['-y', output_path])
