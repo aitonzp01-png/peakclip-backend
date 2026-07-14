@@ -1,7 +1,10 @@
 'use client'
 import { getSupabaseClient } from './supabase'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
+if (!BACKEND_URL && typeof window !== 'undefined') {
+  console.error('NEXT_PUBLIC_BACKEND_URL is not set — API calls will fail')
+}
 
 export async function getSessionToken() {
   const { data } = await getSupabaseClient().auth.getSession()

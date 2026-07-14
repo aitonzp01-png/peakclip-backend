@@ -1,0 +1,17 @@
+.git
+.github
+.vercel
+.env
+.env.*
+*.pem
+*.key
+env_vars.txt
+PROXY_NOTAS.txt
+peakclip-backend/.env
+peakclip-backend/cookies.txt
+peakclip-backend/downloads
+peakclip-backend/outputs
+peakclip-backend/thumbnails
+peakclip-backend/__pycache__
+peakclip-app
+node_modules

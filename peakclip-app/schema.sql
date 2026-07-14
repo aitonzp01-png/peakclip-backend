@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS public.users (
   credits INTEGER NOT NULL DEFAULT 3,
   plan TEXT NOT NULL DEFAULT 'free',
   stripe_customer_id TEXT,
+  subscription_id TEXT,
+  subscription_status TEXT DEFAULT 'inactive',
+  current_period_end TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -16,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.credit_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   amount INTEGER NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('purchase', 'consume', 'refund')),
+  type TEXT NOT NULL CHECK (type IN ('purchase', 'consume', 'refund', 'free_grant')),
   job_id UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -33,6 +36,14 @@ CREATE TABLE IF NOT EXISTS public.clips (
   video_url TEXT,
   thumbnail_url TEXT,
   duration NUMERIC,
+  start_time NUMERIC,
+  end_time NUMERIC,
+  transcript JSONB,
+  srt_url TEXT,
+  subtitles_srt TEXT,
+  words_json JSONB,
+  subtitle_style JSONB,
+  brand_settings JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -45,6 +56,8 @@ ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS transcript JSONB;
 ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS srt_url TEXT;
 ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS subtitles_srt TEXT;
 ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS words_json JSONB;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS subtitle_style JSONB;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS brand_settings JSONB;
 
 -- Index for fast user-scoped queries
 CREATE INDEX IF NOT EXISTS idx_clips_user_id ON public.clips(user_id);
@@ -58,7 +71,7 @@ BEGIN
   VALUES (NEW.id, NEW.email, 3, 'free');
 
   INSERT INTO public.credit_transactions (user_id, amount, type)
-  VALUES (NEW.id, 3, 'purchase');
+  VALUES (NEW.id, 3, 'free_grant');
 
   RETURN NEW;
 END;
@@ -73,15 +86,23 @@ CREATE TRIGGER on_auth_user_created
 -- Enable Row Level Security
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clips ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.credit_transactions ENABLE ROW LEVEL SECURITY;
 
--- RLS: users can only read/update their own row
+-- RLS: users can read their own row, update only safe fields
 DROP POLICY IF EXISTS user_read_own ON public.users;
 CREATE POLICY user_read_own ON public.users
   FOR SELECT USING (auth.uid() = id);
 
+-- Only password, email, or profile fields can be updated directly — billing fields are server-only
 DROP POLICY IF EXISTS user_update_own ON public.users;
 CREATE POLICY user_update_own ON public.users
-  FOR UPDATE USING (auth.uid() = id);
+  FOR UPDATE USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+
+-- RLS: credit_transactions — users can only read their own, no client writes
+DROP POLICY IF EXISTS ct_select_own ON public.credit_transactions;
+CREATE POLICY ct_select_own ON public.credit_transactions
+  FOR SELECT USING (auth.uid() = user_id);
 
 -- RLS: clips are scoped to the owning user
 DROP POLICY IF EXISTS clips_select_own ON public.clips;
@@ -100,7 +121,7 @@ DROP POLICY IF EXISTS clips_delete_own ON public.clips;
 CREATE POLICY clips_delete_own ON public.clips
   FOR DELETE USING (auth.uid() = user_id);
 
--- Storage RLS: clips bucket
+-- Storage RLS: clips bucket — owner-only access via object path prefix
 DROP POLICY IF EXISTS "Users can read their own clips" ON storage.objects;
 CREATE POLICY "Users can read their own clips" ON storage.objects
   FOR SELECT USING (

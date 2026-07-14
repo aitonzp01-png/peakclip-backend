@@ -3,6 +3,15 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from '../../../lib/supabase'
 
+const ALLOWED_REDIRECTS = ['/dashboard', '/editor', '/dashboard?tab=settings']
+
+function isValidRedirect(path) {
+  if (!path || !path.startsWith('/')) return false
+  // Allow /editor?id=xxx even if not in ALLOWED_REDIRECTS
+  if (path.startsWith('/editor')) return true
+  return ALLOWED_REDIRECTS.includes(path.split('?')[0])
+}
+
 export default function AuthCallback() {
   const router = useRouter()
   const [msg, setMsg] = useState('Authenticating...')
@@ -12,6 +21,7 @@ export default function AuthCallback() {
       try {
         const supabase = getSupabaseClient()
         const params = new URLSearchParams(window.location.search)
+        const redirectTo = isValidRedirect(params.get('redirect_to')) ? params.get('redirect_to') : '/dashboard'
 
         // Check PKCE code flow
         const code = params.get('code')
@@ -19,7 +29,6 @@ export default function AuthCallback() {
           setMsg('Exchanging code...')
           const { error } = await supabase.auth.exchangeCodeForSession(code)
           if (!error) {
-            const redirectTo = params.get('redirect_to') || '/dashboard'
             router.push(redirectTo)
             return
           }
@@ -35,7 +44,6 @@ export default function AuthCallback() {
             refresh_token: h.get('refresh_token'),
           })
           if (!error) {
-            const redirectTo = params.get('redirect_to') || '/dashboard'
             router.push(redirectTo)
             return
           }
@@ -45,7 +53,6 @@ export default function AuthCallback() {
         setMsg('Checking session...')
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
         if (session) {
-          const redirectTo = params.get('redirect_to') || '/dashboard'
           router.push(redirectTo)
           return
         }

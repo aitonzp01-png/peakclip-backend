@@ -61,6 +61,7 @@ export default function Register() {
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     });
 
     if (signUpError) {
@@ -69,25 +70,22 @@ export default function Register() {
       return;
     }
 
-    // Sign in to get a session, then auto-confirm email
+    // Try immediate sign-in (works if auto-confirm is enabled, or just created)
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email: form.email,
       password: form.password,
     });
 
-    if (signInError) {
-      setMessage({ type: 'error', text: signInError.message });
-      setLoading(false);
-      return;
+    if (signInData?.session) {
+      const token = signInData.session.access_token;
+      if (signUpData.user?.id && token) {
+        await autoConfirmEmail(signUpData.user.id, token);
+      }
+      router.replace('/dashboard');
+    } else {
+      // Email confirmation is required — show notice
+      setMessage({ type: 'success', text: 'Account created! Check your email to confirm your sign-in.' });
     }
-
-    const user = signInData.user;
-    const token = signInData.session?.access_token;
-    if (user && token) {
-      await autoConfirmEmail(user.id, token);
-    }
-
-    router.replace('/dashboard');
     setLoading(false);
   };
 

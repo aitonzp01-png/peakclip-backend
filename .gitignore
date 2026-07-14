@@ -28,6 +28,10 @@ yarn-error.log*
 # vercel
 .vercel
 .env.vercel
+env_vars.txt
+PROXY_NOTAS.txt
+cookies.txt
+peakclip-backend/cookies.txt
 
 # typescript
 *.tsbuildinfo

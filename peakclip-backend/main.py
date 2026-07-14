@@ -10,14 +10,6 @@ from pydantic import BaseModel
 from supabase import create_client
 import os
 
-# ── OAuth2 plugin purge: MUST run before any yt-dlp import ──
-import importlib.util
-_patch_path = os.path.join(os.path.dirname(__file__), 'ytdlp_oauth2_patch.py')
-if os.path.exists(_patch_path):
-    _spec = importlib.util.spec_from_file_location("ytdlp_oauth2_patch", _patch_path)
-    if _spec and _spec.loader:
-        _spec.loader.exec_module(importlib.util.module_from_spec(_spec))
-
 import yt_dlp
 import openai
 try:
@@ -51,8 +43,8 @@ from contextlib import asynccontextmanager
 BGUTIL_POT_AVAILABLE = False
 
 # ── OAuth2 auto-refresh ───────────────────────────────────────
-YOUTUBE_OAUTH_CLIENT_ID = os.environ.get("YOUTUBE_OAUTH_CLIENT_ID", "861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com")
-YOUTUBE_OAUTH_CLIENT_SECRET = os.environ.get("YOUTUBE_OAUTH_CLIENT_SECRET", "SboVhoG9s0rNafixCSGGKXAT")
+YOUTUBE_OAUTH_CLIENT_ID = os.environ.get("YOUTUBE_OAUTH_CLIENT_ID", "")
+YOUTUBE_OAUTH_CLIENT_SECRET = os.environ.get("YOUTUBE_OAUTH_CLIENT_SECRET", "")
 
 OAUTH_TOKEN_CACHE_DIR = os.path.expanduser('~/.cache/yt-dlp')
 OAUTH_TOKEN_PATH = os.path.join(OAUTH_TOKEN_CACHE_DIR, 'youtube_oauth2.json')
@@ -220,25 +212,16 @@ def upload_with_verification(supabase, bucket, file_path, storage_path, content_
             print(f"UPLOAD: PUT exception: {type(e).__name__}: {e}")
             return None
 
-        public_url = f"{supabase_url}/storage/v1/object/public/{bucket}/{storage_path}"
-        # Verify the uploaded object is accessible
-        for attempt in range(3):
-            try:
-                r = httpx.head(public_url, timeout=15, follow_redirects=True)
-                if r.status_code < 400:
-                    cl = r.headers.get('content-length')
-                    if cl is None or int(cl) > 0:
-                        print(f"UPLOAD: verified OK (status={r.status_code}, size={cl})")
-                        return public_url
-                    else:
-                        print(f"UPLOAD: verification {attempt+1} - zero content-length")
-                else:
-                    print(f"UPLOAD: verification {attempt+1} - status={r.status_code}")
-            except Exception as e:
-                print(f"UPLOAD: verification {attempt+1} error: {e}")
-            time.sleep(2)
-        print(f"UPLOAD: verification failed, accepting anyway")
-        return public_url
+        # Generate signed URL (bucket is private)
+        try:
+            signed = supabase.storage.from_(bucket).create_signed_url(storage_path, 86400)
+            if signed and signed.get("signedURL"):
+                print(f"UPLOAD: signed URL generated (24h)")
+                return signed["signedURL"]
+        except Exception as e:
+            print(f"UPLOAD: signed URL error: {e}")
+        # Fallback: store object path so caller can generate a signed URL on-demand
+        return storage_path
     except Exception as e:
         print(f"UPLOAD: outer error: {type(e).__name__}: {e}")
         import traceback
@@ -249,41 +232,7 @@ def upload_with_verification(supabase, bucket, file_path, storage_path, content_
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    # First: pip uninstall the OAuth2 plugin so upgrades don't revive it
-    try:
-        result = subprocess.run([sys.executable, '-m', 'pip', 'uninstall', '-y', 'yt-dlp-youtube-oauth2'],
-                                capture_output=True, text=True, timeout=30)
-        if result.returncode == 0:
-            print(f"OAUTH2: pip uninstalled yt-dlp-youtube-oauth2")
-    except Exception as e:
-        print(f"OAUTH2: pip uninstall failed: {e}")
-    # Try to update yt-dlp to latest nightly/master version first, then stable
-    try:
-        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall',
-                                 'yt-dlp[default] @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz'],
-                                capture_output=True, text=True, timeout=180)
-        print(f"yt-dlp master install: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
-        if result.returncode != 0:
-            result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp[default]'],
-                                    capture_output=True, text=True, timeout=120)
-            print(f"yt-dlp stable install: {result.returncode == 0} {result.stdout.strip()[-120:]} {result.stderr.strip()[-120:]}")
-        ver = subprocess.run([sys.executable, '-m', 'yt_dlp', '--version'], capture_output=True, text=True, timeout=10)
-        print(f"yt-dlp version: {ver.stdout.strip() or 'unknown'}")
-    except Exception as e:
-        print(f"yt-dlp upgrade skipped: {e}")
-    # Patch was already applied at module import (before yt_dlp import).
-    # Clear the extractor cache one more time to be safe
-    try:
-        import yt_dlp_plugins.extractor
-        cache_dir = os.path.join(os.path.dirname(yt_dlp_plugins.extractor.__file__), '__pycache__')
-        if os.path.isdir(cache_dir):
-            for fname in os.listdir(cache_dir):
-                if 'youtubeoauth' in fname:
-                    os.remove(os.path.join(cache_dir, fname))
-                    print(f"OAUTH2: deleted cache {fname}")
-            shutil.rmtree(cache_dir, ignore_errors=True)
-    except Exception as e:
-        print(f"OAUTH2 CACHE CLEAR: {e}")
+    print(f"yt-dlp version: {yt_dlp.version.__version__}")
     # Write YouTube cookies from env var if provided
     try:
         cookie_b64 = os.environ.get('YOUTUBE_COOKIES_B64')
@@ -354,7 +303,7 @@ async def run_migrations():
                 INSERT INTO public.users (id, email, credits, plan)
                 VALUES (NEW.id, NEW.email, 3, 'free');
                 INSERT INTO public.credit_transactions (user_id, amount, type)
-                VALUES (NEW.id, 3, 'purchase');
+                VALUES (NEW.id, 3, 'free_grant');
                 RETURN NEW;
             END;
             $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -466,20 +415,43 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ
                 except Exception:
                     pass
 
-    # Ensure 'clips' storage bucket exists and is public
+    # Ensure credit_transactions type constraint includes free_grant
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            headers = {
+                "apikey": service_key,
+                "Authorization": f"Bearer {service_key}",
+                "Content-Type": "application/json",
+            }
+            alter_ct_sql = "ALTER TABLE public.credit_transactions DROP CONSTRAINT IF EXISTS credit_transactions_type_check; ALTER TABLE public.credit_transactions ADD CONSTRAINT credit_transactions_type_check CHECK (type IN ('purchase', 'consume', 'refund', 'free_grant'));"
+            for url in [
+                f"https://{project_ref}.supabase.co/sql/v1/query",
+                f"https://api.supabase.com/v1/projects/{project_ref}/database/query",
+            ]:
+                try:
+                    res = await client.post(url, json={"query": alter_ct_sql}, headers=headers)
+                    if res.status_code == 200:
+                        print(f"SQL MIGRATION: credit_transactions type constraint updated (OK)")
+                        break
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"SQL MIGRATION credit_transactions constraint error: {e}")
+
+    # Ensure 'clips' storage bucket exists and is private
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             update_res = await client.put(
                 f"https://{project_ref}.supabase.co/storage/v1/bucket/clips",
-                json={"public": True},
+                json={"public": False},
                 headers={"Authorization": f"Bearer {service_key}", "Content-Type": "application/json"},
             )
             if update_res.status_code in (200, 201, 204):
-                print("STORAGE BUCKET 'clips' is public (OK)")
+                print("STORAGE BUCKET 'clips' is private (OK)")
             elif update_res.status_code == 400:
                 create_res = await client.post(
                     f"https://{project_ref}.supabase.co/storage/v1/bucket",
-                    json={"id": "clips", "name": "clips", "public": True, "file_size_limit": 524288000, "allowed_mime_types": ["video/mp4", "video/webm", "video/quicktime", "image/jpeg", "image/png", "text/plain", "application/json"]},
+                    json={"id": "clips", "name": "clips", "public": False, "file_size_limit": 524288000, "allowed_mime_types": ["video/mp4", "video/webm", "video/quicktime", "image/jpeg", "image/png", "text/plain", "application/json"]},
                     headers={"Authorization": f"Bearer {service_key}", "Content-Type": "application/json"},
                 )
                 if create_res.status_code in (200, 201):
@@ -730,14 +702,23 @@ def validate_video_url(url: str):
     parsed = urlparse(url)
     if parsed.scheme not in ("https", "http"):
         raise HTTPException(status_code=400, detail="URL must use http or https")
+    hostname = parsed.hostname or ""
+    # Block private/reserved IPs and internal hostnames
     private_patterns = [
         r"^localhost$", r"^127\.", r"^10\.", r"^172\.(1[6-9]|2\d|3[01])\.",
         r"^192\.168\.", r"^0\.0\.0\.0$", r"^::1$", r"^metadata\.",
+        r"^169\.254\.", r"^fc00:", r"^fd00:", r"^fe80:", r"^\[::",
+        r"^0x7f", r"^0177",
     ]
-    hostname = parsed.hostname or ""
     for pattern in private_patterns:
-        if re.match(pattern, hostname):
+        if re.match(pattern, hostname, re.IGNORECASE):
             raise HTTPException(status_code=400, detail="URL pointing to private network not allowed")
+    # Block internal DNS names commonly used for SSRF
+    internal_suffixes = [".internal", ".local", ".localhost", ".lan", ".corp", ".cloud"]
+    host_lower = hostname.lower()
+    for suffix in internal_suffixes:
+        if host_lower.endswith(suffix) or host_lower == suffix.lstrip("."):
+            raise HTTPException(status_code=400, detail="URL pointing to internal hostname not allowed")
     return url
 
 
@@ -2030,6 +2011,11 @@ async def create_checkout_session(data: dict, user: dict = Depends(get_current_u
     if not price_id:
         raise HTTPException(status_code=400, detail="Missing price_id")
 
+    # Only allow known price IDs — reject arbitrary prices
+    allowed_prices = {os.getenv("STRIPE_PRICE_CREATOR", "price_creator"), os.getenv("STRIPE_PRICE_PRO", "price_pro")}
+    if price_id not in allowed_prices:
+        raise HTTPException(status_code=400, detail="Invalid price_id")
+
     try:
         # Find or create Stripe Customer
         user_result = supabase.table("users").select("email,stripe_customer_id").eq("id", user_id).execute()
@@ -2244,7 +2230,23 @@ async def upload_video(
             )
     except Exception as e:
         print(f"UPLOAD {job_id}: Whisper transcription failed: {e}")
-        raise Exception(f"Transcription failed: {e}")
+        # Try Groq fallback
+        if groq_client:
+            try:
+                with open(audio_path, 'rb') as f:
+                    transcript = groq_client.audio.transcriptions.create(
+                        model="whisper-large-v3-turbo",
+                        file=f,
+                        response_format="verbose_json",
+                        timestamp_granularities=["word", "segment"],
+                        timeout=120,
+                    )
+                print(f"UPLOAD {job_id}: Groq Whisper OK")
+            except Exception as groq_e:
+                print(f"UPLOAD {job_id}: Groq transcription also failed: {groq_e}")
+                raise Exception(f"Transcription failed: {e}")
+        else:
+            raise Exception(f"Transcription failed: {e}")
 
     words_data = []
     if hasattr(transcript, 'words') and transcript.words:
@@ -2262,15 +2264,13 @@ async def upload_video(
 
     jobs_store[job_id] = {"status": "processing", "message": "Analyzing viral moments with AI..."}
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        response_format={"type": "json_object"},
-        messages=[{
-            "role": "system",
-            "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
-        }, {
-            "role": "user",
-            "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
+    response = None
+    analysis_body = [{
+        "role": "system",
+        "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
+    }, {
+        "role": "user",
+        "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
 {segments_text}
@@ -2287,10 +2287,33 @@ Return JSON with this exact format:
   {{"start": 120.0, "end": 150.5, "title": "Clip title 2", "reason": "Why viral", "mood": "funny", "hook_score": 8}},
   {{"start": 200.0, "end": 230.0, "title": "Clip title 3", "reason": "Why viral", "mood": "emotional", "hook_score": 7}}
 ]}}"""
-        }]
-    )
+    }]
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o", response_format={"type": "json_object"},
+            timeout=120, messages=analysis_body,
+        )
+    except Exception as e:
+        err_msg = str(e).lower()
+        if ("insufficient_quota" in err_msg or "429" in err_msg or "exceeded" in err_msg or "incorrect api key" in err_msg or "401" in err_msg or "invalid_api_key" in err_msg) and groq_client:
+            print(f"UPLOAD {job_id}: OpenAI quota/key error for analysis, using Groq...")
+            try:
+                response = groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    response_format={"type": "json_object"},
+                    timeout=60, messages=analysis_body,
+                )
+            except Exception as groq_ai_err:
+                print(f"UPLOAD {job_id}: Groq analysis also failed: {groq_ai_err}")
+                response = None
+        else:
+            print(f"UPLOAD {job_id}: AI analysis error: {e}")
+            response = None
 
-    raw = response.choices[0].message.content.strip()
+    if response and response.choices:
+        raw = response.choices[0].message.content.strip()
+    else:
+        raw = None
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[-1].rsplit("\n", 1)[0]
         if raw.endswith("```"):
@@ -2452,7 +2475,8 @@ Return JSON with this exact format:
 @app.get("/admin/oauth-status")
 async def admin_oauth_status(request: Request):
     auth = request.headers.get('X-Admin-Key', '')
-    if auth != os.environ.get('ADMIN_KEY', 'peakclip-admin-2026'):
+    admin_key = os.environ.get('ADMIN_KEY')
+    if not admin_key or auth != admin_key:
         raise HTTPException(403, "Unauthorized")
     if not os.path.exists(OAUTH_TOKEN_PATH):
         return {"status": "no_tokens", "message": "No OAuth2 tokens configured. Set YOUTUBE_OAUTH_TOKENS_B64"}
@@ -2475,7 +2499,8 @@ async def admin_oauth_status(request: Request):
 @app.post("/admin/refresh-oauth")
 async def admin_refresh_oauth(request: Request):
     auth = request.headers.get('X-Admin-Key', '')
-    if auth != os.environ.get('ADMIN_KEY', 'peakclip-admin-2026'):
+    admin_key = os.environ.get('ADMIN_KEY')
+    if not admin_key or auth != admin_key:
         raise HTTPException(403, "Unauthorized")
     setup_oauth2_tokens()
     if not os.path.exists(OAUTH_TOKEN_PATH):

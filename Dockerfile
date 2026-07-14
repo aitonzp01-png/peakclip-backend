@@ -5,10 +5,7 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
     wget \
-    git \
     build-essential \
-    nodejs \
-    npm \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -18,19 +15,18 @@ WORKDIR /app
 COPY peakclip-backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar yt-dlp master y plugins
-RUN pip install --no-cache-dir \
-    "yt-dlp[default] @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz" \
-    yt-dlp-youtube-oauth2 \
-    yt-dlp-ejs \
-    opencv-python-headless
-
 # Instalar Playwright y Chromium
 RUN pip install --no-cache-dir playwright && \
     playwright install chromium --with-deps
 
 # Copiar todo el backend
 COPY peakclip-backend/ .
+
+RUN useradd --create-home --uid 10001 peakclip && \
+    mkdir -p downloads outputs thumbnails music && \
+    chown -R peakclip:peakclip /app
+
+USER peakclip
 
 EXPOSE 8080
 
