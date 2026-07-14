@@ -2419,7 +2419,7 @@ export default function EditorPage() {
         show={showExportModal}
         onClose={() => setShowExportModal(false)}
         clipId={clipId}
-        videoSrc={videoSrc}
+        videoSrc={displayVideoSrc || videoSrc}
         activeTranscript={activeTranscript}
         subtitleStyle={subtitleStyle}
         trimStart={trimStart}

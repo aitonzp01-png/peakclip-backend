@@ -44,6 +44,7 @@ export default function ExportModal({
   const [resultUrl, setResultUrl] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const [downloadProgress, setDownloadProgress] = useState(0)
+  const [downloadPhase, setDownloadPhase] = useState('') // 'preparing' | 'ready'
   const abortRef = useRef(null)
   const timerRef = useRef(null)
 
@@ -152,9 +153,10 @@ export default function ExportModal({
         return
       }
 
-      setProgress(88)
+      setProgress(95)
       setStage('downloading')
-      setStatusText('Processing complete, downloading video...')
+      setDownloadPhase('preparing')
+      setStatusText('Processing complete, preparing download...')
 
       const data = await response.json()
       const downloadUrl = data.video_url || data.url
@@ -166,54 +168,21 @@ export default function ExportModal({
         return
       }
 
-      // Download with progress tracking
-      setStatusText('Downloading video...')
-      const dlResponse = await fetch(downloadUrl, { signal: controller.signal })
-      if (!dlResponse.ok) {
-        setStatusText('Download failed: unable to fetch video')
-        setStage('error')
-        setExporting(false)
-        clearInterval(timerRef.current)
-        return
-      }
-
-      const contentLength = dlResponse.headers.get('content-length')
-      const totalBytes = contentLength ? parseInt(contentLength, 10) : 0
-      const reader = dlResponse.body.getReader()
-      const chunks = []
-      let downloadedBytes = 0
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        chunks.push(value)
-        downloadedBytes += value.length
-        if (totalBytes > 0) {
-          setDownloadProgress(Math.round((downloadedBytes / totalBytes) * 100))
-        } else {
-          setDownloadProgress((prev) => Math.min(99, prev + 2))
-        }
-        setProgress(88 + Math.round((downloadedBytes / (totalBytes || downloadedBytes * 2)) * 12))
-      }
-
-      const blob = new Blob(chunks, { type: 'video/mp4' })
-      const objectUrl = URL.createObjectURL(blob)
-
-      setResultUrl(objectUrl)
+      setResultUrl(downloadUrl)
       setProgress(100)
-      setDownloadProgress(100)
       setStage('done')
+      setDownloadPhase('ready')
       setStatusText('Export complete!')
 
-      // auto-download after brief delay
-      setTimeout(() => {
-        const a = document.createElement('a')
-        a.href = objectUrl
-        a.download = 'video_editado.mp4'
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-      }, 600)
+      // Trigger download directly — no in-memory buffering
+      const a = document.createElement('a')
+      a.href = downloadUrl
+      a.download = 'video_editado.mp4'
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
     } catch (err) {
       if (err.name === 'AbortError') {
         setStatusText('Export cancelled')
@@ -310,9 +279,14 @@ export default function ExportModal({
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               </div>
               <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--cream-text-primary)', marginBottom: '8px' }}>Export Complete!</div>
+              <div style={{ fontSize: '11px', color: 'var(--cream-text-secondary)', marginBottom: '12px' }}>
+                Your video is ready. Click below to download.
+              </div>
               <a
                 href={resultUrl}
                 download="video_editado.mp4"
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: '8px',
                   padding: '10px 24px', borderRadius: '8px',
