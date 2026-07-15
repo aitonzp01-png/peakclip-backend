@@ -647,7 +647,8 @@ export default function EditorPage() {
     if (activePhraseIdx === -1) return
 
     const activePhrase = phrases[activePhraseIdx]
-    const wordsToDraw = activePhrase.filter(w => !w.deleted)
+    // Show words progressively: only words that have started + 1 upcoming
+    const wordsToDraw = activePhrase.filter(w => !w.deleted && w.startTime <= time + 1.0)
     if (!wordsToDraw.length) return
 
     const font = subtitleStyle.fontFamily
@@ -736,8 +737,17 @@ export default function EditorPage() {
 
       for (const lw of lineWords) {
         ctx.save()
+        const isPast = time > lw.word.endTime
         const isActive = time >= lw.word.startTime && time <= lw.word.endTime
+        const isFuture = time < lw.word.startTime
         const tw = ctx.measureText(lw.text).width * autoScale
+
+        // Future (unspoken) words are dim
+        if (isFuture) {
+          ctx.globalAlpha = 0.2
+        } else if (isPast) {
+          ctx.globalAlpha = 0.6
+        }
 
         let color = subtitleStyle.color
         let stroke = subtitleStyle.stroke
@@ -799,13 +809,14 @@ export default function EditorPage() {
 
         // Active word highlight bar
         if (isActive && subtitleStyle.highlightColor && selectedPresetId !== 'karaoke') {
+          ctx.save()
           ctx.fillStyle = subtitleStyle.highlightColor
           ctx.globalAlpha = 0.2
           const barPad = 4
           ctx.beginPath()
           ctx.roundRect(-barPad, -fontSize * autoScale * 0.65, tw + barPad * 2, fontSize * autoScale * 1.15, 4)
           ctx.fill()
-          ctx.globalAlpha = 1
+          ctx.restore()
         }
 
         ctx.fillStyle = color

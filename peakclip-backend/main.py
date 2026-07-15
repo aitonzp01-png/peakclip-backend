@@ -1898,6 +1898,40 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             vcodec = "libx264"
             acodec = "aac"
 
+        # Burn subtitles into video frames using subtitles filter
+        if srt_path:
+            style = (req.subtitle_style_obj or {})
+            font_name = style.get('fontFamily', 'Montserrat').replace(' ', '')
+            font_size = max(12, min(72, style.get('fontSize', 28)))
+            primary_color = style.get('color', '#ffffff').lstrip('#')
+            outline_color = style.get('strokeColor', '#000000').lstrip('#')
+            outline_width = max(0, min(10, style.get('strokeWidth', 2)))
+            margin_v = max(0, min(200, 80 - int(style.get('positionY', 78) * 0.8)))
+
+            # Convert HTML color (#RRGGBB) to ASS color (&HAABBGGRR)
+            def to_ass_color(hex_color):
+                h = hex_color.lstrip('#')
+                if len(h) == 3:
+                    h = ''.join(c*2 for c in h)
+                r = h[0:2]
+                g = h[2:4]
+                b = h[4:6]
+                return f"&H00{b}{g}{r}"
+
+            ass_primary = to_ass_color(primary_color)
+            ass_outline = to_ass_color(outline_color)
+
+            force_style = (
+                f"FontName={font_name},"
+                f"FontSize={font_size},"
+                f"PrimaryColour={ass_primary},"
+                f"OutlineColour={ass_outline},"
+                f"Outline={outline_width},"
+                f"MarginV={margin_v},"
+                f"BorderStyle=1"
+            )
+            vf = f"{vf},subtitles={srt_path}:force_style='{force_style}'"
+
         cmd = [
             'ffmpeg',
             '-i', source_path,
@@ -1905,9 +1939,6 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         ]
         if music_path and os.path.exists(music_path):
             cmd.extend(['-i', music_path])
-        if srt_path:
-            cmd.extend(['-i', srt_path])
-        srt_input_idx = 2 if (music_path and os.path.exists(music_path)) else 1
 
         cmd.extend([
             '-t', str(trim_d),
@@ -1924,12 +1955,6 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             '-threads', '2',
             '-c:a', acodec,
         ])
-        if srt_path:
-            cmd.extend([
-                '-map', f'{srt_input_idx}:s:0',
-                '-c:s', 'mov_text',
-                '-disposition:s:0', 'default',
-            ])
         if af_filter:
             cmd.extend(['-filter_complex', af_filter])
         cmd.extend(['-y', output_path])
