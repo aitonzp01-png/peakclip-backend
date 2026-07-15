@@ -1365,7 +1365,7 @@ export default function EditorPage() {
   }
 
   // --- PHRASE GROUPING FOR SUBTITLE TRACKS ---
-  const groupWordsIntoPhrases = (words) => {
+  function groupWordsIntoPhrases(words) {
     const active = words.filter(w => !w.deleted).sort((a, b) => a.startTime - b.startTime)
     const phrases = []
     let current = []
