@@ -1217,7 +1217,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
         visitor_data = os.environ.get('YOUTUBE_VISITOR_DATA')
 
         last_err = None
-        max_attempts = 8
+        max_attempts = 16
         proxy_disabled = False
         for attempt in range(max_attempts):
             check_deadline("download")
@@ -1255,13 +1255,21 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                         'Accept-Language': 'en-US,en;q=0.5',
                     },
+                    'youtube_include_dash_manifest': False,
+                    'youtube_include_hls_manifest': False,
+                    'source_address': '0.0.0.0',
                 }
                 if imp:
                     ydl_opts['impersonate'] = imp
                 if proxy_url and not proxy_disabled:
                     ydl_opts['proxy'] = proxy_url
-                if cookies_file:
+                # On attempts 8+ skip cookies — stale cookies block more than they help
+                if cookies_file and attempt < 8:
                     ydl_opts['cookies'] = cookies_file
+                # OAuth2 for download — bypasses many YouTube IP blocks
+                if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH):
+                    ydl_opts['use_oauth'] = True
+                    ydl_opts['token_path'] = OAUTH_TOKEN_PATH
                 extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
                 if po_token:
                     extractor_args['youtube']['po_token'] = po_token
@@ -1271,7 +1279,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     extractor_args['youtubepot-bgutilhttp'] = {}
                 if extractor_args['youtube'] or 'youtubepot-bgutilhttp' in extractor_args:
                     ydl_opts['extractor_args'] = extractor_args
-                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled else 'no'} cookies={'yes' if cookies_file else 'no'}")
+                use_cookies = bool(cookies_file and attempt < 8)
+                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled else 'no'} cookies={'yes' if use_cookies else 'no'} oauth={'yes' if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH) else 'no'}")
                 # Run yt-dlp in a subprocess so we can hard-kill it on timeout
                 ytdlp_script = os.path.join(os.path.dirname(__file__), 'ytdlp_download.py')
                 sub_opts = dict(ydl_opts)
@@ -1357,7 +1366,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
             if not fallback_success or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
                 print(f"Job {job_id}: all fallback downloaders failed")
                 ytdlp_err = str(last_err)[:200] if last_err else "unknown"
-                jobs_store[job_id] = {"status": "error", "message": "Download failed. Railway's IP is blocked by YouTube. Solutions: (1) Export fresh cookies from your browser and set YOUTUBE_COOKIES_B64. (2) Set YOUTUBE_PROXY with residential proxy credentials. (3) Self-host the backend on a residential connection."}
+                jobs_store[job_id] = {"status": "error", "message": "Download failed. Railway's IP is blocked by YouTube. Solutions: (1) Run peakclip-backend/oauth_setup.py locally and set YOUTUBE_OAUTH_TOKENS_B64 on Railway. (2) Export fresh cookies from your browser and set YOUTUBE_COOKIES_B64. (3) Set YOUTUBE_PROXY with residential proxy credentials. (4) Self-host the backend on a residential connection."}
                 return
 
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio...", "user_id": user_id}
