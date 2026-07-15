@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from '../../lib/supabase'
 import { exportClip } from '../../lib/api'
@@ -45,7 +45,19 @@ const SUBTITLE_PRESETS = [
   { id: 'minimal', name: 'Minimal', color: '#ffffff', fontWeight: '300', letterSpacing: 2, textTransform: 'uppercase' },
   { id: 'boldpod', name: 'Bold Pod', color: '#ffffff', fontWeight: '900', fontSize: 36, backgroundColor: '#000000', backgroundOpacity: 60, backgroundBorderRadius: 12, stroke: true, strokeColor: '#000000', strokeWidth: 1 },
   { id: 'retro', name: 'Retro', color: '#ffcc00', fontFamily: 'Impact', fontWeight: '900', stroke: true, strokeColor: '#cc0000', strokeWidth: 4, textTransform: 'uppercase', letterSpacing: 1 },
-  { id: 'elegant', name: 'Elegant', color: '#d4af37', fontFamily: 'Playfair Display', fontWeight: '700', fontStyle: 'italic', lineHeight: 1.1, letterSpacing: 0.5, stroke: true, strokeColor: '#1a1a2e', strokeWidth: 1 }
+  { id: 'elegant', name: 'Elegant', color: '#d4af37', fontFamily: 'Playfair Display', fontWeight: '700', fontStyle: 'italic', lineHeight: 1.1, letterSpacing: 0.5, stroke: true, strokeColor: '#1a1a2e', strokeWidth: 1 },
+  { id: 'matrix', name: 'Matrix', color: '#00ff41', fontFamily: 'Courier New', fontWeight: '900', backgroundColor: '#000000', backgroundOpacity: 60, textTransform: 'uppercase', letterSpacing: 3 },
+  { id: 'cyber', name: 'Cyberpunk', color: '#ff00ff', fontFamily: 'Orbitron', fontWeight: '900', stroke: true, strokeColor: '#00ffff', strokeWidth: 2, textTransform: 'uppercase', letterSpacing: 2 },
+  { id: 'sunset', name: 'Sunset', color: '#ff6b35', fontWeight: '800', fontStyle: 'italic', backgroundColor: '#1a0a00', backgroundOpacity: 70, backgroundBorderRadius: 8 },
+  { id: 'ocean', name: 'Ocean', color: '#7dd3fc', fontWeight: '700', backgroundColor: '#020617', backgroundOpacity: 70, backgroundBorderRadius: 10, letterSpacing: 1 },
+  { id: 'candy', name: 'Candy', color: '#ff69b4', fontWeight: '800', backgroundColor: '#1a0011', backgroundOpacity: 60, stroke: true, strokeColor: '#ffffff', strokeWidth: 1 },
+  { id: 'newspaper', name: 'Newspaper', color: '#0a0a0a', fontFamily: 'Times New Roman', fontWeight: '700', backgroundColor: '#f5f0e8', backgroundOpacity: 100, backgroundBorderRadius: 2, lineHeight: 1.1 },
+  { id: 'shadowdeep', name: 'Deep Shadow', color: '#ffffff', fontWeight: '900', shadow: true, shadowColor: '#000000', shadowBlur: 16, shadowOffsetX: 4, shadowOffsetY: 4, letterSpacing: 0.5 },
+  { id: 'vaporwave', name: 'Vaporwave', color: '#f472b6', fontWeight: '800', stroke: true, strokeColor: '#2dd4bf', strokeWidth: 2, textTransform: 'uppercase', letterSpacing: 4 },
+  { id: 'tiktok', name: 'TikTok', color: '#ffff00', fontWeight: '900', backgroundColor: '#000000', backgroundOpacity: 100, stroke: true, strokeColor: '#000000', strokeWidth: 2, textTransform: 'uppercase' },
+  { id: 'spotify', name: 'Spotify', color: '#1ed760', fontFamily: 'Circular', fontWeight: '900', backgroundColor: '#121212', backgroundOpacity: 80, letterSpacing: 0.5 },
+  { id: 'glitch', name: 'Glitch', color: '#ffffff', fontWeight: '900', stroke: true, strokeColor: '#ff0040', strokeWidth: 3, textTransform: 'uppercase', letterSpacing: 1 },
+  { id: 'glass', name: 'Glass', color: '#ffffff', fontWeight: '600', backgroundColor: 'rgba(255,255,255,0.1)', backgroundOpacity: 30, backgroundBorderRadius: 16, letterSpacing: 1 }
 ]
 
 const VIRAL_HOOKS = [
@@ -748,6 +760,102 @@ export default function EditorPage() {
         letterSpacing: '0.5px',
         lineHeight: 1.1,
       },
+      matrix: {
+        color: '#00ff41',
+        fontWeight: 900,
+        fontFamily: 'Courier New, monospace',
+        textShadow: '0 0 8px #00ff41, 0 0 2px #003300',
+        letterSpacing: '2px',
+      },
+      cyber: {
+        color: '#ff00ff',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+        fontFamily: 'Orbitron, sans-serif',
+        textShadow: '-2px 0 #00ffff, 2px 0 #00ffff',
+        letterSpacing: '2px',
+      },
+      sunset: {
+        color: '#ff6b35',
+        fontWeight: 800,
+        fontStyle: 'italic',
+        textShadow: '0 2px 12px rgba(255,107,53,0.6)',
+        background: 'linear-gradient(180deg, rgba(26,10,0,0.85), rgba(60,20,0,0.85))',
+        padding: '4px 12px',
+        borderRadius: '8px',
+      },
+      ocean: {
+        color: '#7dd3fc',
+        fontWeight: 700,
+        textShadow: '0 0 10px rgba(125,211,252,0.5)',
+        background: 'linear-gradient(135deg, rgba(2,6,23,0.85), rgba(15,23,42,0.85))',
+        padding: '4px 14px',
+        borderRadius: '10px',
+        letterSpacing: '1px',
+      },
+      candy: {
+        color: '#ff69b4',
+        fontWeight: 800,
+        textShadow: '-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff',
+        WebkitTextStroke: '0.5px white',
+      },
+      newspaper: {
+        color: '#0a0a0a',
+        fontWeight: 700,
+        fontFamily: 'Times New Roman, serif',
+        background: '#f5f0e8',
+        padding: '2px 8px',
+        borderRadius: '2px',
+        lineHeight: 1.1,
+      },
+      shadowdeep: {
+        color: '#ffffff',
+        fontWeight: 900,
+        textShadow: '4px 4px 16px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,0.5)',
+        letterSpacing: '0.5px',
+      },
+      vaporwave: {
+        color: '#f472b6',
+        fontWeight: 800,
+        textTransform: 'uppercase',
+        textShadow: '-2px -2px 0 #2dd4bf, 2px 2px 0 #2dd4bf',
+        letterSpacing: '4px',
+      },
+      tiktok: {
+        color: '#ffff00',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+        background: '#000000',
+        padding: '3px 10px',
+        WebkitTextStroke: '1px #000',
+        textShadow: '0 0 4px rgba(255,255,0,0.5)',
+      },
+      spotify: {
+        color: '#1ed760',
+        fontWeight: 900,
+        fontFamily: 'Circular, sans-serif',
+        textShadow: '0 0 6px rgba(30,215,96,0.4)',
+        background: 'rgba(18,18,18,0.85)',
+        padding: '3px 10px',
+        borderRadius: '4px',
+      },
+      glitch: {
+        color: '#ffffff',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+        textShadow: '-2px 0 #ff0040, 2px 0 #00ffff',
+        letterSpacing: '1px',
+      },
+      glass: {
+        color: '#ffffff',
+        fontWeight: 600,
+        backdropFilter: 'blur(10px)',
+        background: 'rgba(255,255,255,0.08)',
+        padding: '4px 16px',
+        borderRadius: '16px',
+        border: '1px solid rgba(255,255,255,0.15)',
+        letterSpacing: '1px',
+      },
     }
     const base = presets[presetId] || presets.youshaei
     return {
@@ -966,13 +1074,19 @@ export default function EditorPage() {
     }
   }
 
+  // Computed phrase text from current time for DOM overlay
+  const phraseText = useMemo(() => {
+    if (selectedPresetId === 'none' || !activeTranscript.length) return ''
+    const phrases = groupWordsIntoPhrases(activeTranscript)
+    const phrase = phrases.find(p => p.some(w => !w.deleted && currentTime >= w.startTime && currentTime <= w.endTime))
+    if (!phrase) return ''
+    return phrase.map(w => w.word).join(' ')
+  }, [activeTranscript, currentTime, selectedPresetId])
+
   const handleTimeUpdate = useCallback(() => {
     if (!videoRef.current) return
-    const t = videoRef.current.currentTime
-    setCurrentTime(t)
-    const word = activeTranscript.find(w => !w.deleted && t >= w.startTime && t <= w.endTime)
-    setSubtitleText(word ? word.word : '')
-  }, [activeTranscript])
+    setCurrentTime(videoRef.current.currentTime)
+  }, [])
 
   const drawSubtitles = useCallback((videoTime) => {
     drawSubtitlesOnCanvas(subtitleCanvasRef.current, videoTime)
@@ -1979,11 +2093,11 @@ export default function EditorPage() {
                 pointerEvents: 'none',
                 zIndex: 10,
               }}>
-                {selectedPresetId !== 'none' && subtitleText && (
-                  <span style={getSubtitleStyle(subtitleText, selectedPresetId, subtitleStyle)}>
-                    {subtitleText}
-                  </span>
-                )}
+  {selectedPresetId !== 'none' && phraseText && (
+    <span style={getSubtitleStyle(phraseText, selectedPresetId, subtitleStyle)}>
+      {phraseText}
+    </span>
+  )}
               </div>
 
               {/* Face Tracker */}

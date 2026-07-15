@@ -2,39 +2,39 @@
 
 /* Inject palette variables — PeakClip Red Palette */
 :root {
-  --cream-bg: #f6f6f2;
-  --cream-panel: #ffffff;
-  --cream-panel-border: #e8e8e3;
-  --cream-surface: #fafafa;
-  --cream-surface-border: #e8e8e3;
-  --cream-hover: #f0f0ea;
-  --cream-text-primary: #0f0f0f;
-  --cream-text-secondary: #6b6b6b;
-  --cream-placeholder: #8a8a8a;
+  --cream-bg: #0f0f0f;
+  --cream-panel: #18181b;
+  --cream-panel-border: #27272a;
+  --cream-surface: #1f1f23;
+  --cream-surface-border: #2a2a2e;
+  --cream-hover: #27272a;
+  --cream-text-primary: #fafafa;
+  --cream-text-secondary: #a1a1aa;
+  --cream-placeholder: #52525b;
   --cream-accent: #ff1f1f;
-  --cream-primary-btn-bg: #0f0f0f;
-  --cream-primary-btn-color: #ffffff;
+  --cream-primary-btn-bg: #ffffff;
+  --cream-primary-btn-color: #0f0f0f;
   --cream-accent-btn-bg: #ff1f1f;
   --cream-accent-btn-color: #ffffff;
-  --cream-focus-border: #0f0f0f;
+  --cream-focus-border: #ffffff;
   --cream-focus-detail: #ff1f1f;
   --cream-success: #22c55e;
   --cream-error: #ef4444;
-  --cream-tl-bg: #fafafa;
-  --cream-tl-border: #e8e8e3;
+  --cream-tl-bg: #0a0a0a;
+  --cream-tl-border: #1f1f23;
   --cream-waveform: rgba(255,31,31,0.6);
   --cream-playhead: #ff1f1f;
   --cream-bbox: #ff1f1f;
   --cream-badge-new-bg: #ff1f1f;
   --cream-badge-new-text: #ffffff;
-  --cream-zinc-50: #fafafa;
-  --cream-zinc-100: #f4f4f5;
-  --cream-zinc-200: #e4e4e7;
+  --cream-zinc-50: #1a1a1a;
+  --cream-zinc-100: #27272a;
+  --cream-zinc-200: #3f3f46;
   --cream-zinc-400: #a1a1aa;
-  --cream-zinc-500: #71717a;
-  --cream-zinc-600: #52525b;
-  --cream-zinc-700: #3f3f46;
-  --cream-zinc-800: #27272a;
+  --cream-zinc-500: #d4d4d8;
+  --cream-zinc-600: #e4e4e7;
+  --cream-zinc-700: #f4f4f5;
+  --cream-zinc-800: #fafafa;
 }
 
 html, body {
