@@ -624,14 +624,14 @@ export default function EditorPage() {
   }
 
   // --- CANVAS SUBTITLE RENDERING ENGINE ---
-  const drawSubtitlesOnCanvas = (canvas) => {
+  const drawSubtitlesOnCanvas = (canvas, timeOverride) => {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
     if (selectedPresetId === 'none') return
 
-    const time = currentTime
+    const time = timeOverride != null ? timeOverride : currentTime
     const activeWord = activeTranscript.find(w => !w.deleted && time >= w.startTime && time <= w.endTime)
     if (!activeWord) {
       let foundAny = false
@@ -828,10 +828,10 @@ export default function EditorPage() {
     }
   }
 
-  const drawSubtitles = useCallback(() => {
-    drawSubtitlesOnCanvas(subtitleCanvasRef.current)
-    drawSubtitlesOnCanvas(mobileSubtitleCanvasRef.current)
-  }, [activeTranscript, currentTime, subtitleStyle, selectedPresetId])
+  const drawSubtitles = useCallback((videoTime) => {
+    drawSubtitlesOnCanvas(subtitleCanvasRef.current, videoTime)
+    drawSubtitlesOnCanvas(mobileSubtitleCanvasRef.current, videoTime)
+  }, [activeTranscript, subtitleStyle, selectedPresetId])
 
   const hexToRgba = (hex, opacity) => {
     if (hex.startsWith('rgba')) return hex
@@ -914,7 +914,7 @@ export default function EditorPage() {
       } else if (videoRef.current) {
         time = videoRef.current.currentTime
       }
-      drawSubtitlesRef.current()
+      drawSubtitlesRef.current(time)
       if (Math.abs(time - lastTimeUpdateRef.current) > 0.05) {
         setCurrentTime(time)
         lastTimeUpdateRef.current = time
@@ -1140,7 +1140,7 @@ export default function EditorPage() {
         words: phrase,
       }
     })
-    setTimelineItems(prev => [...prev.filter(x => x.track !== 'subtitle'), ...subtitleItems])
+    setTimelineItems(prev => [...prev.filter(x => !x.id.startsWith('phrase-')), ...subtitleItems])
   }, [activeTranscript])
 
   const handleWordClick = (w) => {

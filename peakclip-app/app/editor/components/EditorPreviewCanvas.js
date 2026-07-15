@@ -12,6 +12,7 @@ export default function EditorPreviewCanvas({ videoRef }) {
   const animFrameRef = useRef(null)
   const modelsLoadingRef = useRef(false)
   const detectFaceRef = useRef(null)
+  const liveTimeRef = useRef(0)
 
   const {
     aspectRatio, setAspectRatio,
@@ -77,8 +78,9 @@ export default function EditorPreviewCanvas({ videoRef }) {
     const ctx = canvas.getContext('2d')
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
+    const time = liveTimeRef.current
     const activeWords = transcript.filter(w =>
-      !w.deleted && currentTime >= w.startTime && currentTime <= w.endTime
+      !w.deleted && time >= w.startTime && time <= w.endTime
     )
     if (!activeWords.length) return
 
@@ -140,7 +142,7 @@ export default function EditorPreviewCanvas({ videoRef }) {
 
       if (subtitleStyle.karaokeHighlight) {
         line.forEach((word, wi) => {
-          const isActive = currentTime >= word.startTime && currentTime <= word.endTime
+          const isActive = time >= word.startTime && time <= word.endTime
           ctx.fillStyle = isActive ? (subtitleStyle.highlightColor || brand) : subtitleStyle.color
           let tw = word.word
           if (subtitleStyle.textTransform === 'uppercase') tw = tw.toUpperCase()
@@ -164,19 +166,22 @@ export default function EditorPreviewCanvas({ videoRef }) {
       ctx.shadowOffsetY = 0
       ctx.shadowBlur = 0
     })
-  }, [transcript, currentTime, subtitleStyle, subtitleEnabled])
+  }, [transcript, subtitleStyle, subtitleEnabled])
 
   useEffect(() => {
     if (!subtitleEnabled || !transcript.length) return
     let running = true
     const loop = () => {
       if (!running) return
+      if (videoRef?.current) {
+        liveTimeRef.current = videoRef.current.currentTime
+      }
       renderSubtitles()
       animFrameRef.current = requestAnimationFrame(loop)
     }
     animFrameRef.current = requestAnimationFrame(loop)
     return () => { running = false; if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current) }
-  }, [subtitleEnabled, transcript.length, renderSubtitles])
+  }, [videoRef, subtitleEnabled, transcript.length, renderSubtitles])
 
   const ratios = {
     '9:16': { w: 360, h: 640 },

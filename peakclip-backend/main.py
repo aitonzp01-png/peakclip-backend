@@ -1624,15 +1624,16 @@ def process_video_background(job_id: str, user_id: str, url: str):
             "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
         }, {
             "role": "user",
-            "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
+            "content": f"""Analyze this transcript and return exactly 3 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
 {segments_text}
 
 RULES:
-- Each clip MUST be 30-60 seconds long (ideal for shorts).
+- You MUST return exactly 3 clips. Never fewer.
+- Each clip MUST be 30-60 seconds long (ideal for shorts). Prefer longer clips near 45-60s.
 - Prioritize: strong hooks in first 3s, emotional peaks, surprising twists, humor, high-energy moments, or controversy.
-- Align clip boundaries with audio energy peaks when possible.
+- Distribute clips across the video timeline — don't cluster them all at the beginning.
 - Classify mood as: epic, hype, chill, funny, emotional, suspense.
 - Include a hook_score from 1-10 ranking virality potential.
 
@@ -1687,6 +1688,21 @@ Return JSON with this exact format:
         # Sort clips by hook_score descending (best viral moment first)
         clips_data["clips"].sort(key=lambda c: c.get("hook_score", 5), reverse=True)
 
+        # Pad to exactly 3 clips if AI returned fewer
+        if len(clips_data.get("clips", [])) < 3:
+            existing = clips_data.get("clips", [])[:]
+            last_end = max((c.get("end", 0) for c in existing), default=0)
+            total_duration = words_data[-1].endTime if words_data else 600
+            step = (total_duration - last_end) / max(1, 3 - len(existing))
+            for j in range(len(existing), 3):
+                pad_start = last_end + (j - len(existing) + 1) * step
+                pad_end = min(pad_start + 45, total_duration)
+                clips_data["clips"].append({
+                    "start": pad_start, "end": pad_end,
+                    "title": f"Highlight {j+1}", "reason": "Auto-selected highlight",
+                    "mood": "chill", "hook_score": 5
+                })
+
         output_clips = []
         temp_files_extra = []
 
@@ -1714,7 +1730,7 @@ Return JSON with this exact format:
                 clip_start = clip["start"]
                 raw_duration = clip["end"] - clip["start"]
                 # Enforce shorts-friendly duration: 15-60 seconds
-                duration = max(15, min(raw_duration, 60))
+                duration = max(30, min(raw_duration, 60))
                 clip["end"] = clip_start + duration
                 clip_mood = clip.get("mood", "chill")
 
@@ -1737,8 +1753,8 @@ Return JSON with this exact format:
                     audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
 
                 render_attempts = [
+                    {"scale": "1080:1920", "preset": "medium", "crf": "18", "label": "med_1080p", "b_v": "6000k", "maxrate": "8000k", "bufsize": "12000k"},
                     {"scale": "720:1280", "preset": "medium", "crf": "18", "label": "med_720p", "b_v": "4000k", "maxrate": "6000k", "bufsize": "8000k"},
-                    {"scale": "540:960", "preset": "medium", "crf": "18", "label": "med_540p", "b_v": "2500k", "maxrate": "4000k", "bufsize": "6000k"},
                 ]
                 rendered = False
                 for att in render_attempts:
@@ -2408,14 +2424,16 @@ async def upload_video(
         "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
     }, {
         "role": "user",
-        "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
+        "content": f"""Analyze this transcript and return exactly 3 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
 {segments_text}
 
 RULES:
-- Each clip MUST be 30-60 seconds long (ideal for shorts).
+- You MUST return exactly 3 clips. Never fewer.
+- Each clip MUST be 30-60 seconds long (ideal for shorts). Prefer longer clips near 45-60s.
 - Prioritize: strong hooks in first 3s, emotional peaks, surprising twists, humor, high-energy moments, or controversy.
+- Distribute clips across the video timeline — don't cluster them all at the beginning.
 - Classify mood as: epic, hype, chill, funny, emotional, suspense.
 - Include a hook_score from 1-10 ranking virality potential.
 
@@ -2452,12 +2470,33 @@ Return JSON with this exact format:
         raw = response.choices[0].message.content.strip()
     else:
         raw = None
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[-1].rsplit("\n", 1)[0]
-        if raw.endswith("```"):
-            raw = raw[:-3]
-    clips_data = json.loads(raw)
+    if raw:
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1].rsplit("\n", 1)[0]
+            if raw.endswith("```"):
+                raw = raw[:-3]
+        try:
+            clips_data = json.loads(raw)
+        except json.JSONDecodeError:
+            clips_data = {"clips": []}
+    else:
+        clips_data = {"clips": []}
     clips_data["clips"].sort(key=lambda c: c.get("hook_score", 5), reverse=True)
+
+    # Pad to exactly 3 clips if AI returned fewer
+    if len(clips_data["clips"]) < 3:
+        existing = clips_data["clips"][:]
+        last_end = max((c["end"] for c in existing), default=0)
+        total_duration = words_data[-1].endTime if words_data else 600
+        step = (total_duration - last_end) / max(1, 3 - len(existing))
+        for j in range(len(existing), 3):
+            pad_start = last_end + (j - len(existing) + 1) * step
+            pad_end = min(pad_start + 45, total_duration)
+            clips_data["clips"].append({
+                "start": pad_start, "end": pad_end,
+                "title": f"Highlight {j+1}", "reason": "Auto-selected highlight",
+                "mood": "chill", "hook_score": 5
+            })
 
     output_clips = []
     temp_files_extra = []
@@ -2467,7 +2506,7 @@ Return JSON with this exact format:
             output_path = f"outputs/{job_id}_clip{i+1}.mp4"
             clip_start = clip["start"]
             raw_duration = clip["end"] - clip["start"]
-            duration = max(15, min(raw_duration, 60))
+            duration = max(30, min(raw_duration, 60))
             clip["end"] = clip_start + duration
             clip_mood = clip.get("mood", "chill")
 
