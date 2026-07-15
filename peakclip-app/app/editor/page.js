@@ -83,6 +83,7 @@ export default function EditorPage() {
   const [clipStart, setClipStart] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [subtitleText, setSubtitleText] = useState('')
 
   // Mobile editor state
   const [mobileTab, setMobileTab] = useState('home')
@@ -175,6 +176,14 @@ export default function EditorPage() {
   const [selectedTimelineItemId, setSelectedTimelineItemId] = useState('vid-main')
   const [draggingTimelineItem, setDraggingTimelineItem] = useState(null)
   const timelineDragMoved = useRef(false)
+  const timelineRef = useRef(null)
+  const handleTimelineClick = useCallback((e) => {
+    if (!timelineRef.current || duration <= 0) return
+    const rect = timelineRef.current.getBoundingClientRect()
+    const clickX = e.clientX - rect.left
+    const pct = Math.max(0, Math.min(1, clickX / rect.width))
+    seekTo(pct * duration)
+  }, [duration])
 
   // Text overlays
   const [textOverlays, setTextOverlays] = useState([])
@@ -287,14 +296,14 @@ export default function EditorPage() {
             if (transcriptSource) {
               const parsed = typeof transcriptSource === 'string' ? JSON.parse(transcriptSource) : transcriptSource
               if (Array.isArray(parsed) && parsed.length > 0) {
-                rawTranscript = parsed.map((w, i) => ({
-                  id: `w-${i}`,
-                  word: w.word || '',
-                  startTime: (w.startTime ?? w.start ?? 0) - clipOffset,
-                  endTime: (w.endTime ?? w.end ?? 0) - clipOffset,
-                  deleted: false,
-                  favorite: false
-                }))
+                  rawTranscript = parsed.map((w, i) => ({
+                    id: `w-${i}`,
+                    word: w.word || '',
+                    startTime: Math.max(0, (w.startTime ?? w.start ?? 0) - clipOffset),
+                    endTime: Math.max(0, (w.endTime ?? w.end ?? 0) - clipOffset),
+                    deleted: false,
+                    favorite: false
+                  }))
               }
             }
             // Fallback: parse subtitles_srt if words_json was empty/null
@@ -624,6 +633,135 @@ export default function EditorPage() {
   }
 
   // --- CANVAS SUBTITLE RENDERING ENGINE ---
+  const getSubtitleStyle = (text, presetId, style) => {
+    const fs = style?.fontSize || 22
+    const presets = {
+      karaoke: {
+        color: style?.highlightColor || '#ff1f1f',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+        textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000',
+        WebkitTextStroke: '1px black',
+        letterSpacing: '0.5px',
+        lineHeight: 1.2,
+      },
+      beasty: {
+        color: style?.highlightColor || '#ffeb3b',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+        textShadow: '-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000',
+        letterSpacing: '1px',
+        lineHeight: 1.1,
+      },
+      deepdiver: {
+        color: '#ffffff',
+        fontWeight: 700,
+        background: 'rgba(0,0,60,0.75)',
+        padding: '4px 12px',
+        borderRadius: '4px',
+        lineHeight: 1.3,
+      },
+      youshaei: {
+        color: style?.highlightColor || '#ff1f1f',
+        fontWeight: 600,
+        fontStyle: 'italic',
+        textTransform: 'uppercase',
+        textShadow: '0 2px 12px rgba(0,0,0,0.9)',
+        letterSpacing: '0.3px',
+        lineHeight: 1.4,
+      },
+      podp: {
+        color: '#000000',
+        fontWeight: 700,
+        background: '#ffffff',
+        padding: '3px 10px',
+        borderRadius: '3px',
+        lineHeight: 1.3,
+      },
+      mozi: {
+        color: '#ffffff',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+        background: 'linear-gradient(135deg, #7c3aed, #db2777)',
+        padding: '4px 14px',
+        borderRadius: '6px',
+        letterSpacing: '0.5px',
+      },
+      popline: {
+        color: '#fde047',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+        background: '#000000',
+        border: '2px solid #fde047',
+        padding: '3px 10px',
+        borderRadius: '4px',
+        letterSpacing: '1px',
+      },
+      typewriter: {
+        color: style?.highlightColor || '#ff1f1f',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+        textShadow: '-3px -3px 0 #000, 3px -3px 0 #000',
+        WebkitTextStroke: '1px black',
+        letterSpacing: '0.5px',
+      },
+      gradient: {
+        color: '#ffffff',
+        fontWeight: 800,
+        textShadow: '0 0 6px #000, 2px 2px 4px #000',
+        letterSpacing: '0.5px',
+      },
+      neon: {
+        color: '#00ff88',
+        fontWeight: 900,
+        textShadow: '0 0 12px #00ff88, 0 0 4px #003322',
+        WebkitTextStroke: '1px #003322',
+      },
+      minimal: {
+        color: '#ffffff',
+        fontWeight: 300,
+        textTransform: 'uppercase',
+        letterSpacing: '2px',
+      },
+      boldpod: {
+        color: '#ffffff',
+        fontWeight: 900,
+        background: 'rgba(0,0,0,0.6)',
+        padding: '4px 12px',
+        borderRadius: '12px',
+        lineHeight: 1.3,
+      },
+      retro: {
+        color: '#ffcc00',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+        fontFamily: 'Impact',
+        textShadow: '-3px -3px 0 #cc0000, 3px -3px 0 #cc0000, -3px 3px 0 #cc0000, 3px 3px 0 #cc0000',
+        letterSpacing: '1px',
+      },
+      elegant: {
+        color: '#d4af37',
+        fontWeight: 700,
+        fontStyle: 'italic',
+        fontFamily: 'Playfair Display',
+        textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+        letterSpacing: '0.5px',
+        lineHeight: 1.1,
+      },
+    }
+    const base = presets[presetId] || presets.youshaei
+    return {
+      fontSize: `${(style?.fontSize || 22) + (presetId === 'beasty' ? 4 : presetId === 'mozi' ? 2 : presetId === 'popline' ? 2 : 0)}px`,
+      fontFamily: style?.fontFamily || 'Montserrat, sans-serif',
+      textAlign: 'center',
+      maxWidth: '90%',
+      wordBreak: 'break-word',
+      display: 'block',
+      transition: 'all 0.1s ease',
+      ...base,
+    }
+  }
+
   const drawSubtitlesOnCanvas = (canvas, timeOverride) => {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -827,6 +965,14 @@ export default function EditorPage() {
       }
     }
   }
+
+  const handleTimeUpdate = useCallback(() => {
+    if (!videoRef.current) return
+    const t = videoRef.current.currentTime
+    setCurrentTime(t)
+    const word = activeTranscript.find(w => !w.deleted && t >= w.startTime && t <= w.endTime)
+    setSubtitleText(word ? word.word : '')
+  }, [activeTranscript])
 
   const drawSubtitles = useCallback((videoTime) => {
     drawSubtitlesOnCanvas(subtitleCanvasRef.current, videoTime)
@@ -1149,6 +1295,8 @@ export default function EditorPage() {
 
   const handleWordClick = (w) => {
     seekTo(w.startTime)
+    videoRef.current?.play().catch(() => {})
+    setIsPlaying(true)
   }
 
   const toggleWordDeleted = (id) => {
@@ -1173,7 +1321,7 @@ export default function EditorPage() {
     let srtText = ''
     activeTranscript.forEach((w, index) => {
       const formatTime = (seconds) => {
-        const date = new Date(seconds * 1000)
+        const date = new Date(Math.max(0, seconds) * 1000)
         const hh = String(date.getUTCHours()).padStart(2, '0')
         const mm = String(date.getUTCMinutes()).padStart(2, '0')
         const ss = String(date.getUTCSeconds()).padStart(2, '0')
@@ -1808,6 +1956,7 @@ export default function EditorPage() {
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
                 onEnded={() => setIsPlaying(false)}
+                onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={() => {
                   if (videoRef.current?.duration) setDuration(videoRef.current.duration)
                 }}
@@ -1819,20 +1968,23 @@ export default function EditorPage() {
                 }}
               />
 
-              {/* Subtitles */}
-              <canvas
-                ref={subtitleCanvasRef}
-                width={360}
-                height={640}
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  width: '100%',
-                  height: '100%',
-                  pointerEvents: 'none',
-                  zIndex: 10
-                }}
-              />
+              {/* Subtitles overlay */}
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'flex-end',
+                justifyContent: 'center',
+                padding: '0 16px 12%',
+                pointerEvents: 'none',
+                zIndex: 10,
+              }}>
+                {selectedPresetId !== 'none' && subtitleText && (
+                  <span style={getSubtitleStyle(subtitleText, selectedPresetId, subtitleStyle)}>
+                    {subtitleText}
+                  </span>
+                )}
+              </div>
 
               {/* Face Tracker */}
               <canvas
@@ -2283,78 +2435,127 @@ export default function EditorPage() {
           height: '36px',
           backgroundColor: 'var(--cream-panel)',
           borderBottom: '1px solid var(--cream-panel-border)',
-          padding: '0 12px',
+          padding: '0 16px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          flexShrink: 0
+          flexShrink: 0,
+          background: '#111',
+          borderBottom: '1px solid #333',
+          minHeight: '44px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button onClick={handleSplitClip} style={{ background: 'var(--cream-surface)', color: 'var(--cream-text-primary)', border: '1px solid var(--cream-panel-border)', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Scissors size={14} strokeWidth={1.5} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button onClick={handleSplitClip} style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #444', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}>
+              <Scissors size={12} strokeWidth={1.5} />
               Split
             </button>
-            <button onClick={handleDeleteSelectedTimelineItem} style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Trash2 size={14} strokeWidth={1.5} />
+            <button onClick={handleDeleteSelectedTimelineItem} style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Trash2 size={12} strokeWidth={1.5} />
               Delete
             </button>
           </div>
 
-          {/* Playback */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button onClick={() => seekTo(currentTime - 2)} style={{ background: 'none', border: 'none', color: 'var(--cream-text-primary)', cursor: 'pointer', display: 'flex', padding: '4px' }}>
-              <SkipBack size={14} strokeWidth={1.5} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button onClick={() => seekTo(currentTime - 2)} style={{ background: 'none', border: 'none', color: '#a1a1aa', cursor: 'pointer', display: 'flex', padding: '4px', transition: 'color 0.15s' }}>
+              <SkipBack size={16} strokeWidth={1.5} />
             </button>
-            <button onClick={togglePlay} style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--cream-accent)', color: 'var(--cream-accent-btn-color)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isPlaying ? <Pause size={16} strokeWidth={1.5} fill="currentColor" /> : <Play size={16} strokeWidth={1.5} fill="currentColor" />}
+            <button onClick={togglePlay} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#c8ff00', color: '#000', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: isPlaying ? '0 0 20px rgba(200,255,0,0.3)' : 'none', transition: 'all 0.15s' }}>
+              {isPlaying ? <Pause size={16} fill="currentColor" strokeWidth={0} /> : <Play size={16} fill="currentColor" strokeWidth={0} />}
             </button>
-            <button onClick={() => seekTo(currentTime + 2)} style={{ background: 'none', border: 'none', color: 'var(--cream-text-primary)', cursor: 'pointer', display: 'flex', padding: '4px' }}>
-              <SkipForward size={14} strokeWidth={1.5} />
+            <button onClick={() => seekTo(currentTime + 2)} style={{ background: 'none', border: 'none', color: '#a1a1aa', cursor: 'pointer', display: 'flex', padding: '4px', transition: 'color 0.15s' }}>
+              <SkipForward size={16} strokeWidth={1.5} />
             </button>
-            <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--cream-text-primary)', fontFamily: 'monospace', background: 'var(--cream-surface)', padding: '2px 8px', borderRadius: '4px' }}>
+            <span style={{ fontSize: '12px', fontWeight: '700', color: '#d4d4d8', fontFamily: 'monospace', background: '#1a1a1a', padding: '2px 8px', borderRadius: '4px' }}>
               {new Date(currentTime * 1000).toISOString().substr(14, 5)}
-              <span style={{ color: 'var(--cream-text-secondary)', fontWeight: '400' }}>
+              <span style={{ color: '#52525b', fontWeight: '400' }}>
                 {' / '}{new Date(duration * 1000).toISOString().substr(14, 5)}
               </span>
             </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ZoomIn size={14} strokeWidth={1.5} style={{ color: 'var(--cream-text-secondary)' }} />
-            <input type="range" min="10" max="100" value={timelineZoom} onChange={(e) => setTimelineZoom(parseInt(e.target.value))} style={{ width: '80px' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <ZoomIn size={12} strokeWidth={1.5} style={{ color: '#52525b' }} />
+              <input type="range" min="10" max="100" value={timelineZoom} onChange={(e) => setTimelineZoom(parseInt(e.target.value))} style={{ width: '60px', accentColor: '#c8ff00' }} />
+            </div>
           </div>
         </div>
 
         {/* Tracks */}
-        <div className="timeline-scroll" style={{ flex: 1, overflowY: 'hidden', overflowX: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${(currentTime / duration) * 85 + 10}%`, width: '2px', backgroundColor: 'var(--cream-playhead)', pointerEvents: 'none', zIndex: 100 }}>
-            <div style={{ position: 'absolute', top: 0, left: '-4px', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '8px solid var(--cream-playhead)' }} />
-          </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#0d0d0d' }}>
 
-          {['video', 'text', 'subtitle', 'audio'].map(track => (
-            <div key={track} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '10px', fontWeight: '800', color: 'var(--cream-text-secondary)', width: '50px', textTransform: 'uppercase', textAlign: 'right' }}>{track === 'video' ? 'Video' : track === 'text' ? 'Text' : track === 'subtitle' ? 'Subtitles' : 'Audio'}</span>
-              <div style={{ flex: 1, height: '36px', backgroundColor: 'var(--cream-panel)', border: '1px solid var(--cream-panel-border)', borderRadius: '8px', position: 'relative', overflow: 'hidden' }}>
-                {timelineItems.filter(x => x.track === track).length === 0 && (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: 'var(--cream-placeholder)' }}>
-                    {track === 'video' ? 'Drag a video here' : track === 'text' ? 'Add text from the panel' : track === 'subtitle' ? 'Words from transcript appear here' : 'Add music from Audio'}
-                  </div>
-                )}
-                {timelineItems.filter(x => x.track === track).map((item) => {
-                  const isSel = selectedTimelineItemId === item.id
-                  const startPct = (item.start / duration) * 100
-                  const widthPct = (item.duration / duration) * 100
-                  return (
-                    <div key={item.id} onMouseDown={(e) => handleTimelineMouseDown(e, item, 'move')} style={{ position: 'absolute', left: `${startPct}%`, width: `${widthPct}%`, height: '100%', backgroundColor: item.color, borderRadius: '6px', border: isSel ? '2px solid var(--cream-accent)' : '1px solid var(--cream-panel-border)', cursor: 'grab', display: 'flex', alignItems: 'center', padding: '0 6px', fontSize: '11px', fontWeight: '700', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', color: '#ffffff' }}>
-                      <div onMouseDown={(e) => handleTimelineMouseDown(e, item, 'resize-left')} style={{ position: 'absolute', left: 0, top: 2, bottom: 2, width: '4px', backgroundColor: 'var(--cream-accent)', borderRadius: '2px', cursor: 'w-resize', opacity: 0.7 }} />
-                      <span style={{ marginLeft: '4px' }}>{item.title}</span>
-                      <div onMouseDown={(e) => handleTimelineMouseDown(e, item, 'resize-right')} style={{ position: 'absolute', right: 0, top: 2, bottom: 2, width: '4px', backgroundColor: 'var(--cream-accent)', borderRadius: '2px', cursor: 'e-resize', opacity: 0.7 }} />
+          {/* Playhead line that spans all tracks */}
+          <div style={{ position: 'relative', flex: 1 }}>
+            <div className="timeline-scroll" style={{ position: 'absolute', inset: 0, overflowY: 'hidden', overflowX: 'auto' }}>
+              <div style={{ position: 'relative', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
+                {/* VIDEO track */}
+                <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a1a', minHeight: '48px' }}>
+                  <span style={{ width: '52px', flexShrink: 0, textAlign: 'right', paddingRight: '8px', fontSize: '9px', fontWeight: '700', color: '#71717a', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Video</span>
+                  <div ref={timelineRef} onClick={handleTimelineClick} style={{ flex: 1, height: '48px', position: 'relative', cursor: 'pointer', background: '#111' }}>
+                    <div style={{ position: 'absolute', top: '6px', bottom: '6px', left: 0, right: 0, background: '#222', borderRadius: '6px', border: '1px solid #333', display: 'flex', alignItems: 'center', padding: '0 8px', overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', gap: '1px', height: '100%', alignItems: 'center' }}>
+                        {Array.from({length: 30}).map((_, i) => (
+                          <div key={i} style={{ width: '4px', height: '24px', background: '#333', borderRadius: '1px', flexShrink: 0 }} />
+                        ))}
+                      </div>
+                      <span style={{ position: 'absolute', left: '8px', fontSize: '9px', color: '#71717a', fontWeight: '600' }}>video.mp4</span>
                     </div>
-                  )
-                })}
+                    {/* Playhead */}
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, width: '2px', background: '#c8ff00', left: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`, zIndex: 20, pointerEvents: 'none', boxShadow: '0 0 8px rgba(200,255,0,0.4)' }}>
+                      <div style={{ position: 'absolute', top: '-1px', left: '-4px', width: '10px', height: '10px', background: '#c8ff00', borderRadius: '50%', boxShadow: '0 0 12px rgba(200,255,0,0.6)' }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* TEXT track */}
+                <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a1a', minHeight: '28px' }}>
+                  <span style={{ width: '52px', flexShrink: 0, textAlign: 'right', paddingRight: '8px', fontSize: '9px', fontWeight: '700', color: '#71717a', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Text</span>
+                  <div style={{ flex: 1, height: '28px', position: 'relative', background: '#0a0a0a', display: 'flex', alignItems: 'center', padding: '0 8px' }}>
+                    <span style={{ fontSize: '9px', color: '#52525b', fontStyle: 'italic' }}>Add text from the panel</span>
+                  </div>
+                </div>
+
+                {/* SUBTITLES track */}
+                <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a1a', minHeight: '36px' }}>
+                  <span style={{ width: '52px', flexShrink: 0, textAlign: 'right', paddingRight: '8px', fontSize: '9px', fontWeight: '700', color: '#71717a', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Subs</span>
+                  <div style={{ flex: 1, height: '36px', position: 'relative', background: '#0d0d0d' }}>
+                    {timelineItems.filter(x => x.track === 'subtitle').length === 0 && (
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#52525b', fontStyle: 'italic' }}>
+                        Words from transcript appear here
+                      </div>
+                    )}
+                    {timelineItems.filter(x => x.track === 'subtitle').map((item) => {
+                      const isSel = selectedTimelineItemId === item.id
+                      const startPct = duration > 0 ? (item.start / duration) * 100 : 0
+                      const widthPct = duration > 0 ? (item.duration / duration) * 100 : 0
+                      const isCurrent = currentTime >= item.start && currentTime <= item.start + item.duration
+                      return (
+                        <div key={item.id} onMouseDown={(e) => { e.stopPropagation(); setSelectedTimelineItemId(isSel ? null : item.id) }}
+                          style={{
+                            position: 'absolute', top: '4px', bottom: '4px',
+                            left: `${startPct}%`, width: `${Math.max(widthPct, 0.3)}%`,
+                            borderRadius: '4px', cursor: 'pointer', overflow: 'hidden',
+                            background: isCurrent ? 'rgba(200,255,0,0.2)' : isSel ? 'rgba(249,115,22,0.2)' : 'rgba(30,58,42,0.8)',
+                            border: `1px solid ${isCurrent ? '#c8ff00' : isSel ? '#f97316' : '#2a5a3a'}`,
+                            transition: 'all 0.1s',
+                            display: 'flex', alignItems: 'center', padding: '0 4px', zIndex: isCurrent ? 10 : 1,
+                          }}>
+                          <span style={{ fontSize: '8px', color: isCurrent ? '#c8ff00' : '#4ade80', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.1' }}>
+                            {item.title}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* AUDIO track */}
+                <div style={{ display: 'flex', alignItems: 'center', minHeight: '28px' }}>
+                  <span style={{ width: '52px', flexShrink: 0, textAlign: 'right', paddingRight: '8px', fontSize: '9px', fontWeight: '700', color: '#71717a', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Audio</span>
+                  <div style={{ flex: 1, height: '28px', position: 'relative', background: '#0a0a0a', display: 'flex', alignItems: 'center', padding: '0 8px' }}>
+                    <span style={{ fontSize: '9px', color: '#52525b', fontStyle: 'italic' }}>Add music from Audio</span>
+                  </div>
+                </div>
               </div>
             </div>
-          ))}
+          </div>
         </div>
       </footer>
 

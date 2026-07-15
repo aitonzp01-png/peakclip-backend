@@ -76,10 +76,14 @@ function parseSRTTime(timeStr) {
 }
 
 function formatSRTTime(seconds) {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = Math.floor(seconds % 60)
-  const ms = Math.round((seconds - Math.floor(seconds)) * 1000)
+  let s = Math.max(0, seconds)
+  let h = Math.floor(s / 3600); s -= h * 3600
+  let m = Math.floor(s / 60); s -= m * 60
+  let ms = Math.round((s - Math.floor(s)) * 1000)
+  s = Math.floor(s)
+  if (ms >= 1000) { ms -= 1000; s += 1 }
+  if (s >= 60) { s -= 60; m += 1 }
+  if (m >= 60) { m -= 60; h += 1 }
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`
 }
 

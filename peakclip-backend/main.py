@@ -782,7 +782,7 @@ def generate_srt_subtitle(words, clip_start, clip_end, output_path):
         if not text:
             continue
         rel_start = max(0.0, first['start'] - clip_start)
-        rel_end = last['end'] - clip_start
+        rel_end = max(rel_start + 0.1, last['end'] - clip_start)
         lines.append(str(idx))
         lines.append(f"{format_srt_time(rel_start)} --> {format_srt_time(rel_end)}")
         lines.append(text)
@@ -1631,7 +1631,7 @@ Transcript:
 
 RULES:
 - Return exactly 2 clips.
-- Let the clip duration be whatever the best viral moment lasts naturally — do not artificially extend or shorten.
+- Each clip should be at least 10 seconds long — capture enough context for the viral moment.
 - Prioritize: strong hooks, emotional peaks, surprising twists, humor, high-energy moments, or controversy.
 - Distribute clips across the video timeline — don't cluster them together.
 - Classify mood as: epic, hype, chill, funny, emotional, suspense.
@@ -1691,7 +1691,7 @@ Return JSON with this exact format:
         if len(clips_data.get("clips", [])) < 2:
             existing = clips_data.get("clips", [])[:]
             last_end = max((c.get("end", 0) for c in existing), default=0)
-            total_duration = words_data[-1].endTime if words_data else 600
+            total_duration = words_data[-1].get('endTime', 0) if words_data else 600
             step = (total_duration - last_end) / max(1, 2 - len(existing))
             for j in range(len(existing), 2):
                 pad_start = last_end + (j - len(existing) + 1) * step
@@ -1728,7 +1728,8 @@ Return JSON with this exact format:
                 output_path = f"outputs/{job_id}_clip{i+1}.mp4"
                 clip_start = clip["start"]
                 raw_duration = clip["end"] - clip["start"]
-                duration = max(2, raw_duration)
+                # Minimum 15s for a usable Shorts clip
+                duration = max(15, raw_duration)
                 clip_mood = clip.get("mood", "chill")
 
                 # ── Generate SRT subtitles (word-by-word, relative to clip start) ──
@@ -2428,7 +2429,7 @@ Transcript:
 
 RULES:
 - Return exactly 2 clips.
-- Let the clip duration be whatever the best viral moment lasts naturally — do not artificially extend or shorten.
+- Each clip should be at least 10 seconds long — capture enough context for the viral moment.
 - Prioritize: strong hooks, emotional peaks, surprising twists, humor, high-energy moments, or controversy.
 - Distribute clips across the video timeline — don't cluster them together.
 - Classify mood as: epic, hype, chill, funny, emotional, suspense.
@@ -2483,7 +2484,7 @@ Return JSON with this exact format:
     if len(clips_data["clips"]) < 2:
         existing = clips_data["clips"][:]
         last_end = max((c["end"] for c in existing), default=0)
-        total_duration = words_data[-1].endTime if words_data else 600
+        total_duration = words_data[-1].get('endTime', 0) if words_data else 600
         step = (total_duration - last_end) / max(1, 2 - len(existing))
         for j in range(len(existing), 2):
             pad_start = last_end + (j - len(existing) + 1) * step
@@ -2502,7 +2503,7 @@ Return JSON with this exact format:
             output_path = f"outputs/{job_id}_clip{i+1}.mp4"
             clip_start = clip["start"]
             raw_duration = clip["end"] - clip["start"]
-            duration = max(2, raw_duration)
+            duration = max(15, raw_duration)
             clip["end"] = clip_start + duration
             clip_mood = clip.get("mood", "chill")
 
