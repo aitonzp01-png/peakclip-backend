@@ -907,20 +907,24 @@ export default function EditorPage() {
   useEffect(() => {
     let animId
     const update = async () => {
-      const isMobile = window.innerWidth <= 768
-      let time = 0
-      if (isMobile && mobileVideoRef.current) {
-        time = mobileVideoRef.current.currentTime
-      } else if (videoRef.current) {
-        time = videoRef.current.currentTime
-      }
-      drawSubtitlesRef.current(time)
-      if (Math.abs(time - lastTimeUpdateRef.current) > 0.05) {
-        setCurrentTime(time)
-        lastTimeUpdateRef.current = time
-      }
-      if (time > 0 && !isMobile && videoRef.current && faceTrackingEnabled) {
-        await detectFace()
+      try {
+        const isMobile = window.innerWidth <= 768
+        let time = 0
+        if (isMobile && mobileVideoRef.current) {
+          time = mobileVideoRef.current.currentTime
+        } else if (videoRef.current) {
+          time = videoRef.current.currentTime
+        }
+        drawSubtitlesRef.current(time)
+        if (Math.abs(time - lastTimeUpdateRef.current) > 0.05) {
+          setCurrentTime(time)
+          lastTimeUpdateRef.current = time
+        }
+        if (time > 0 && !isMobile && videoRef.current && faceTrackingEnabled) {
+          await detectFace()
+        }
+      } catch (e) {
+        console.warn('Animation loop error:', e)
       }
       animId = requestAnimationFrame(update)
     }
