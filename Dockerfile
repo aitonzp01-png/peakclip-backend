@@ -18,7 +18,7 @@ WORKDIR /app
 # Copiar e instalar dependencias Python
 COPY peakclip-backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir --upgrade https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz 2>&1 | tail -5
+    pip install --no-cache-dir --upgrade "yt-dlp[default] @ git+https://github.com/yt-dlp/yt-dlp.git@master" 2>&1 | tail -5
 
 # Instalar Playwright y Chromium
 RUN pip install --no-cache-dir playwright && \

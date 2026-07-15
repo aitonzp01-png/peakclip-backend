@@ -233,19 +233,15 @@ def upload_with_verification(supabase, bucket, file_path, storage_path, content_
 async def lifespan(app: FastAPI):
     # Startup
     print(f"yt-dlp version: {yt_dlp.version.__version__}")
-    # Write YouTube cookies from env var if provided
-    try:
-        cookie_b64 = os.environ.get('YOUTUBE_COOKIES_B64')
-        if cookie_b64:
-            data = base64.b64decode(cookie_b64).decode('utf-8', errors='replace')
-            with open('cookies.txt', 'w', encoding='utf-8') as f:
-                f.write(data)
-            print(f"COOKIES: written {len(data)} bytes to cookies.txt")
-        else:
-            print("COOKIES: no YOUTUBE_COOKIES_B64 env var")
-    except Exception as e:
-        print(f"COOKIES: failed to write: {e}")
-    # Load OAuth2 tokens from env (legacy, not used for download but may be useful)
+    # Remove any stale cookies.txt — they cause "No video formats found" when expired.
+    # Proxy + PoToken are sufficient for YouTube access.
+    for _cf in ('cookies.txt',):
+        try:
+            if os.path.exists(_cf):
+                os.remove(_cf)
+                print(f"COOKIES: removed stale {_cf}")
+        except Exception:
+            pass
     setup_oauth2_tokens()
     await run_migrations()
     await fetch_jwks()
@@ -1313,9 +1309,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
         ]
         impersonate_profiles = [None, 'chrome', 'safari', 'chrome-120', 'chrome-119', 'safari-17']
 
-        # Auth strategy: cookies (from browser) > proxy (residential IP) > fallback downloaders
+        # Auth: residential proxy + POT server + extractor strategies
         proxy_url = os.environ.get('YOUTUBE_PROXY')
-        cookies_file = 'cookies.txt' if os.path.exists('cookies.txt') else None
         po_token = os.environ.get('YOUTUBE_PO_TOKEN')
         visitor_data = os.environ.get('YOUTUBE_VISITOR_DATA')
 
@@ -1366,9 +1361,6 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     ydl_opts['impersonate'] = imp
                 if proxy_url and not proxy_disabled:
                     ydl_opts['proxy'] = proxy_url
-                # On attempts 8+ skip cookies — stale cookies block more than they help
-                if cookies_file and attempt < 8:
-                    ydl_opts['cookies'] = cookies_file
                 # OAuth2 for download — bypasses many YouTube IP blocks
                 if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH):
                     ydl_opts['use_oauth'] = True
@@ -1382,18 +1374,18 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     extractor_args['youtubepot-bgutilhttp'] = {}
                 if extractor_args['youtube'] or 'youtubepot-bgutilhttp' in extractor_args:
                     ydl_opts['extractor_args'] = extractor_args
-                use_cookies = bool(cookies_file and attempt < 8)
-                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled else 'no'} cookies={'yes' if use_cookies else 'no'} oauth={'yes' if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH) else 'no'}")
+                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled else 'no'} oauth={'yes' if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH) else 'no'}")
                 # Run yt-dlp in a subprocess so we can hard-kill it on timeout
                 ytdlp_script = os.path.join(os.path.dirname(__file__), 'ytdlp_download.py')
                 sub_opts = dict(ydl_opts)
                 sub_opts['url'] = url
                 try:
+                    sub_timeout = 60 if attempt < 4 else 120 if attempt < 8 else 300
                     result = subprocess.run(
                         [sys.executable, ytdlp_script, json.dumps(sub_opts)],
                         capture_output=True,
                         text=True,
-                        timeout=300,
+                        timeout=sub_timeout,
                     )
                     if result.returncode != 0:
                         stderr_tail = (result.stderr or '')[-1000:]
@@ -1625,46 +1617,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
             segments_text = "\n".join(segments_lines)
             print(f"TRANSCRIBE: done, {len(words_data)} words")
 
-        check_deadline("energy-analysis")
-        jobs_store[job_id] = {"status": "processing", "message": "Analyzing audio energy peaks..."}
-        energy_peaks = []
-        try:
-            import struct, math
-            raw_result = subprocess.run([
-                'ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_f32le',
-                '-ar', '16000', '-ac', '1', '-f', 'f32le', '-'
-            ], capture_output=True, timeout=60)
-            if raw_result.returncode == 0 and len(raw_result.stdout) > 100:
-                raw_data = raw_result.stdout
-                samples = struct.unpack(f'<{len(raw_data)//4}f', raw_data)
-                window_size = int(16000 * 0.5)
-                energy_windows = []
-                for i in range(0, len(samples), window_size):
-                    window = samples[i:i+window_size]
-                    if len(window) < window_size // 2:
-                        continue
-                    rms = math.sqrt(sum(s*s for s in window) / len(window))
-                    energy_windows.append((i / 16000, rms))
-                if energy_windows:
-                    mean_e = sum(e for _, e in energy_windows) / len(energy_windows)
-                    threshold = mean_e * 1.8
-                    for ts, e in energy_windows:
-                        if e > threshold:
-                            energy_peaks.append({"time": round(ts, 1), "energy": round(e, 1)})
-                print(f"ENERGY: {len(energy_peaks)} peaks detected")
-        except Exception as e:
-            print(f"ENERGY: analysis failed ({e}), continuing without audio features")
-
         check_deadline("ai-analysis")
         jobs_store[job_id] = {"status": "processing", "message": "Analyzing viral moments with AI..."}
-        energy_hint = ""
-        if energy_peaks:
-            peak_times = [p['time'] for p in energy_peaks[:30]]
-            energy_hint = (
-                f"\n\nAUDIO ENERGY PEAKS (high-excitement moments at these timestamps):\n"
-                f"{', '.join(str(t)+'s' for t in peak_times)}\n"
-                f"These timestamps have above-average volume/energy — prioritize clips near these."
-            )
         analysis_body = [{
             "role": "system",
             "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
@@ -1673,7 +1627,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
             "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
-{segments_text}{energy_hint}
+{segments_text}
 
 RULES:
 - Each clip MUST be 30-60 seconds long (ideal for shorts).
