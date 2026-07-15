@@ -1805,6 +1805,12 @@ export default function EditorPage() {
                 ref={videoRef}
                 src={displayVideoSrc}
                 loop
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onEnded={() => setIsPlaying(false)}
+                onLoadedMetadata={() => {
+                  if (videoRef.current?.duration) setDuration(videoRef.current.duration)
+                }}
                 style={{
                   width: '100%',
                   height: '100%',
