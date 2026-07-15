@@ -1,40 +1,40 @@
-/* editor.css – Cream palette styling for the video editor */
+/* editor.css – Red and White Design for the video editor */
 
-/* Inject palette variables — PeakClip Red Palette */
+/* Inject palette variables — PeakClip Red & White Palette */
 :root {
-  --cream-bg: #0f0f0f;
-  --cream-panel: #18181b;
-  --cream-panel-border: #27272a;
-  --cream-surface: #1f1f23;
-  --cream-surface-border: #2a2a2e;
-  --cream-hover: #27272a;
-  --cream-text-primary: #fafafa;
-  --cream-text-secondary: #a1a1aa;
-  --cream-placeholder: #52525b;
+  --cream-bg: #ffffff;
+  --cream-panel: #f9fafb;
+  --cream-panel-border: #e5e7eb;
+  --cream-surface: #ffffff;
+  --cream-surface-border: #d1d5db;
+  --cream-hover: #f3f4f6;
+  --cream-text-primary: #030712;
+  --cream-text-secondary: #6b7280;
+  --cream-placeholder: #9ca3af;
   --cream-accent: #ff1f1f;
-  --cream-primary-btn-bg: #ffffff;
-  --cream-primary-btn-color: #0f0f0f;
+  --cream-primary-btn-bg: #030712;
+  --cream-primary-btn-color: #ffffff;
   --cream-accent-btn-bg: #ff1f1f;
   --cream-accent-btn-color: #ffffff;
-  --cream-focus-border: #ffffff;
+  --cream-focus-border: #030712;
   --cream-focus-detail: #ff1f1f;
-  --cream-success: #22c55e;
+  --cream-success: #10b981;
   --cream-error: #ef4444;
-  --cream-tl-bg: #0a0a0a;
-  --cream-tl-border: #1f1f23;
-  --cream-waveform: rgba(255,31,31,0.6);
+  --cream-tl-bg: #ffffff;
+  --cream-tl-border: #ff1f1f;
+  --cream-waveform: rgba(255,31,31,0.3);
   --cream-playhead: #ff1f1f;
   --cream-bbox: #ff1f1f;
   --cream-badge-new-bg: #ff1f1f;
   --cream-badge-new-text: #ffffff;
-  --cream-zinc-50: #1a1a1a;
-  --cream-zinc-100: #27272a;
-  --cream-zinc-200: #3f3f46;
-  --cream-zinc-400: #a1a1aa;
-  --cream-zinc-500: #d4d4d8;
-  --cream-zinc-600: #e4e4e7;
-  --cream-zinc-700: #f4f4f5;
-  --cream-zinc-800: #fafafa;
+  --cream-zinc-50: #f9fafb;
+  --cream-zinc-100: #f3f4f6;
+  --cream-zinc-200: #e5e7eb;
+  --cream-zinc-400: #9ca3af;
+  --cream-zinc-500: #6b7280;
+  --cream-zinc-600: #4b5563;
+  --cream-zinc-700: #374151;
+  --cream-zinc-800: #1f2937;
 }
 
 html, body {
