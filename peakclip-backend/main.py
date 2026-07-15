@@ -745,23 +745,51 @@ def format_srt_time(seconds: float) -> str:
     m = int((seconds % 3600) // 60)
     s = int(seconds % 60)
     ms = int(round((seconds - int(seconds)) * 1000))
+    if ms >= 1000:
+        ms -= 1000
+        s += 1
+        if s >= 60:
+            s -= 60
+            m += 1
+            if m >= 60:
+                m -= 60
+                h += 1
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
 def generate_srt_subtitle(words, clip_start, clip_end, output_path):
-    """Generate SRT word-by-word subtitles with timestamps relative to clip_start."""
+    """Generate SRT phrase-level subtitles grouped into natural reading chunks."""
     clip_words = [w for w in words if w['start'] >= clip_start and w['end'] <= clip_end]
+    if not clip_words:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write("")
+        return
+    # Group consecutive words into phrases (gap < 1.0s, max 8 words, max 5s duration)
+    phrases = []
+    current = [clip_words[0]]
+    for w in clip_words[1:]:
+        gap = w['start'] - current[-1]['end']
+        phrase_dur = current[-1]['end'] - current[0]['start']
+        if gap < 1.0 and len(current) < 8 and phrase_dur < 5.0:
+            current.append(w)
+        else:
+            phrases.append(current)
+            current = [w]
+    if current:
+        phrases.append(current)
     lines = []
     idx = 1
-    for w in clip_words:
-        word_text = w['word'].strip()
-        if not word_text:
+    for phrase in phrases:
+        first = phrase[0]
+        last = phrase[-1]
+        text = ' '.join(w['word'].strip() for w in phrase if w['word'].strip())
+        if not text:
             continue
-        rel_start = max(0.0, w['start'] - clip_start)
-        rel_end = w['end'] - clip_start
+        rel_start = max(0.0, first['start'] - clip_start)
+        rel_end = last['end'] - clip_start
         lines.append(str(idx))
         lines.append(f"{format_srt_time(rel_start)} --> {format_srt_time(rel_end)}")
-        lines.append(word_text)
+        lines.append(text)
         lines.append("")
         idx += 1
     with open(output_path, 'w', encoding='utf-8') as f:
@@ -1949,12 +1977,14 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             '-c:v', vcodec,
         ])
         if vcodec == 'libx264':
-            cmd.extend(['-pix_fmt', 'yuv420p', '-movflags', '+faststart'])
+            cmd.extend(['-pix_fmt', 'yuv420p', '-profile:v', 'high', '-movflags', '+faststart'])
         cmd.extend([
-            '-preset', 'ultrafast',
-            '-threads', '2',
+            '-preset', 'medium',
+            '-crf', '18',
             '-c:a', acodec,
         ])
+        if acodec == 'aac':
+            cmd.extend(['-b:a', '192k'])
         if af_filter:
             cmd.extend(['-filter_complex', af_filter])
         cmd.extend(['-y', output_path])
