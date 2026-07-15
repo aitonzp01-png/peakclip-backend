@@ -796,6 +796,109 @@ def generate_srt_subtitle(words, clip_start, clip_end, output_path):
         f.write("\n".join(lines))
 
 
+def format_ass_time(seconds: float) -> str:
+    """Convert seconds to ASS time format H:MM:SS.cc (centiseconds)."""
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    cs = int(round((seconds - int(seconds)) * 100))
+    if cs >= 100:
+        cs -= 100
+        s += 1
+        if s >= 60:
+            s -= 60
+            m += 1
+            if m >= 60:
+                m -= 60
+                h += 1
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None):
+    """Generate ASS subtitle with \\k karaoke tags for progressive word-by-word reveal.
+
+    Each phrase becomes one ASS Dialogue line with \\k<centiseconds> tags between
+    words. The libass renderer shows words filling progressively: SecondaryColour
+    (unspoken/dim) -> PrimaryColour (spoken). This creates the same progressive
+    reveal effect as the canvas preview.
+    """
+    clip_words = [w for w in words if w['start'] >= clip_start and w['end'] <= clip_end]
+    if not clip_words:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write("[Script Info]\nScriptType: v4.00+\n")
+        return
+
+    phrases = []
+    current = [clip_words[0]]
+    for w in clip_words[1:]:
+        gap = w['start'] - current[-1]['end']
+        phrase_dur = current[-1]['end'] - current[0]['start']
+        if gap < 1.0 and len(current) < 8 and phrase_dur < 5.0:
+            current.append(w)
+        else:
+            phrases.append(current)
+            current = [w]
+    if current:
+        phrases.append(current)
+
+    font_name = "Arial"
+    font_size = 28
+    primary_color = "&H00FFFFFF"
+    secondary_color = "&H00333333"
+    outline_color = "&H00000000"
+    bold = 0
+    if style:
+        font_name = style.get('fontFamily', 'Arial').replace(' ', '')
+        font_size = max(12, min(72, style.get('fontSize', 28)))
+        _pc = style.get('color', '#ffffff').lstrip('#')
+        if len(_pc) == 3:
+            _pc = ''.join(c*2 for c in _pc)
+        primary_color = f"&H00{_pc[4:6] if len(_pc)>=6 else 'FF'}{_pc[2:4] if len(_pc)>=4 else 'FF'}{_pc[0:2]}"
+        hc = style.get('highlightColor', '#c4ff3d').lstrip('#')
+        if len(hc) == 3:
+            hc = ''.join(c*2 for c in hc)
+        secondary_color = f"&H00{hc[4:6] if len(hc)>=6 else 'FF'}{hc[2:4] if len(hc)>=4 else 'FF'}{hc[0:2]}"
+        _oc = style.get('strokeColor', '#000000').lstrip('#')
+        if len(_oc) == 3:
+            _oc = ''.join(c*2 for c in _oc)
+        outline_color = f"&H00{_oc[4:6] if len(_oc)>=6 else 'FF'}{_oc[2:4] if len(_oc)>=4 else 'FF'}{_oc[0:2]}"
+        bold = -1 if style.get('fontWeight', '400') in ('700', '800', '900') else 0
+
+    lines = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        "Collisions: Normal",
+        "PlayResX: 1920",
+        "PlayResY: 1080",
+        "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+        f"Style: Default,{font_name},{font_size},{primary_color},{secondary_color},{outline_color},&H00000000,{bold},0,0,0,100,100,0,0,1,2,1,2,10,10,10,1",
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+
+    for phrase in phrases:
+        phrase_start = phrase[0]['start']
+        phrase_end = phrase[-1]['end']
+        text_parts = []
+        for w in phrase:
+            duration_cs = max(1, int(round((w['end'] - w['start']) * 100)))
+            word_text = w['word'].strip()
+            if word_text:
+                text_parts.append(f"{{\\k{duration_cs}}}{word_text}")
+        if not text_parts:
+            continue
+        dialogue_text = ' '.join(text_parts)
+        start_str = format_ass_time(max(0.0, phrase_start - clip_start))
+        end_str = format_ass_time(phrase_end - clip_start)
+        lines.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{dialogue_text}")
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write("\n".join(lines))
+
+
 def resolve_music_path(mood: str) -> str | None:
     filename = MOOD_TRACKS.get(mood)
     if not filename:
@@ -1191,22 +1294,22 @@ def process_video_background(job_id: str, user_id: str, url: str):
             'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
         ]
         format_fallbacks = [
-            # Try best quality first
+            # Try 4K first if available
+            'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160]/best',
+            # 1080p
             'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best',
-            # Quick fallback to reliable worst MP4
-            'worst[ext=mp4]/worst',
+            # WebM best
+            'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
             # Best MP4
             'best[ext=mp4]/best',
-            # Best non-MP4
-            'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
             # Any format
             'bestvideo+bestaudio/best',
-            # Worst MP4 extended
-            'worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst',
-            # Absolute worst
-            'worst',
-            # Another fallback
+            # H.264 specifically
             'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
+            # Quick fallback to any
+            'best',
+            # Reliable worst
+            'worst[ext=mp4]/worst',
         ]
         impersonate_profiles = [None, 'chrome', 'safari', 'chrome-120', 'chrome-119', 'safari-17']
 
@@ -1522,8 +1625,46 @@ def process_video_background(job_id: str, user_id: str, url: str):
             segments_text = "\n".join(segments_lines)
             print(f"TRANSCRIBE: done, {len(words_data)} words")
 
+        check_deadline("energy-analysis")
+        jobs_store[job_id] = {"status": "processing", "message": "Analyzing audio energy peaks..."}
+        energy_peaks = []
+        try:
+            import struct, math
+            raw_result = subprocess.run([
+                'ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_f32le',
+                '-ar', '16000', '-ac', '1', '-f', 'f32le', '-'
+            ], capture_output=True, timeout=60)
+            if raw_result.returncode == 0 and len(raw_result.stdout) > 100:
+                raw_data = raw_result.stdout
+                samples = struct.unpack(f'<{len(raw_data)//4}f', raw_data)
+                window_size = int(16000 * 0.5)
+                energy_windows = []
+                for i in range(0, len(samples), window_size):
+                    window = samples[i:i+window_size]
+                    if len(window) < window_size // 2:
+                        continue
+                    rms = math.sqrt(sum(s*s for s in window) / len(window))
+                    energy_windows.append((i / 16000, rms))
+                if energy_windows:
+                    mean_e = sum(e for _, e in energy_windows) / len(energy_windows)
+                    threshold = mean_e * 1.8
+                    for ts, e in energy_windows:
+                        if e > threshold:
+                            energy_peaks.append({"time": round(ts, 1), "energy": round(e, 1)})
+                print(f"ENERGY: {len(energy_peaks)} peaks detected")
+        except Exception as e:
+            print(f"ENERGY: analysis failed ({e}), continuing without audio features")
+
         check_deadline("ai-analysis")
         jobs_store[job_id] = {"status": "processing", "message": "Analyzing viral moments with AI..."}
+        energy_hint = ""
+        if energy_peaks:
+            peak_times = [p['time'] for p in energy_peaks[:30]]
+            energy_hint = (
+                f"\n\nAUDIO ENERGY PEAKS (high-excitement moments at these timestamps):\n"
+                f"{', '.join(str(t)+'s' for t in peak_times)}\n"
+                f"These timestamps have above-average volume/energy — prioritize clips near these."
+            )
         analysis_body = [{
             "role": "system",
             "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
@@ -1532,11 +1673,12 @@ def process_video_background(job_id: str, user_id: str, url: str):
             "content": f"""Analyze this transcript and return the 3 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
-{segments_text}
+{segments_text}{energy_hint}
 
 RULES:
 - Each clip MUST be 30-60 seconds long (ideal for shorts).
 - Prioritize: strong hooks in first 3s, emotional peaks, surprising twists, humor, high-energy moments, or controversy.
+- Align clip boundaries with audio energy peaks when possible.
 - Classify mood as: epic, hype, chill, funny, emotional, suspense.
 - Include a hook_score from 1-10 ranking virality potential.
 
@@ -1641,8 +1783,8 @@ Return JSON with this exact format:
                     audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
 
                 render_attempts = [
-                    {"scale": "720:1280", "preset": "ultrafast", "crf": "22", "label": "ufast_720p", "b_v": "2000k", "maxrate": "3000k", "bufsize": "6000k"},
-                    {"scale": "540:960", "preset": "ultrafast", "crf": "22", "label": "ufast_540p", "b_v": "1500k", "maxrate": "2000k", "bufsize": "4000k"},
+                    {"scale": "720:1280", "preset": "medium", "crf": "18", "label": "med_720p", "b_v": "4000k", "maxrate": "6000k", "bufsize": "8000k"},
+                    {"scale": "540:960", "preset": "medium", "crf": "18", "label": "med_540p", "b_v": "2500k", "maxrate": "4000k", "bufsize": "6000k"},
                 ]
                 rendered = False
                 for att in render_attempts:
@@ -1687,9 +1829,9 @@ Return JSON with this exact format:
                             '-map', '0:v', '-map', '0:a']
                     if sub_idx is not None:
                         cmd += ['-map', f'{sub_idx}:s']
-                    cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
-                            '-b:v', '1200k', '-maxrate', '1500k', '-bufsize', '3000k',
-                            '-c:a', 'aac', '-b:a', '96k']
+                    cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'medium', '-crf', '22',
+                            '-b:v', '2000k', '-maxrate', '3000k', '-bufsize', '6000k',
+                            '-c:a', 'aac', '-b:a', '128k']
                     if sub_idx is not None:
                         cmd += ['-c:s', 'mov_text', '-disposition:s:0', 'default']
                     cmd += ['-movflags', '+faststart', '-y', no_subs]
@@ -1865,12 +2007,12 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         elif req.filter_style == "cool":
             vf = f"{vf},colorbalance=rs=-.2:gs=.1:bs=.3"
 
-        # Subtitles: generate SRT from timed words (embedded as track, not burned in)
-        srt_path = None
+        # Subtitles: generate ASS karaoke for progressive word-by-word reveal
+        ass_path = None
         if req.subtitle_style != "none" and req.subtitle_words:
-            srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_subs.srt")
-            generate_srt_subtitle(req.subtitle_words, trim_s, trim_s + trim_d, srt_path)
-            temp_files.append(srt_path)
+            ass_path = os.path.join(tempfile.gettempdir(), f"{job_id}_subs.ass")
+            generate_ass_karaoke(req.subtitle_words, trim_s, trim_s + trim_d, ass_path, style=req.subtitle_style_obj)
+            temp_files.append(ass_path)
 
         # Watermark via textfile
         if req.watermark_text:
@@ -1936,38 +2078,40 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             acodec = "aac"
 
         # Burn subtitles into video frames using subtitles filter
-        if srt_path:
+        if ass_path:
             style = (req.subtitle_style_obj or {})
+            outline_width = max(0, min(10, style.get('strokeWidth', 2)))
+
+            # Override ASS style via force_style for user-customized values
             font_name = style.get('fontFamily', 'Montserrat').replace(' ', '')
             font_size = max(12, min(72, style.get('fontSize', 28)))
-            primary_color = style.get('color', '#ffffff').lstrip('#')
-            outline_color = style.get('strokeColor', '#000000').lstrip('#')
-            outline_width = max(0, min(10, style.get('strokeWidth', 2)))
             margin_v = max(0, min(200, 80 - int(style.get('positionY', 78) * 0.8)))
-
-            # Convert HTML color (#RRGGBB) to ASS color (&HAABBGGRR)
-            def to_ass_color(hex_color):
-                h = hex_color.lstrip('#')
-                if len(h) == 3:
-                    h = ''.join(c*2 for c in h)
-                r = h[0:2]
-                g = h[2:4]
-                b = h[4:6]
-                return f"&H00{b}{g}{r}"
-
-            ass_primary = to_ass_color(primary_color)
-            ass_outline = to_ass_color(outline_color)
+            _pc = style.get('color', '#ffffff').lstrip('#')
+            if len(_pc) == 3:
+                _pc = ''.join(c*2 for c in _pc)
+            pc_ass = f"&H00{_pc[4:6] if len(_pc)>=6 else 'FF'}{_pc[2:4] if len(_pc)>=4 else 'FF'}{_pc[0:2]}"
+            hc = style.get('highlightColor', '#c4ff3d').lstrip('#')
+            if len(hc) == 3:
+                hc = ''.join(c*2 for c in hc)
+            sc_ass = f"&H00{hc[4:6] if len(hc)>=6 else 'FF'}{hc[2:4] if len(hc)>=4 else 'FF'}{hc[0:2]}"
+            _oc = style.get('strokeColor', '#000000').lstrip('#')
+            if len(_oc) == 3:
+                _oc = ''.join(c*2 for c in _oc)
+            oc_ass = f"&H00{_oc[4:6] if len(_oc)>=6 else 'FF'}{_oc[2:4] if len(_oc)>=4 else 'FF'}{_oc[0:2]}"
+            bold_val = -1 if style.get('fontWeight', '400') in ('700', '800', '900') else 0
 
             force_style = (
                 f"FontName={font_name},"
                 f"FontSize={font_size},"
-                f"PrimaryColour={ass_primary},"
-                f"OutlineColour={ass_outline},"
+                f"PrimaryColour={pc_ass},"
+                f"SecondaryColour={sc_ass},"
+                f"OutlineColour={oc_ass},"
                 f"Outline={outline_width},"
                 f"MarginV={margin_v},"
+                f"Bold={bold_val},"
                 f"BorderStyle=1"
             )
-            vf = f"{vf},subtitles={srt_path}:force_style='{force_style}'"
+            vf = f"{vf},subtitles={ass_path}:force_style='{force_style}'"
 
         cmd = [
             'ffmpeg',
@@ -2380,7 +2524,7 @@ Return JSON with this exact format:
             music_path = resolve_music_path(clip_mood)
             
             # Render video (no subtitles burned — uploaded separately)
-            scale_target = "640:360"
+            scale_target = "720:1280"
             scale_flags = f"scale={scale_target}:force_original_aspect_ratio=increase:flags=lanczos"
             vid_filter = f"{scale_flags},crop={scale_target},setsar=1,format=yuv420p"
             no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
@@ -2399,8 +2543,8 @@ Return JSON with this exact format:
                     '-filter_complex', ';'.join(parts),
                     '-map', '[v]', '-map', '[a]',
                     '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-                    '-preset', 'ultrafast', '-crf', '22',
-                    '-b:v', '500k', '-maxrate', '1000k', '-bufsize', '2000k',
+                    '-preset', 'medium', '-crf', '18',
+                    '-b:v', '4000k', '-maxrate', '6000k', '-bufsize', '8000k',
                     '-c:a', 'aac', '-b:a', '128k',
                     '-movflags', '+faststart', '-y', no_subs]
             print(f"FFMPEG: clip{i+1} render: {' '.join(cmd)}")
@@ -2410,9 +2554,9 @@ Return JSON with this exact format:
                 cmd_fb = ['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
                           '-threads', '4',
                           '-vf', f'scale={scale_target}:force_original_aspect_ratio=increase:flags=lanczos,crop={scale_target}',
-                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-crf', '26',
-                          '-b:v', '400k', '-maxrate', '800k', '-bufsize', '1600k',
-                          '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', '-y', no_subs]
+                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'medium', '-crf', '22',
+                          '-b:v', '2000k', '-maxrate', '3000k', '-bufsize', '6000k',
+                          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', no_subs]
                 print(f"FFMPEG: clip{i+1} fallback: {' '.join(cmd_fb)}")
                 subprocess.run(cmd_fb, capture_output=True, timeout=300)
                 if not (os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024):
