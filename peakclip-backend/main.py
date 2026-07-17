@@ -754,8 +754,18 @@ def format_srt_time(seconds: float) -> str:
 
 
 def generate_srt_subtitle(words, clip_start, clip_end, output_path):
-    """Generate SRT phrase-level subtitles grouped into natural reading chunks."""
-    clip_words = [w for w in words if w['start'] >= clip_start and w['end'] <= clip_end]
+    """Generate a valid, clip-relative SRT from words that overlap the clip."""
+    clip_words = []
+    for word in words:
+        start = float(word.get('start', 0))
+        end = float(word.get('end', start))
+        if end <= clip_start or start >= clip_end:
+            continue
+        clip_words.append({
+            **word,
+            'start': max(start, clip_start),
+            'end': min(end, clip_end),
+        })
     if not clip_words:
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write("")
@@ -790,6 +800,15 @@ def generate_srt_subtitle(words, clip_start, clip_end, output_path):
         idx += 1
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("\n".join(lines))
+
+
+def compact_analysis_transcript(text, max_lines=140):
+    """Keep the full timeline represented while staying below AI token limits."""
+    lines = [line for line in text.splitlines() if line.strip()]
+    if len(lines) <= max_lines:
+        return text
+    indexes = [round(i * (len(lines) - 1) / (max_lines - 1)) for i in range(max_lines)]
+    return "\n".join(lines[index] for index in indexes)
 
 
 def format_ass_time(seconds: float) -> str:
@@ -829,7 +848,7 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None):
     for w in clip_words[1:]:
         gap = w['start'] - current[-1]['end']
         phrase_dur = current[-1]['end'] - current[0]['start']
-        if gap < 1.0 and len(current) < 8 and phrase_dur < 5.0:
+        if gap < 1.0 and len(current) < 3 and phrase_dur < 3.0:
             current.append(w)
         else:
             phrases.append(current)
@@ -844,13 +863,14 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None):
     outline_color = "&H00000000"
     bold = 0
     if style:
-        font_name = style.get('fontFamily', 'Arial').replace(' ', '')
+        font_name_raw = style.get('fontFamily', 'Arial')
+        font_name = f"'{font_name_raw}'" if ' ' in font_name_raw else font_name_raw
         font_size = max(12, min(72, style.get('fontSize', 28)))
         _pc = style.get('color', '#ffffff').lstrip('#')
         if len(_pc) == 3:
             _pc = ''.join(c*2 for c in _pc)
         primary_color = f"&H00{_pc[4:6] if len(_pc)>=6 else 'FF'}{_pc[2:4] if len(_pc)>=4 else 'FF'}{_pc[0:2]}"
-        hc = style.get('highlightColor', '#c4ff3d').lstrip('#')
+        hc = style.get('highlightColor', '#ff1f1f').lstrip('#')
         if len(hc) == 3:
             hc = ''.join(c*2 for c in hc)
         secondary_color = f"&H00{hc[4:6] if len(hc)>=6 else 'FF'}{hc[2:4] if len(hc)>=4 else 'FF'}{hc[0:2]}"
@@ -1464,6 +1484,24 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 jobs_store[job_id] = {"status": "error", "message": "Download failed. Railway's IP is blocked by YouTube. Solutions: (1) Run peakclip-backend/oauth_setup.py locally and set YOUTUBE_OAUTH_TOKENS_B64 on Railway. (2) Export fresh cookies from your browser and set YOUTUBE_COOKIES_B64. (3) Set YOUTUBE_PROXY with residential proxy credentials. (4) Self-host the backend on a residential connection."}
                 return
 
+        # Verify resolution — warn if below 720p (will be upscaled during render)
+        probe_res = subprocess.run([
+            'ffprobe', '-v', 'error', '-select_streams', 'v:0',
+            '-show_entries', 'stream=width,height',
+            '-of', 'csv=p=0', video_path
+        ], capture_output=True, text=True, timeout=30)
+        if probe_res.stdout.strip():
+            parts = probe_res.stdout.strip().split(',')
+            if len(parts) == 2:
+                try:
+                    w, h = int(parts[0]), int(parts[1])
+                    src_res = min(w, h)
+                    print(f"Job {job_id}: source resolution {w}x{h}")
+                    if src_res < 720:
+                        print(f"Job {job_id}: WARNING source below 720p ({src_res}p), will upscale to 720p")
+                except ValueError:
+                    pass
+
         jobs_store[job_id] = {"status": "processing", "message": "Extracting audio...", "user_id": user_id}
         # Extract audio at low bitrate to stay under Whisper's 25MB limit
         ffmpeg_result = subprocess.run([
@@ -1619,6 +1657,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
 
         check_deadline("ai-analysis")
         jobs_store[job_id] = {"status": "processing", "message": "Analyzing viral moments with AI..."}
+        analysis_transcript = compact_analysis_transcript(segments_text)
         analysis_body = [{
             "role": "system",
             "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
@@ -1627,7 +1666,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
             "content": f"""Analyze this transcript and return the 2 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
-{segments_text}
+ {analysis_transcript}
 
 RULES:
 - Return exactly 2 clips.
@@ -1691,7 +1730,8 @@ Return JSON with this exact format:
         if len(clips_data.get("clips", [])) < 2:
             existing = clips_data.get("clips", [])[:]
             last_end = max((c.get("end", 0) for c in existing), default=0)
-            total_duration = words_data[-1].get('endTime', 0) if words_data else 600
+            total_duration = words_data[-1].get('end', 0) if words_data else 600
+            total_duration = max(total_duration, 60)
             step = (total_duration - last_end) / max(1, 2 - len(existing))
             for j in range(len(existing), 2):
                 pad_start = last_end + (j - len(existing) + 1) * step
@@ -1736,6 +1776,7 @@ Return JSON with this exact format:
                 srt_path = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}.srt")
                 generate_srt_subtitle(words_data, clip_start, clip["end"], srt_path)
                 temp_files_extra.append(srt_path)
+                srt_has_data = os.path.exists(srt_path) and os.path.getsize(srt_path) > 0
 
                 # ── Resolve music track (silently skip if missing) ──
                 music_path = resolve_music_path(clip_mood)
@@ -1762,9 +1803,9 @@ Return JSON with this exact format:
                     cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
                     if music_path:
                         cmd += ['-stream_loop', '-1', '-i', music_path_ff]
-                    if os.path.exists(srt_path):
+                    if srt_has_data:
                         cmd += ['-i', srt_path]
-                    sub_idx = 2 if music_path else 1 if os.path.exists(srt_path) else None
+                    sub_idx = 2 if music_path else 1 if srt_has_data else None
                     cmd += ['-t', str(duration),
                             '-threads', '4',
                             '-filter_complex', ';'.join(parts),
@@ -1788,12 +1829,12 @@ Return JSON with this exact format:
 
                 if not rendered:
                     cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-                    if os.path.exists(srt_path):
+                    if srt_has_data:
                         cmd += ['-i', srt_path]
-                    sub_idx = 1 if os.path.exists(srt_path) else None
+                    sub_idx = 1 if srt_has_data else None
                     cmd += ['-t', str(duration),
                             '-threads', '4',
-                            '-vf', 'scale=540:960:force_original_aspect_ratio=increase:flags=lanczos,crop=540:960',
+                            '-vf', 'scale=720:1280:force_original_aspect_ratio=increase:flags=lanczos,crop=720:1280',
                             '-map', '0:v', '-map', '0:a']
                     if sub_idx is not None:
                         cmd += ['-map', f'{sub_idx}:s']
@@ -2051,14 +2092,15 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             outline_width = max(0, min(10, style.get('strokeWidth', 2)))
 
             # Override ASS style via force_style for user-customized values
-            font_name = style.get('fontFamily', 'Montserrat').replace(' ', '')
+            font_name_raw = style.get('fontFamily', 'Montserrat')
+            font_name = f'"{font_name_raw}"' if ' ' in font_name_raw else font_name_raw
             font_size = max(12, min(72, style.get('fontSize', 28)))
             margin_v = max(0, min(200, 80 - int(style.get('positionY', 78) * 0.8)))
             _pc = style.get('color', '#ffffff').lstrip('#')
             if len(_pc) == 3:
                 _pc = ''.join(c*2 for c in _pc)
             pc_ass = f"&H00{_pc[4:6] if len(_pc)>=6 else 'FF'}{_pc[2:4] if len(_pc)>=4 else 'FF'}{_pc[0:2]}"
-            hc = style.get('highlightColor', '#c4ff3d').lstrip('#')
+            hc = style.get('highlightColor', '#ff1f1f').lstrip('#')
             if len(hc) == 3:
                 hc = ''.join(c*2 for c in hc)
             sc_ass = f"&H00{hc[4:6] if len(hc)>=6 else 'FF'}{hc[2:4] if len(hc)>=4 else 'FF'}{hc[0:2]}"
@@ -2067,6 +2109,13 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                 _oc = ''.join(c*2 for c in _oc)
             oc_ass = f"&H00{_oc[4:6] if len(_oc)>=6 else 'FF'}{_oc[2:4] if len(_oc)>=4 else 'FF'}{_oc[0:2]}"
             bold_val = -1 if style.get('fontWeight', '400') in ('700', '800', '900') else 0
+            # Shadow handling
+            shadow_enabled = style.get('shadow', False)
+            shadow_color = style.get('shadowColor', '#000000').lstrip('#')
+            if len(shadow_color) == 3:
+                shadow_color = ''.join(c*2 for c in shadow_color)
+            shadow_ass = f"&H00{shadow_color[4:6] if len(shadow_color)>=6 else 'FF'}{shadow_color[2:4] if len(shadow_color)>=4 else 'FF'}{shadow_color[0:2]}"
+            shadow_blur = max(0, min(10, style.get('shadowBlur', 4))) if shadow_enabled else 0
 
             force_style = (
                 f"FontName={font_name},"
@@ -2074,7 +2123,9 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                 f"PrimaryColour={pc_ass},"
                 f"SecondaryColour={sc_ass},"
                 f"OutlineColour={oc_ass},"
+                f"BackColour={shadow_ass if shadow_enabled else '&H00000000'},"
                 f"Outline={outline_width},"
+                f"Shadow={shadow_blur},"
                 f"MarginV={margin_v},"
                 f"Bold={bold_val},"
                 f"BorderStyle=1"
@@ -2417,6 +2468,7 @@ async def upload_video(
     jobs_store[job_id] = {"status": "processing", "message": "Analyzing viral moments with AI..."}
 
     response = None
+    analysis_transcript = compact_analysis_transcript(segments_text)
     analysis_body = [{
         "role": "system",
         "content": "You are a viral clip analyzer. Return ONLY valid JSON, no markdown, no code fences.",
@@ -2425,7 +2477,7 @@ async def upload_video(
         "content": f"""Analyze this transcript and return the 2 best viral moments for YouTube Shorts/TikTok.
 
 Transcript:
-{segments_text}
+ {analysis_transcript}
 
 RULES:
 - Return exactly 2 clips.
@@ -2484,7 +2536,8 @@ Return JSON with this exact format:
     if len(clips_data["clips"]) < 2:
         existing = clips_data["clips"][:]
         last_end = max((c["end"] for c in existing), default=0)
-        total_duration = words_data[-1].get('endTime', 0) if words_data else 600
+        total_duration = words_data[-1].get('end', 0) if words_data else 600
+        total_duration = max(total_duration, 60)
         step = (total_duration - last_end) / max(1, 2 - len(existing))
         for j in range(len(existing), 2):
             pad_start = last_end + (j - len(existing) + 1) * step

@@ -29,26 +29,15 @@ export function hexToRgba(hex, opacity) {
   return `rgba(${r},${g},${b},${opacity})`
 }
 
-export function groupWordsIntoLines(words, maxWidth, canvasWidth) {
-  if (!words.length) return []
-  const lines = []
-  let current = []
-  let currentWidth = 0
-  const charWidth = 10
-  words.forEach(w => {
-    const wordWidth = w.word.length * charWidth
-    if (currentWidth + wordWidth > maxWidth * canvasWidth / 100 && current.length > 0) {
-      lines.push(current)
-      current = [w]
-      currentWidth = wordWidth
-    } else {
-      current.push(w)
-      currentWidth += wordWidth + charWidth
-    }
-  })
-  if (current.length) lines.push(current)
-  return lines
+export function groupWordsIntoLines(words, maxWords = 4) {
+  if (!words.length) return [];
+  const lines = [];
+  for (let i = 0; i < words.length; i += maxWords) {
+    lines.push(words.slice(i, i + maxWords));
+  }
+  return lines;
 }
+
 
 export const subtitlePresets = [
   { id: 'none', label: 'Sin subtítulos' },
@@ -59,7 +48,9 @@ export const subtitlePresets = [
   { id: 'pod-p', label: 'Pod P', fontFamily: 'Inter', fontSize: 28, fontWeight: '600', color: '#f5f5f0', textAlign: 'center', lineHeight: 1.5 },
   { id: 'mozi', label: 'Mozi', fontFamily: 'Inter', fontSize: 34, fontWeight: '900', color: '#c4ff3d', stroke: true, strokeColor: '#000000', strokeWidth: 3, textAlign: 'center' },
   { id: 'popline', label: 'Popline', fontFamily: 'Inter', fontSize: 30, fontWeight: '800', color: '#0f0f0f', backgroundColor: '#c4ff3d', backgroundOpacity: 100, textAlign: 'center' },
-]
+  { id: 'capcut', label: 'CapCut Premium', fontFamily: 'Montserrat', fontSize: 44, fontWeight: '900', color: '#ffffff', backgroundColor: 'transparent', backgroundOpacity: 0, textAlign: 'center', stroke: true, strokeColor: '#000000', strokeWidth: 5, shadow: true, shadowColor: '#000000', shadowOffsetX: 2, shadowOffsetY: 2, shadowBlur: 6, karaokeHighlight: true, highlightColor: '#ffeb3b' },
+
+];
 
 export const defaultSubtitleStyle = {
   fontFamily: 'Inter',
@@ -68,7 +59,7 @@ export const defaultSubtitleStyle = {
   color: '#ffffff',
   backgroundColor: 'transparent',
   backgroundOpacity: 0,
-  textAlign: 'center',
+  maxWords: 4,
   textTransform: 'none',
   letterSpacing: 0,
   lineHeight: 1.2,

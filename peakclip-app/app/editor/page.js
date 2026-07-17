@@ -30,18 +30,49 @@ const FONTS = [
   'Roboto Condensed', 'Poppins', 'Arial Black', 'Impact', 'Playfair Display'
 ]
 
+const PRESET_CATEGORIES = [
+  { id: 'sync', name: 'Word by Word' },
+  { id: 'boxed', name: 'Background' },
+  { id: 'classic', name: 'Classic & Clean' },
+  { id: 'bold', name: 'Bold & Impact' },
+]
+
 const SUBTITLE_PRESETS = [
-  { id: 'none', name: 'No captions', isNone: true },
-  { id: 'karaoke', name: 'Karaoke', color: '#000000', highlightColor: '#ff1f1f', fontWeight: '800', karaokeHighlight: true },
-  { id: 'beasty', name: 'Beasty', color: '#ffffff', backgroundColor: '#ff1f1f', backgroundOpacity: 100, fontWeight: '900', textTransform: 'uppercase' },
-  { id: 'youshaei', name: 'Youshaei', color: '#ff1f1f', fontWeight: '800', fontStyle: 'italic', textTransform: 'uppercase' },
-  { id: 'popline', name: 'Popline', color: '#ffffff', backgroundColor: '#ff1f1f', backgroundOpacity: 100, fontWeight: '800', textTransform: 'uppercase' },
-  { id: 'boldpod', name: 'Bold Pod', color: '#ffffff', fontWeight: '900', fontSize: 36, backgroundColor: '#000000', backgroundOpacity: 60, backgroundBorderRadius: 12 },
-  { id: 'minimal', name: 'Minimal', color: '#000000', fontWeight: '300', letterSpacing: 2, textTransform: 'uppercase' },
-  { id: 'retro', name: 'Retro', color: '#000000', fontFamily: 'Impact', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
-  { id: 'deepdiver', name: 'Deep Diver', color: '#ffffff', backgroundColor: '#111827', backgroundOpacity: 80, fontWeight: '600' },
-  { id: 'newspaper', name: 'Newspaper', color: '#000000', fontFamily: 'Times New Roman', fontWeight: '700', backgroundColor: '#f3f4f6', backgroundOpacity: 100, backgroundBorderRadius: 2, lineHeight: 1.1 },
-  { id: 'shadowdeep', name: 'Deep Shadow', color: '#ffffff', fontWeight: '900', shadow: true, shadowColor: '#000000', shadowBlur: 16, shadowOffsetX: 4, shadowOffsetY: 4, letterSpacing: 0.5 }
+  { id: 'none', name: 'No captions', cat: '', isNone: true },
+  { id: 'focus', name: 'Focus', cat: 'sync', color: '#ffffff', highlightColor: '#ff1f1f', fontWeight: '900', fontSize: 38, karaokeHighlight: true, stroke: true, strokeColor: '#000000', strokeWidth: 3, fontFamily: 'Inter', backgroundColor: '#ff1f1f', backgroundOpacity: 30, backgroundBorderRadius: 18, backgroundPadding: 16 },
+  { id: 'karaoke', name: 'Karaoke', cat: 'sync', color: '#ffffff', highlightColor: '#ff1f1f', fontWeight: '800', fontSize: 34, karaokeHighlight: true, stroke: true, strokeColor: '#000000', strokeWidth: 4, fontFamily: 'Inter' },
+  { id: 'typewriter', name: 'Typewriter', cat: 'sync', color: '#ff1f1f', highlightColor: '#ff1f1f', fontWeight: '900', fontSize: 34, fontFamily: 'Courier New', textTransform: 'uppercase', stroke: true, strokeColor: '#000000', strokeWidth: 4, karaokeHighlight: true },
+  { id: 'bounce', name: 'Bounce', cat: 'sync', color: '#ffffff', fontWeight: '900', fontSize: 36, fontFamily: 'Montserrat', stroke: true, strokeColor: '#000000', strokeWidth: 4, shadow: true, shadowColor: '#ff1f1f', shadowBlur: 12, shadowOffsetX: 0, shadowOffsetY: 0 },
+  { id: 'neon', name: 'Neon Glow', cat: 'sync', color: '#ff1f1f', fontWeight: '900', fontSize: 34, fontFamily: 'Bebas Neue', shadow: true, shadowColor: '#ff1f1f', shadowBlur: 20, shadowOffsetX: 0, shadowOffsetY: 0, stroke: true, strokeColor: '#330000', strokeWidth: 2 },
+  { id: 'vhs', name: 'VHS', cat: 'sync', color: '#ffffff', fontWeight: '700', fontSize: 30, fontFamily: 'Courier New', textTransform: 'uppercase', letterSpacing: 2, stroke: true, strokeColor: '#000000', strokeWidth: 3 },
+  { id: 'bold_block', name: 'Bold Block', cat: 'boxed', color: '#ffffff', fontWeight: '900', fontSize: 36, backgroundColor: '#000000', backgroundOpacity: 80, backgroundBorderRadius: 12, backgroundPadding: 16 },
+  { id: 'bubble', name: 'Bubble Chat', cat: 'boxed', color: '#000000', fontWeight: '700', fontSize: 30, backgroundColor: '#ffffff', backgroundOpacity: 95, backgroundBorderRadius: 24, backgroundPadding: 18, fontFamily: 'Poppins' },
+  { id: 'bottom_bar', name: 'Bottom Bar', cat: 'boxed', color: '#ffffff', fontWeight: '800', fontSize: 34, backgroundColor: '#000000', backgroundOpacity: 70, backgroundBorderRadius: 0, backgroundPadding: 20, textTransform: 'uppercase' },
+  { id: 'boldpod', name: 'Bold Pod', cat: 'boxed', color: '#ffffff', fontWeight: '900', fontSize: 36, backgroundColor: '#000000', backgroundOpacity: 60, backgroundBorderRadius: 12, stroke: true, strokeColor: '#000000', strokeWidth: 2 },
+  { id: 'reels', name: 'Reels Style', cat: 'boxed', color: '#ffffff', fontWeight: '800', fontSize: 32, fontFamily: 'Montserrat', backgroundColor: '#ff1f1f', backgroundOpacity: 85, backgroundBorderRadius: 16, backgroundPadding: 14, stroke: true, strokeColor: '#000000', strokeWidth: 2 },
+  { id: 'slide', name: 'Slide In', cat: 'boxed', color: '#ffffff', fontWeight: '800', fontSize: 32, backgroundColor: '#ff1f1f', backgroundOpacity: 90, backgroundBorderRadius: 8, backgroundPadding: 12, fontFamily: 'Montserrat' },
+  { id: 'deepdiver', name: 'Deep Diver', cat: 'boxed', color: '#ffffff', backgroundColor: '#1a1a2e', backgroundOpacity: 80, fontWeight: '600', fontSize: 32, fontFamily: 'Inter', stroke: true, strokeColor: '#000000', strokeWidth: 2 },
+  { id: 'glass', name: 'Glass', cat: 'boxed', color: '#ffffff', fontWeight: '600', fontSize: 32, backgroundColor: 'rgba(255,255,255,0.1)', backgroundOpacity: 30, backgroundBorderRadius: 16, letterSpacing: 1, shadow: true, shadowColor: '#000000', shadowBlur: 20, shadowOffsetX: 0, shadowOffsetY: 8 },
+  { id: 'pastel', name: 'Pastel', cat: 'boxed', color: '#1a1a2e', fontWeight: '700', fontSize: 32, backgroundColor: '#fce4ec', backgroundOpacity: 100, backgroundBorderRadius: 16, backgroundPadding: 14, fontFamily: 'Poppins' },
+  { id: 'spotify', name: 'Spotify', cat: 'boxed', color: '#1ed760', fontFamily: 'Inter', fontWeight: '900', fontSize: 32, backgroundColor: '#121212', backgroundOpacity: 80, letterSpacing: 0.5 },
+  { id: 'beasty', name: 'Bold Impact', cat: 'boxed', color: '#ffffff', backgroundColor: '#ff1f1f', backgroundOpacity: 100, fontWeight: '900', fontSize: 38, textTransform: 'uppercase', fontFamily: 'Bebas Neue', stroke: true, strokeColor: '#000000', strokeWidth: 2 },
+  { id: 'popline', name: 'Pop Line', cat: 'boxed', color: '#ffffff', backgroundColor: '#ff1f1f', backgroundOpacity: 100, fontWeight: '800', fontSize: 34, textTransform: 'uppercase', fontFamily: 'Anton', stroke: true, strokeColor: '#000000', strokeWidth: 2 },
+  { id: 'classic', name: 'Classic', cat: 'classic', color: '#ffffff', fontWeight: '700', fontSize: 32, stroke: true, strokeColor: '#000000', strokeWidth: 4, backgroundColor: 'transparent', backgroundOpacity: 0 },
+  { id: 'outline', name: 'Outline', cat: 'classic', color: '#ffffff', fontWeight: '800', fontSize: 34, stroke: true, strokeColor: '#000000', strokeWidth: 6, backgroundColor: 'transparent' },
+  { id: 'shadow', name: 'Shadow', cat: 'classic', color: '#ffffff', fontWeight: '700', fontSize: 32, shadow: true, shadowColor: '#000000', shadowBlur: 8, shadowOffsetX: 3, shadowOffsetY: 3 },
+  { id: 'minimal', name: 'Minimal', cat: 'classic', color: '#000000', fontWeight: '300', fontSize: 28, letterSpacing: 3, textTransform: 'uppercase', fontFamily: 'Inter' },
+  { id: 'handwriting', name: 'Handwriting', cat: 'classic', color: '#ffffff', fontWeight: '600', fontSize: 34, fontFamily: 'Dancing Script', fontStyle: 'italic', stroke: true, strokeColor: '#000000', strokeWidth: 3 },
+  { id: 'newspaper', name: 'Newspaper', cat: 'classic', color: '#000000', fontFamily: 'Times New Roman', fontWeight: '700', fontSize: 30, backgroundColor: '#f3f4f6', backgroundOpacity: 100, backgroundBorderRadius: 2, lineHeight: 1.1 },
+  { id: 'gradient', name: 'Gradient Text', cat: 'classic', color: '#ffffff', fontWeight: '900', fontSize: 38, fontFamily: 'Montserrat', stroke: true, strokeColor: '#000000', strokeWidth: 3 },
+  { id: 'shadowdeep', name: 'Deep Shadow', cat: 'classic', color: '#ffffff', fontWeight: '900', fontSize: 34, shadow: true, shadowColor: '#000000', shadowBlur: 16, shadowOffsetX: 4, shadowOffsetY: 4, letterSpacing: 0.5 },
+  { id: 'tiktok', name: 'TikTok Style', cat: 'bold', color: '#ffffff', fontWeight: '900', fontSize: 34, fontFamily: 'Montserrat', stroke: true, strokeColor: '#000000', strokeWidth: 4, textTransform: 'uppercase', letterSpacing: 1 },
+  { id: 'glitch', name: 'Glitch', cat: 'bold', color: '#ffffff', fontWeight: '800', fontSize: 34, fontFamily: 'Montserrat', stroke: true, strokeColor: '#000000', strokeWidth: 3, letterSpacing: 1 },
+  { id: 'meme', name: 'Meme', cat: 'bold', color: '#ffffff', fontFamily: 'Impact', fontWeight: '900', fontSize: 38, stroke: true, strokeColor: '#000000', strokeWidth: 5, textTransform: 'uppercase' },
+  { id: 'youshaei', name: 'Red Italic', cat: 'bold', color: '#ff1f1f', fontWeight: '800', fontSize: 32, fontStyle: 'italic', textTransform: 'uppercase', fontFamily: 'Montserrat', stroke: true, strokeColor: '#000000', strokeWidth: 2 },
+  { id: 'retro', name: 'Retro', cat: 'bold', color: '#ffcc00', fontFamily: 'Impact', fontWeight: '900', fontSize: 34, stroke: true, strokeColor: '#000000', strokeWidth: 3, textTransform: 'uppercase', letterSpacing: 1 },
+  { id: 'vaporwave', name: 'Vaporwave', cat: 'bold', color: '#f472b6', fontWeight: '800', fontSize: 32, fontFamily: 'Orbitron', stroke: true, strokeColor: '#000000', strokeWidth: 2, letterSpacing: 3 },
+  { id: 'cinematic', name: 'Cinematic', cat: 'bold', color: '#ffffff', fontWeight: '400', fontSize: 28, letterSpacing: 4, textTransform: 'uppercase', fontFamily: 'Playfair Display', shadow: true, shadowColor: '#000000', shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2 },
+  { id: '3d_extrude', name: '3D Extrude', cat: 'bold', color: '#ffffff', fontWeight: '900', fontSize: 36, fontFamily: 'Anton', textTransform: 'uppercase', shadow: true, shadowColor: '#000000', shadowBlur: 0, shadowOffsetX: 3, shadowOffsetY: 3, stroke: true, strokeColor: '#333333', strokeWidth: 2 },
 ]
 
 const VIRAL_HOOKS = [
@@ -125,12 +156,12 @@ export default function EditorPage() {
   const [zoomCanvas, setZoomCanvas] = useState(100)
 
   // Subtitle Style Settings
-  const [selectedPresetId, setSelectedPresetId] = useState('karaoke')
+  const [selectedPresetId, setSelectedPresetId] = useState('classic')
   const [subtitleStyle, setSubtitleStyle] = useState({
-    fontFamily: 'Montserrat',
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#000000',
+    fontFamily: 'Inter',
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ffffff',
     backgroundColor: 'transparent',
     backgroundOpacity: 0,
     backgroundBorderRadius: 6,
@@ -139,15 +170,16 @@ export default function EditorPage() {
     letterSpacing: 0,
     lineHeight: 1.2,
     positionY: 78,
-    maxWidth: 85,
-    stroke: false,
-    strokeWidth: 0,
+    maxWidth: 82,
+    stroke: true,
+    strokeColor: '#000000',
+    strokeWidth: 4,
     shadow: false,
     shadowColor: '#000000',
     shadowBlur: 4,
     shadowOffsetX: 2,
     shadowOffsetY: 2,
-    karaokeHighlight: true,
+    karaokeHighlight: false,
     highlightColor: '#ff1f1f',
     fontStyle: 'normal'
   })
@@ -372,7 +404,8 @@ export default function EditorPage() {
           }
         } else {
           // Default demo clip
-          setVideoSrc('https://assets.mixkit.co/videos/preview/mixkit-holding-a-retro-game-controller-with-both-hands-41484-large.mp4')
+           // Keep the demo playable without requiring storage permissions.
+           setVideoSrc('https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4')
           setDuration(39)
           setClipDate(new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))
           const defaultEN = generateEnglishTranscript(39)
@@ -631,203 +664,170 @@ export default function EditorPage() {
   const getSubtitleStyle = (text, presetId, style) => {
     const fs = style?.fontSize || 22
     const presets = {
-      karaoke: {
-        color: style?.highlightColor || '#ff1f1f',
+      focus: {
+        color: '#ffffff',
         fontWeight: 900,
-        textTransform: 'uppercase',
-        textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000',
-        WebkitTextStroke: '1px black',
-        letterSpacing: '0.5px',
+        textShadow: '2px 2px 0 #000',
         lineHeight: 1.2,
       },
+      karaoke: {
+        color: '#ffffff',
+        fontWeight: 800,
+        textShadow: '2px 2px 0 #000',
+        lineHeight: 1.3,
+      },
       beasty: {
-        color: style?.highlightColor || '#ffeb3b',
+        color: '#ffffff',
         fontWeight: 900,
         textTransform: 'uppercase',
-        textShadow: '-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000',
-        letterSpacing: '1px',
-        lineHeight: 1.1,
+        textShadow: '2px 2px 0 #000',
+        letterSpacing: '0.5px',
+        lineHeight: 1.2,
       },
       deepdiver: {
         color: '#ffffff',
         fontWeight: 700,
-        background: 'rgba(0,0,60,0.75)',
-        padding: '4px 12px',
-        borderRadius: '4px',
+        background: 'rgba(26,26,46,0.8)',
+        padding: '4px 14px',
+        borderRadius: '6px',
         lineHeight: 1.3,
+        textShadow: '2px 2px 0 #000',
       },
       youshaei: {
-        color: style?.highlightColor || '#ff1f1f',
-        fontWeight: 600,
+        color: '#ff1f1f',
+        fontWeight: 700,
         fontStyle: 'italic',
         textTransform: 'uppercase',
-        textShadow: '0 2px 12px rgba(0,0,0,0.9)',
-        letterSpacing: '0.3px',
-        lineHeight: 1.4,
-      },
-      podp: {
-        color: '#000000',
-        fontWeight: 700,
-        background: '#ffffff',
-        padding: '3px 10px',
-        borderRadius: '3px',
+        textShadow: '2px 2px 0 #000',
+        letterSpacing: '0.5px',
         lineHeight: 1.3,
       },
-      mozi: {
+      popline: {
         color: '#ffffff',
         fontWeight: 900,
         textTransform: 'uppercase',
-        background: 'linear-gradient(135deg, #7c3aed, #db2777)',
-        padding: '4px 14px',
-        borderRadius: '6px',
+        textShadow: '2px 2px 0 #000',
         letterSpacing: '0.5px',
-      },
-      popline: {
-        color: '#fde047',
-        fontWeight: 900,
-        textTransform: 'uppercase',
-        background: '#000000',
-        border: '2px solid #fde047',
-        padding: '3px 10px',
-        borderRadius: '4px',
-        letterSpacing: '1px',
+        lineHeight: 1.2,
       },
       typewriter: {
         color: style?.highlightColor || '#ff1f1f',
         fontWeight: 900,
         textTransform: 'uppercase',
-        textShadow: '-3px -3px 0 #000, 3px -3px 0 #000',
-        WebkitTextStroke: '1px black',
+        textShadow: '2px 2px 0 #000',
         letterSpacing: '0.5px',
       },
       gradient: {
         color: '#ffffff',
         fontWeight: 800,
-        textShadow: '0 0 6px #000, 2px 2px 4px #000',
+        textShadow: '2px 2px 4px #000',
         letterSpacing: '0.5px',
       },
       neon: {
-        color: '#00ff88',
+        color: '#ffffff',
         fontWeight: 900,
-        textShadow: '0 0 12px #00ff88, 0 0 4px #003322',
-        WebkitTextStroke: '1px #003322',
+        textShadow: '2px 2px 0 #000, 0 0 20px #ff1f1f',
+        letterSpacing: '1px',
       },
       minimal: {
         color: '#ffffff',
         fontWeight: 300,
         textTransform: 'uppercase',
         letterSpacing: '2px',
+        textShadow: '2px 2px 0 #000',
       },
       boldpod: {
         color: '#ffffff',
         fontWeight: 900,
         background: 'rgba(0,0,0,0.6)',
-        padding: '4px 12px',
+        padding: '4px 14px',
         borderRadius: '12px',
         lineHeight: 1.3,
+        textShadow: '2px 2px 0 #000',
       },
       retro: {
         color: '#ffcc00',
         fontWeight: 900,
         textTransform: 'uppercase',
         fontFamily: 'Impact',
-        textShadow: '-3px -3px 0 #cc0000, 3px -3px 0 #cc0000, -3px 3px 0 #cc0000, 3px 3px 0 #cc0000',
-        letterSpacing: '1px',
-      },
-      elegant: {
-        color: '#d4af37',
-        fontWeight: 700,
-        fontStyle: 'italic',
-        fontFamily: 'Playfair Display',
-        textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+        textShadow: '2px 2px 0 #000',
         letterSpacing: '0.5px',
-        lineHeight: 1.1,
       },
-      matrix: {
-        color: '#00ff41',
+      bounce: {
+        color: '#ffffff',
         fontWeight: 900,
-        fontFamily: 'Courier New, monospace',
-        textShadow: '0 0 8px #00ff41, 0 0 2px #003300',
+        textShadow: '2px 2px 0 #000, 0 0 16px #ff1f1f',
+        letterSpacing: '0.5px',
+      },
+      vhs: {
+        color: '#ffffff',
+        fontWeight: 700,
+        fontFamily: 'Courier New',
+        textTransform: 'uppercase',
+        textShadow: '2px 2px 0 #000',
         letterSpacing: '2px',
       },
-      cyber: {
-        color: '#ff00ff',
+      slide: {
+        color: '#ffffff',
+        fontWeight: 800,
+        textShadow: '2px 2px 0 #000',
+        letterSpacing: '0.5px',
+      },
+      tiktok: {
+        color: '#ffffff',
         fontWeight: 900,
         textTransform: 'uppercase',
-        fontFamily: 'Orbitron, sans-serif',
-        textShadow: '-2px 0 #00ffff, 2px 0 #00ffff',
-        letterSpacing: '2px',
+        textShadow: '2px 2px 0 #000',
+        letterSpacing: '0.5px',
       },
-      sunset: {
-        color: '#ff6b35',
+      reels: {
+        color: '#ffffff',
         fontWeight: 800,
-        fontStyle: 'italic',
-        textShadow: '0 2px 12px rgba(255,107,53,0.6)',
-        background: 'linear-gradient(180deg, rgba(26,10,0,0.85), rgba(60,20,0,0.85))',
-        padding: '4px 12px',
-        borderRadius: '8px',
+        textShadow: '2px 2px 0 #000',
+        letterSpacing: '0.5px',
       },
-      ocean: {
-        color: '#7dd3fc',
-        fontWeight: 700,
-        textShadow: '0 0 10px rgba(125,211,252,0.5)',
-        background: 'linear-gradient(135deg, rgba(2,6,23,0.85), rgba(15,23,42,0.85))',
-        padding: '4px 14px',
-        borderRadius: '10px',
+      glitch: {
+        color: '#ffffff',
+        fontWeight: 800,
         letterSpacing: '1px',
+        textShadow: '2px 2px 0 #000',
       },
-      candy: {
-        color: '#ff69b4',
-        fontWeight: 800,
-        textShadow: '-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff',
-        WebkitTextStroke: '0.5px white',
+      cinematic: {
+        color: '#ffffff',
+        fontWeight: 400,
+        textTransform: 'uppercase',
+        fontFamily: 'Playfair Display',
+        textShadow: '2px 2px 4px #000',
+        letterSpacing: '3px',
       },
-      newspaper: {
-        color: '#0a0a0a',
-        fontWeight: 700,
-        fontFamily: 'Times New Roman, serif',
-        background: '#f5f0e8',
-        padding: '2px 8px',
-        borderRadius: '2px',
-        lineHeight: 1.1,
+      meme: {
+        color: '#ffffff',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+        fontFamily: 'Impact',
+        textShadow: '3px 3px 0 #000',
       },
       shadowdeep: {
         color: '#ffffff',
         fontWeight: 900,
-        textShadow: '4px 4px 16px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,0.5)',
+        textShadow: '4px 4px 16px rgba(0,0,0,0.9)',
         letterSpacing: '0.5px',
       },
       vaporwave: {
         color: '#f472b6',
         fontWeight: 800,
         textTransform: 'uppercase',
-        textShadow: '-2px -2px 0 #2dd4bf, 2px 2px 0 #2dd4bf',
-        letterSpacing: '4px',
-      },
-      tiktok: {
-        color: '#ffff00',
-        fontWeight: 900,
-        textTransform: 'uppercase',
-        background: '#000000',
-        padding: '3px 10px',
-        WebkitTextStroke: '1px #000',
-        textShadow: '0 0 4px rgba(255,255,0,0.5)',
+        fontFamily: 'Orbitron',
+        textShadow: '2px 2px 0 #000',
+        letterSpacing: '3px',
       },
       spotify: {
         color: '#1ed760',
         fontWeight: 900,
-        fontFamily: 'Circular, sans-serif',
-        textShadow: '0 0 6px rgba(30,215,96,0.4)',
+        textShadow: '2px 2px 0 #000',
         background: 'rgba(18,18,18,0.85)',
-        padding: '3px 10px',
+        padding: '3px 12px',
         borderRadius: '4px',
-      },
-      glitch: {
-        color: '#ffffff',
-        fontWeight: 900,
-        textTransform: 'uppercase',
-        textShadow: '-2px 0 #ff0040, 2px 0 #00ffff',
-        letterSpacing: '1px',
       },
       glass: {
         color: '#ffffff',
@@ -838,19 +838,46 @@ export default function EditorPage() {
         borderRadius: '16px',
         border: '1px solid rgba(255,255,255,0.15)',
         letterSpacing: '1px',
+        textShadow: '2px 2px 0 #000',
       },
     }
-    const base = presets[presetId] || presets.youshaei
+    const base = presets[presetId] || presets.karaoke
     return {
-      fontSize: `${(style?.fontSize || 22) + (presetId === 'beasty' ? 4 : presetId === 'mozi' ? 2 : presetId === 'popline' ? 2 : 0)}px`,
+      ...base,
+      fontSize: `${(style?.fontSize || 22) + (presetId === 'beasty' ? 4 : 0)}px`,
       fontFamily: style?.fontFamily || 'Montserrat, sans-serif',
-      textAlign: 'center',
+      textAlign: style?.textAlign || 'center',
+      color: style?.color || base.color || '#ffffff',
+      fontWeight: style?.fontWeight || base.fontWeight || '700',
       maxWidth: '90%',
       wordBreak: 'break-word',
       display: 'block',
-      transition: 'all 0.1s ease',
-      ...base,
     }
+  }
+
+  const wordByWordPresets = ['karaoke', 'typewriter', 'bounce', 'vhs', 'neon', 'focus']
+
+  function getSubtitleWordsAtTime(time) {
+    if (wordByWordPresets.includes(selectedPresetId)) {
+      const visible = activeTranscript.filter(w => !w.deleted)
+      const idx = visible.findIndex(w => time < Number(w.endTime) + 0.18)
+      if (idx === -1) return []
+      const word = visible[idx]
+      if (time >= Number(word.startTime) - 0.18 && time < Number(word.endTime) + 0.18) {
+        return [word]
+      }
+      return []
+    }
+
+    const activeWord = activeTranscript.find(w =>
+      !w.deleted && time >= Number(w.startTime) - 0.12 && time < Number(w.endTime)
+    )
+    if (!activeWord) return []
+
+    const phrase = groupWordsIntoPhrases(activeTranscript).find(words =>
+      words.some(w => w.id === activeWord.id)
+    )
+    return phrase?.filter(w => !w.deleted) || [activeWord]
   }
 
   const drawSubtitlesOnCanvas = (canvas, timeOverride) => {
@@ -861,24 +888,12 @@ export default function EditorPage() {
     if (selectedPresetId === 'none') return
 
     const time = timeOverride != null ? timeOverride : currentTime
-    const activeWord = activeTranscript.find(w => !w.deleted && time >= w.startTime && time <= w.endTime)
-    if (!activeWord) {
-      let foundAny = false
-      for (let i = activeTranscript.length - 1; i >= 0; i--) {
-        const w = activeTranscript[i]
-        if (!w.deleted && time >= w.startTime && time <= w.endTime) { foundAny = true; break }
-      }
-      if (!foundAny) return
-    }
-
-    const phrases = groupWordsIntoPhrases(activeTranscript)
-    const activePhraseIdx = phrases.findIndex(p => p.some(w => !w.deleted && time >= w.startTime && time <= w.endTime))
-    if (activePhraseIdx === -1) return
-
-    const activePhrase = phrases[activePhraseIdx]
-    // Show words progressively: only words that have started + 1 upcoming
-    const wordsToDraw = activePhrase.filter(w => !w.deleted && w.startTime <= time + 1.0)
+    const wordsToDraw = getSubtitleWordsAtTime(time)
     if (!wordsToDraw.length) return
+    const activeWord = wordByWordPresets.includes(selectedPresetId)
+      ? wordsToDraw[0]
+      : wordsToDraw.find(w => time >= Number(w.startTime) - 0.12 && time < Number(w.endTime))
+    if (!activeWord) return
 
     const font = subtitleStyle.fontFamily
     const fontSize = subtitleStyle.fontSize
@@ -886,23 +901,7 @@ export default function EditorPage() {
     const textTransform = subtitleStyle.textTransform
     const baseY = (canvas.height * subtitleStyle.positionY) / 100
 
-    // 1-by-1 Typewriter style
-    if (selectedPresetId === 'typewriter') {
-      ctx.save()
-      const wordText = textTransform === 'uppercase' ? activeWord.word.toUpperCase() :
-                       textTransform === 'lowercase' ? activeWord.word.toLowerCase() : activeWord.word
-      ctx.font = `${subtitleStyle.fontStyle || 'normal'} ${fontWeight} ${fontSize * 1.45}px ${font}`
-      const wordW = ctx.measureText(wordText).width
-      const textX = (canvas.width - wordW) / 2
-      ctx.strokeStyle = '#000000'
-      ctx.lineWidth = 7
-      ctx.lineJoin = 'round'
-      ctx.strokeText(wordText, textX, baseY)
-      ctx.fillStyle = subtitleStyle.highlightColor || '#ff1f1f'
-      ctx.fillText(wordText, textX, baseY)
-      ctx.restore()
-      return
-    }
+    // Focus and Typewriter use the general multi-word rendering below
 
     // Group words into display lines for multi-line support
     const charWidth = ctx.measureText('A').width || fontSize * 0.6
@@ -927,6 +926,15 @@ export default function EditorPage() {
       }
     }
     if (line.length > 0) displayLines.push(line)
+    const MAX_LINES = 3
+    if (displayLines.length > MAX_LINES) {
+      displayLines.splice(MAX_LINES)
+      const last = displayLines[MAX_LINES - 1]
+      if (last.length > 0) {
+        const lastWord = last[last.length - 1]
+        lastWord.text = lastWord.text ? lastWord.text + '...' : '...'
+      }
+    }
 
     const lineHeight = fontSize * (subtitleStyle.lineHeight || 1.3)
     const totalTextHeight = displayLines.length * lineHeight
@@ -971,13 +979,6 @@ export default function EditorPage() {
         const isFuture = time < lw.word.startTime
         const tw = ctx.measureText(lw.text).width * autoScale
 
-        // Future (unspoken) words are dim
-        if (isFuture) {
-          ctx.globalAlpha = 0.2
-        } else if (isPast) {
-          ctx.globalAlpha = 0.6
-        }
-
         let color = subtitleStyle.color
         let stroke = subtitleStyle.stroke
         let strokeColor = subtitleStyle.strokeColor
@@ -1004,9 +1005,6 @@ export default function EditorPage() {
           strokeWidth = 2
         } else if (selectedPresetId === 'karaoke') {
           color = isActive ? (subtitleStyle.highlightColor || '#ff1f1f') : '#ffffff'
-          stroke = isActive
-          strokeColor = '#000000'
-          strokeWidth = 3
         }
 
         if (subtitleStyle.karaokeHighlight) {
@@ -1030,21 +1028,48 @@ export default function EditorPage() {
         }
 
         if (stroke) {
+          if (subtitleStyle.shadow) {
+            ctx.shadowColor = 'transparent'
+          }
           ctx.strokeStyle = strokeColor
           ctx.lineWidth = strokeWidth
           ctx.lineJoin = 'round'
           ctx.strokeText(lw.text, 0, 0)
+          if (subtitleStyle.shadow) {
+            ctx.shadowColor = subtitleStyle.shadowColor || '#000000'
+          }
         }
 
         // Active word highlight bar
-        if (isActive && subtitleStyle.highlightColor && selectedPresetId !== 'karaoke') {
+        if (isActive && subtitleStyle.highlightColor) {
           ctx.save()
           ctx.fillStyle = subtitleStyle.highlightColor
-          ctx.globalAlpha = 0.2
-          const barPad = 4
+          ctx.globalAlpha = 0.25
+          const barPad = 6
           ctx.beginPath()
-          ctx.roundRect(-barPad, -fontSize * autoScale * 0.65, tw + barPad * 2, fontSize * autoScale * 1.15, 4)
+          ctx.roundRect(-barPad, -fontSize * autoScale * 0.7, tw + barPad * 2, fontSize * autoScale * 1.2, 6)
           ctx.fill()
+          ctx.shadowColor = subtitleStyle.highlightColor
+          ctx.shadowBlur = 20
+          ctx.globalAlpha = 0.08
+          ctx.beginPath()
+          ctx.roundRect(-barPad + 2, -fontSize * autoScale * 0.7, tw + barPad * 2 - 4, fontSize * autoScale * 1.2, 6)
+          ctx.fill()
+          ctx.restore()
+        }
+
+        // Keep the active word prominent in every caption template.
+        if (isActive && !['beasty', 'popline'].includes(selectedPresetId)) {
+          color = subtitleStyle.highlightColor || '#ff1f1f'
+        }
+
+        if (isActive && subtitleStyle.highlightColor) {
+          ctx.save()
+          ctx.shadowColor = subtitleStyle.highlightColor
+          ctx.shadowBlur = 18
+          ctx.fillStyle = color
+          ctx.globalAlpha = 0.15
+          ctx.fillText(lw.text, 0, 0)
           ctx.restore()
         }
 
@@ -1057,13 +1082,10 @@ export default function EditorPage() {
     }
   }
 
-  // Computed phrase text from current time for DOM overlay
-  const phraseText = useMemo(() => {
-    if (selectedPresetId === 'none' || !activeTranscript.length) return ''
-    const phrases = groupWordsIntoPhrases(activeTranscript)
-    const phrase = phrases.find(p => p.some(w => !w.deleted && currentTime >= w.startTime && currentTime <= w.endTime))
-    if (!phrase) return ''
-    return phrase.map(w => w.word).join(' ')
+  // Keep the same synchronized caption words in the DOM preview as the canvas.
+  const subtitleWords = useMemo(() => {
+    if (selectedPresetId === 'none' || !activeTranscript.length) return []
+    return getSubtitleWordsAtTime(currentTime)
   }, [activeTranscript, currentTime, selectedPresetId])
 
   const handleTimeUpdate = useCallback(() => {
@@ -1359,7 +1381,7 @@ export default function EditorPage() {
         const last = current[current.length - 1]
         const gap = w.startTime - last.endTime
         const currentDuration = last.endTime - current[0].startTime
-        if (gap < 1.2 && currentDuration < 8 && current.length < 8) {
+        if (gap < 0.8 && currentDuration < 3.5 && current.length < 3) {
           current.push(w)
         } else {
           phrases.push(current)
@@ -1490,8 +1512,12 @@ export default function EditorPage() {
       videoRef.current.pause()
       setIsPlaying(false)
     } else {
-      videoRef.current.play().catch(() => {})
-      setIsPlaying(true)
+      videoRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch(() => {
+          setIsPlaying(false)
+          setVideoError('Unable to play this video')
+        })
     }
   }
 
@@ -2050,9 +2076,20 @@ export default function EditorPage() {
                 ref={videoRef}
                 src={displayVideoSrc}
                 loop
+                playsInline
+                preload="metadata"
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
                 onEnded={() => setIsPlaying(false)}
+                onError={(e) => {
+                  const originalSrc = e?.currentTarget?.src || displayVideoSrc
+                  const normalizedSrc = normalizeVideoUrl(originalSrc)
+                  if (normalizedSrc !== originalSrc && !videoError) {
+                    setDisplayVideoSrc(normalizedSrc)
+                  } else {
+                    setVideoError('Unable to load this video')
+                  }
+                }}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={() => {
                   if (videoRef.current?.duration) setDuration(videoRef.current.duration)
@@ -2064,22 +2101,79 @@ export default function EditorPage() {
                   transform: faceTrackingEnabled ? `scale(${faceTrackingZoom / 100}) translate(${-cropX.current * 0.05}px, ${-cropY.current * 0.05}px)` : 'none'
                 }}
               />
+              {videoError && (
+                <div style={{ position: 'absolute', inset: 0, zIndex: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '24px', textAlign: 'center', background: 'rgba(255,255,255,0.94)', color: '#0a0a0a' }}>
+                  <strong style={{ fontSize: '14px' }}>Couldn&apos;t load video</strong>
+                  <span style={{ fontSize: '12px', color: '#666666' }}>The video URL is unavailable or cannot be played.</span>
+                  <button
+                    onClick={() => {
+                      setVideoError(null)
+                      setDisplayVideoSrc(normalizeVideoUrl(videoSrc))
+                    }}
+                    style={{ background: '#ff1f1f', color: '#ffffff', border: 'none', borderRadius: '999px', padding: '8px 16px', fontWeight: '700', cursor: 'pointer' }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
 
-              {/* Subtitles overlay */}
+        {/* Subtitles overlay */}
               <div style={{
                 position: 'absolute',
                 inset: 0,
                 display: 'flex',
-                alignItems: 'flex-end',
+                alignItems: 'center',
                 justifyContent: 'center',
-                padding: '0 16px 12%',
+                padding: '0 16px',
                 pointerEvents: 'none',
                 zIndex: 10,
               }}>
-  {selectedPresetId !== 'none' && phraseText && (
-    <span style={getSubtitleStyle(phraseText, selectedPresetId, subtitleStyle)}>
-      {phraseText}
-    </span>
+  {selectedPresetId !== 'none' && subtitleWords.length > 0 && (
+    <div style={{
+      position: 'absolute',
+      left: '50%',
+      top: `${subtitleStyle.positionY}%`,
+      transform: 'translate(-50%, -50%)',
+      textAlign: 'center',
+      maxWidth: '90%',
+      pointerEvents: 'none',
+    }}>
+      <span style={getSubtitleStyle(subtitleWords.map(word => word.word).join(' '), selectedPresetId, subtitleStyle)}>
+        {(() => {
+          const hc = subtitleStyle.highlightColor || '#ff1f1f'
+          return subtitleWords.map((word, index) => {
+            const isActive = currentTime >= Number(word.startTime) - 0.12 && currentTime < Number(word.endTime)
+            const isPast = currentTime > Number(word.endTime)
+            return (
+              <span
+                key={word.id || `${word.word}-${index}`}
+                style={{
+                  position: 'relative',
+                  display: 'inline-block',
+                  color: isActive ? hc : (isPast ? subtitleStyle.color : subtitleStyle.color),
+                  fontWeight: isActive ? '900' : (subtitleStyle.fontWeight || '700'),
+                  transform: isActive ? 'scale(1.05)' : 'scale(1)',
+                  filter: isActive ? `drop-shadow(0 0 10px ${hc}33)` : 'none',
+                  transition: 'transform 0.15s ease, color 0.15s ease, filter 0.15s ease',
+                }}
+              >
+                {isActive && (
+                  <span style={{
+                    position: 'absolute',
+                    inset: '-8px -12px -6px',
+                    background: `${hc}1A`,
+                    borderRadius: '14px',
+                    zIndex: -1,
+                    boxShadow: `0 0 28px ${hc}22`,
+                  }} />
+                )}
+                {index > 0 ? '\u00A0' : ''}{word.word}
+              </span>
+            )
+          })
+        })()}
+      </span>
+    </div>
   )}
               </div>
 
@@ -2198,30 +2292,121 @@ export default function EditorPage() {
               {/* Estilos — incluye presets, tipografía y efectos */}
               {activeRightTab === 'presets' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div>
-                    <h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '10px', color: 'var(--cream-text-primary)' }}>
-                      Viral Shorts Styles
-                    </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                      {SUBTITLE_PRESETS.map(preset => {
-                        const isSelected = selectedPresetId === preset.id
-                        return (
-                          <div key={preset.id} onClick={() => applyPreset(preset)} style={{ backgroundColor: 'var(--cream-surface)', borderRadius: '8px', border: isSelected ? '2px solid var(--cream-accent)' : '1px solid var(--cream-panel-border)', padding: '10px', cursor: 'pointer', textAlign: 'center' }}>
-                            <div style={{ height: '50px', backgroundColor: '#0a0a0a', borderRadius: '4px', marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: 'var(--cream-accent)', fontWeight: '900' }}>
-                              {preset.isNone ? 'Ø' : 'Abc'}
-                            </div>
-                            <span style={{ fontSize: '10px', fontWeight: '700' }}>{preset.name}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
+                  {/* No captions */}
+                  <button
+                    type="button"
+                    onClick={() => applyPreset(SUBTITLE_PRESETS[0])}
+                    style={{
+                      background: selectedPresetId === 'none' ? 'var(--cream-accent)' : 'var(--cream-surface)',
+                      color: selectedPresetId === 'none' ? '#ffffff' : 'var(--cream-text-primary)',
+                      border: selectedPresetId === 'none' ? '2px solid var(--cream-accent)' : '1px solid var(--cream-panel-border)',
+                      borderRadius: '10px',
+                      padding: '10px 0',
+                      fontWeight: '800',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'background 0.15s, border-color 0.15s',
+                    }}
+                  >
+                    No captions
+                  </button>
+
+                  {PRESET_CATEGORIES.map(category => {
+                    const catPresets = SUBTITLE_PRESETS.filter(p => p.cat === category.id)
+                    if (!catPresets.length) return null
+                    return (
+                      <div key={category.id}>
+                        <h4 style={{ fontSize: '12px', fontWeight: '800', color: 'var(--cream-text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {category.name}
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                          {catPresets.map(preset => {
+                            const isSelected = selectedPresetId === preset.id
+                            const previewBg = preset.backgroundColor && !preset.backgroundColor.startsWith('linear-gradient')
+                              ? preset.backgroundColor
+                              : '#f8f8f5'
+                            const previewColor = preset.color === 'transparent' ? '#ff1f1f' : (preset.color || '#ffffff')
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => applyPreset(preset)}
+                                style={{
+                                  background: 'var(--cream-surface)',
+                                  border: isSelected ? '2px solid var(--cream-accent)' : '1px solid var(--cream-panel-border)',
+                                  borderRadius: '8px',
+                                  padding: '8px',
+                                  cursor: 'pointer',
+                                  textAlign: 'center',
+                                  transition: 'border-color 0.15s, box-shadow 0.15s',
+                                  outline: 'none',
+                                }}
+                                onFocus={e => e.currentTarget.style.boxShadow = isSelected ? '0 0 0 2px var(--cream-accent)' : '0 0 0 2px var(--cream-focus-border)'}
+                                onBlur={e => e.currentTarget.style.boxShadow = 'none'}
+                              >
+                                <div style={{
+                                  height: '44px',
+                                  background: preset.isNone ? '#f8f8f5' : previewBg,
+                                  borderRadius: '4px',
+                                  marginBottom: '5px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  overflow: 'hidden',
+                                }}>
+                                  <span style={{
+                                    color: preset.isNone ? '#9ca3af' : previewColor,
+                                    fontFamily: preset.fontFamily || 'Inter',
+                                    fontSize: '13px',
+                                    fontWeight: preset.fontWeight || '800',
+                                    fontStyle: preset.fontStyle || 'normal',
+                                    letterSpacing: '0.3px',
+                                    textTransform: preset.textTransform || 'none',
+                                    WebkitTextStroke: preset.stroke ? `${Math.min(preset.strokeWidth || 1, 2)}px ${preset.strokeColor || '#000000'}` : '0 transparent',
+                                    textShadow: preset.shadow ? `1px 1px ${preset.shadowColor || '#000000'}` : 'none',
+                                    lineHeight: 1.2,
+                                  }}>
+                                    {preset.isNone ? '—' : 'Hello'}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--cream-text-primary)' }}>
+                                  {preset.name}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
 
                   <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '12px' }}>
-                    <h4 style={{ fontSize: '13px', fontWeight: '800', marginBottom: '10px' }}>Typography</h4>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <h4 style={{ fontSize: '13px', fontWeight: '800', margin: 0 }}>Typography</h4>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const current = SUBTITLE_PRESETS.find(p => p.id === selectedPresetId)
+                          if (current && !current.isNone) applyPreset(current)
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--cream-panel-border)',
+                          borderRadius: '6px',
+                          padding: '4px 10px',
+                          fontSize: '10px',
+                          fontWeight: '700',
+                          color: 'var(--cream-text-secondary)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Reset to preset
+                      </button>
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Font family</label>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Font</label>
                         <select value={subtitleStyle.fontFamily} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, fontFamily: e.target.value })} style={{ width: '100%', backgroundColor: 'var(--cream-surface)', border: '1px solid var(--cream-panel-border)', borderRadius: '6px', padding: '6px', fontSize: '12px', color: 'var(--cream-text-primary)' }}>
                           {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>
@@ -2278,13 +2463,15 @@ export default function EditorPage() {
                         <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Max width ({subtitleStyle.maxWidth}%)</label>
                         <input type="range" min="50" max="100" value={subtitleStyle.maxWidth || 85} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, maxWidth: parseInt(e.target.value) })} style={{ width: '100%' }} />
                       </div>
-                      <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Text color</label>
-                        <input type="color" value={subtitleStyle.color} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, color: e.target.value })} style={{ width: '100%', height: '30px', border: 'none', cursor: 'pointer' }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Vertical position ({subtitleStyle.positionY}%)</label>
-                        <input type="range" min="5" max="95" value={subtitleStyle.positionY} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, positionY: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Text color</label>
+                          <input type="color" value={subtitleStyle.color} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, color: e.target.value })} style={{ width: '100%', height: '30px', border: 'none', cursor: 'pointer' }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Position Y ({subtitleStyle.positionY}%)</label>
+                          <input type="range" min="5" max="95" value={subtitleStyle.positionY} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, positionY: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2292,53 +2479,61 @@ export default function EditorPage() {
                   <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '12px' }}>
                     <h4 style={{ fontSize: '13px', fontWeight: '800', marginBottom: '10px' }}>Effects</h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {/* Stroke section */}
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Stroke width ({subtitleStyle.strokeWidth}px)</label>
-                        <input type="range" min="0" max="10" step="0.5" value={subtitleStyle.strokeWidth} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, strokeWidth: parseFloat(e.target.value), stroke: parseFloat(e.target.value) > 0 })} style={{ width: '100%' }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Stroke color</label>
-                        <input type="color" value={subtitleStyle.strokeColor} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, strokeColor: e.target.value })} style={{ width: '100%', height: '30px', border: 'none', cursor: 'pointer' }} />
-                      </div>
-                      <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '8px' }}>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Background color</label>
-                        <input type="color" value={subtitleStyle.backgroundColor === 'transparent' ? '#000000' : subtitleStyle.backgroundColor} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, backgroundColor: e.target.value })} style={{ width: '100%', height: '30px', border: 'none', cursor: 'pointer' }} />
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Opacity ({subtitleStyle.backgroundOpacity}%)</label>
-                          <input type="range" min="0" max="100" value={subtitleStyle.backgroundOpacity} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, backgroundOpacity: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)', display: 'block', marginBottom: '2px' }}>Stroke</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                          <div>
+                            <input type="range" min="0" max="10" step="0.5" value={subtitleStyle.strokeWidth} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, strokeWidth: parseFloat(e.target.value), stroke: parseFloat(e.target.value) > 0 })} style={{ width: '100%' }} />
+                            <span style={{ fontSize: '9px', color: 'var(--cream-text-secondary)' }}>{subtitleStyle.strokeWidth}px</span>
+                          </div>
+                          <input type="color" value={subtitleStyle.strokeColor} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, strokeColor: e.target.value })} style={{ width: '100%', height: '28px', border: 'none', cursor: 'pointer' }} />
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Radius ({subtitleStyle.backgroundBorderRadius}px)</label>
+                      </div>
+                      {/* Background section */}
+                      <div>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)', display: 'block', marginBottom: '2px' }}>Background</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                          <input type="color" value={subtitleStyle.backgroundColor === 'transparent' ? '#000000' : subtitleStyle.backgroundColor} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, backgroundColor: e.target.value })} style={{ width: '100%', height: '28px', border: 'none', cursor: 'pointer' }} />
+                          <div>
+                            <label style={{ fontSize: '9px', color: 'var(--cream-text-secondary)' }}>Opacity {subtitleStyle.backgroundOpacity}%</label>
+                            <input type="range" min="0" max="100" value={subtitleStyle.backgroundOpacity} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, backgroundOpacity: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                          </div>
+                        </div>
+                        <div style={{ marginTop: '4px' }}>
+                          <label style={{ fontSize: '9px', color: 'var(--cream-text-secondary)' }}>Radius {subtitleStyle.backgroundBorderRadius}px</label>
                           <input type="range" min="0" max="24" value={subtitleStyle.backgroundBorderRadius || 6} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, backgroundBorderRadius: parseInt(e.target.value) })} style={{ width: '100%' }} />
                         </div>
                       </div>
-                      <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '8px' }}>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>
-                          <input type="checkbox" checked={subtitleStyle.shadow || false} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, shadow: e.target.checked })} style={{ marginRight: '6px' }} />
+                      {/* Shadow section */}
+                      <div>
+                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={subtitleStyle.shadow || false} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, shadow: e.target.checked })} />
                           Shadow
                         </label>
                         {subtitleStyle.shadow && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
-                            <input type="color" value={subtitleStyle.shadowColor || '#000000'} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, shadowColor: e.target.value })} style={{ width: '100%', height: '25px', border: 'none', cursor: 'pointer' }} />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                              <input type="color" value={subtitleStyle.shadowColor || '#000000'} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, shadowColor: e.target.value })} style={{ width: '100%', height: '26px', border: 'none', cursor: 'pointer' }} />
                               <div>
-                                <label style={{ fontSize: '9px', color: 'var(--cream-text-secondary)' }}>Blur ({subtitleStyle.shadowBlur}px)</label>
+                                <label style={{ fontSize: '9px', color: 'var(--cream-text-secondary)' }}>Blur {subtitleStyle.shadowBlur}px</label>
                                 <input type="range" min="0" max="20" value={subtitleStyle.shadowBlur || 4} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, shadowBlur: parseInt(e.target.value) })} style={{ width: '100%' }} />
                               </div>
-                              <div>
-                                <label style={{ fontSize: '9px', color: 'var(--cream-text-secondary)' }}>Offset Y ({subtitleStyle.shadowOffsetY}px)</label>
-                                <input type="range" min="0" max="10" value={subtitleStyle.shadowOffsetY || 2} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, shadowOffsetY: parseInt(e.target.value) })} style={{ width: '100%' }} />
-                              </div>
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '9px', color: 'var(--cream-text-secondary)' }}>Offset Y {subtitleStyle.shadowOffsetY}px</label>
+                              <input type="range" min="0" max="10" value={subtitleStyle.shadowOffsetY || 2} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, shadowOffsetY: parseInt(e.target.value) })} style={{ width: '100%' }} />
                             </div>
                           </div>
                         )}
                       </div>
-                      <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '8px' }}>
-                        <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)' }}>Highlight color (karaoke)</label>
-                        <input type="color" value={subtitleStyle.highlightColor || '#ff1f1f'} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, highlightColor: e.target.value, karaokeHighlight: true })} style={{ width: '100%', height: '30px', border: 'none', cursor: 'pointer' }} />
-                      </div>
+                      {/* Highlight color — contextual for word-by-word */}  
+                      {wordByWordPresets.includes(selectedPresetId) && (
+                        <div style={{ borderTop: '1px solid var(--cream-panel-border)', paddingTop: '8px' }}>
+                          <label style={{ fontSize: '10px', color: 'var(--cream-text-secondary)', display: 'block', marginBottom: '2px' }}>Active word color</label>
+                          <input type="color" value={subtitleStyle.highlightColor || '#ff1f1f'} onChange={(e) => setSubtitleStyle({ ...subtitleStyle, highlightColor: e.target.value, karaokeHighlight: true })} style={{ width: '100%', height: '30px', border: 'none', cursor: 'pointer' }} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2537,84 +2732,84 @@ export default function EditorPage() {
           alignItems: 'center',
           justifyContent: 'space-between',
           flexShrink: 0,
-          background: '#111',
-          borderBottom: '1px solid #333',
+          background: '#ffffff',
+          borderBottom: '1px solid #e5e5e0',
           minHeight: '44px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <button onClick={handleSplitClip} style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #444', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}>
+            <button onClick={handleSplitClip} style={{ background: '#f8f8f5', color: '#0a0a0a', border: '1px solid #e5e5e0', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', transition: 'all 0.15s' }}>
               <Scissors size={12} strokeWidth={1.5} />
               Split
             </button>
-            <button onClick={handleDeleteSelectedTimelineItem} style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button onClick={handleDeleteSelectedTimelineItem} style={{ background: 'rgba(255,31,31,0.1)', color: '#ff1f1f', border: '1px solid rgba(255,31,31,0.3)', borderRadius: '8px', padding: '4px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <Trash2 size={12} strokeWidth={1.5} />
               Delete
             </button>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <button onClick={() => seekTo(currentTime - 2)} style={{ background: 'none', border: 'none', color: '#a1a1aa', cursor: 'pointer', display: 'flex', padding: '4px', transition: 'color 0.15s' }}>
+            <button onClick={() => seekTo(currentTime - 2)} style={{ background: 'none', border: 'none', color: '#71717a', cursor: 'pointer', display: 'flex', padding: '4px', transition: 'color 0.15s' }}>
               <SkipBack size={16} strokeWidth={1.5} />
             </button>
-            <button onClick={togglePlay} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#c8ff00', color: '#000', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: isPlaying ? '0 0 20px rgba(200,255,0,0.3)' : 'none', transition: 'all 0.15s' }}>
+            <button onClick={togglePlay} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#ff1f1f', color: '#ffffff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: isPlaying ? '0 0 20px rgba(255,31,31,0.3)' : 'none', transition: 'all 0.15s' }}>
               {isPlaying ? <Pause size={16} fill="currentColor" strokeWidth={0} /> : <Play size={16} fill="currentColor" strokeWidth={0} />}
             </button>
-            <button onClick={() => seekTo(currentTime + 2)} style={{ background: 'none', border: 'none', color: '#a1a1aa', cursor: 'pointer', display: 'flex', padding: '4px', transition: 'color 0.15s' }}>
+            <button onClick={() => seekTo(currentTime + 2)} style={{ background: 'none', border: 'none', color: '#71717a', cursor: 'pointer', display: 'flex', padding: '4px', transition: 'color 0.15s' }}>
               <SkipForward size={16} strokeWidth={1.5} />
             </button>
-            <span style={{ fontSize: '12px', fontWeight: '700', color: '#d4d4d8', fontFamily: 'monospace', background: '#1a1a1a', padding: '2px 8px', borderRadius: '4px' }}>
+            <span style={{ fontSize: '12px', fontWeight: '700', color: '#0a0a0a', fontFamily: 'monospace', background: '#f8f8f5', padding: '2px 8px', borderRadius: '4px' }}>
               {new Date(currentTime * 1000).toISOString().substr(14, 5)}
-              <span style={{ color: '#52525b', fontWeight: '400' }}>
+              <span style={{ color: '#9ca3af', fontWeight: '400' }}>
                 {' / '}{new Date(duration * 1000).toISOString().substr(14, 5)}
               </span>
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <ZoomIn size={12} strokeWidth={1.5} style={{ color: '#52525b' }} />
-              <input type="range" min="10" max="100" value={timelineZoom} onChange={(e) => setTimelineZoom(parseInt(e.target.value))} style={{ width: '60px', accentColor: '#c8ff00' }} />
+              <ZoomIn size={12} strokeWidth={1.5} style={{ color: '#9ca3af' }} />
+              <input type="range" min="10" max="100" value={timelineZoom} onChange={(e) => setTimelineZoom(parseInt(e.target.value))} style={{ width: '60px', accentColor: '#ff1f1f' }} />
             </div>
           </div>
         </div>
 
         {/* Tracks */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#0d0d0d' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#ffffff' }}>
 
           {/* Playhead line that spans all tracks */}
           <div style={{ position: 'relative', flex: 1 }}>
             <div className="timeline-scroll" style={{ position: 'absolute', inset: 0, overflowY: 'hidden', overflowX: 'auto' }}>
               <div style={{ position: 'relative', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
                 {/* VIDEO track */}
-                <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a1a', minHeight: '48px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #e5e5e0', minHeight: '48px' }}>
                   <span style={{ width: '52px', flexShrink: 0, textAlign: 'right', paddingRight: '8px', fontSize: '9px', fontWeight: '700', color: '#71717a', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Video</span>
-                  <div ref={timelineRef} onClick={handleTimelineClick} style={{ flex: 1, height: '48px', position: 'relative', cursor: 'pointer', background: '#111' }}>
-                    <div style={{ position: 'absolute', top: '6px', bottom: '6px', left: 0, right: 0, background: '#222', borderRadius: '6px', border: '1px solid #333', display: 'flex', alignItems: 'center', padding: '0 8px', overflow: 'hidden' }}>
+                  <div ref={timelineRef} onClick={handleTimelineClick} style={{ flex: 1, height: '48px', position: 'relative', cursor: 'pointer', background: '#f8f8f5' }}>
+                    <div style={{ position: 'absolute', top: '6px', bottom: '6px', left: 0, right: 0, background: '#ffffff', borderRadius: '6px', border: '1px solid #e5e5e0', display: 'flex', alignItems: 'center', padding: '0 8px', overflow: 'hidden' }}>
                       <div style={{ display: 'flex', gap: '1px', height: '100%', alignItems: 'center' }}>
                         {Array.from({length: 30}).map((_, i) => (
-                          <div key={i} style={{ width: '4px', height: '24px', background: '#333', borderRadius: '1px', flexShrink: 0 }} />
+                          <div key={i} style={{ width: '4px', height: '24px', background: '#d0d0ca', borderRadius: '1px', flexShrink: 0 }} />
                         ))}
                       </div>
-                      <span style={{ position: 'absolute', left: '8px', fontSize: '9px', color: '#71717a', fontWeight: '600' }}>video.mp4</span>
+                      <span style={{ position: 'absolute', left: '8px', fontSize: '9px', color: '#9ca3af', fontWeight: '600' }}>video.mp4</span>
                     </div>
                     {/* Playhead */}
-                    <div style={{ position: 'absolute', top: 0, bottom: 0, width: '2px', background: '#c8ff00', left: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`, zIndex: 20, pointerEvents: 'none', boxShadow: '0 0 8px rgba(200,255,0,0.4)' }}>
-                      <div style={{ position: 'absolute', top: '-1px', left: '-4px', width: '10px', height: '10px', background: '#c8ff00', borderRadius: '50%', boxShadow: '0 0 12px rgba(200,255,0,0.6)' }} />
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, width: '2px', background: '#ff1f1f', left: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`, zIndex: 20, pointerEvents: 'none', boxShadow: '0 0 8px rgba(255,31,31,0.4)' }}>
+                      <div style={{ position: 'absolute', top: '-1px', left: '-4px', width: '10px', height: '10px', background: '#ff1f1f', borderRadius: '50%', boxShadow: '0 0 12px rgba(255,31,31,0.6)' }} />
                     </div>
                   </div>
                 </div>
 
                 {/* TEXT track */}
-                <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a1a', minHeight: '28px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #e5e5e0', minHeight: '28px' }}>
                   <span style={{ width: '52px', flexShrink: 0, textAlign: 'right', paddingRight: '8px', fontSize: '9px', fontWeight: '700', color: '#71717a', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Text</span>
-                  <div style={{ flex: 1, height: '28px', position: 'relative', background: '#0a0a0a', display: 'flex', alignItems: 'center', padding: '0 8px' }}>
-                    <span style={{ fontSize: '9px', color: '#52525b', fontStyle: 'italic' }}>Add text from the panel</span>
+                  <div style={{ flex: 1, height: '28px', position: 'relative', background: '#f8f8f5', display: 'flex', alignItems: 'center', padding: '0 8px' }}>
+                    <span style={{ fontSize: '9px', color: '#9ca3af', fontStyle: 'italic' }}>Add text from the panel</span>
                   </div>
                 </div>
 
                 {/* SUBTITLES track */}
-                <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a1a', minHeight: '36px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #e5e5e0', minHeight: '36px' }}>
                   <span style={{ width: '52px', flexShrink: 0, textAlign: 'right', paddingRight: '8px', fontSize: '9px', fontWeight: '700', color: '#71717a', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Subs</span>
-                  <div style={{ flex: 1, height: '36px', position: 'relative', background: '#0d0d0d' }}>
+                  <div style={{ flex: 1, height: '36px', position: 'relative', background: '#ffffff' }}>
                     {timelineItems.filter(x => x.track === 'subtitle').length === 0 && (
-                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#52525b', fontStyle: 'italic' }}>
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#9ca3af', fontStyle: 'italic' }}>
                         Words from transcript appear here
                       </div>
                     )}
@@ -2629,12 +2824,12 @@ export default function EditorPage() {
                             position: 'absolute', top: '4px', bottom: '4px',
                             left: `${startPct}%`, width: `${Math.max(widthPct, 0.3)}%`,
                             borderRadius: '4px', cursor: 'pointer', overflow: 'hidden',
-                            background: isCurrent ? 'rgba(200,255,0,0.2)' : isSel ? 'rgba(249,115,22,0.2)' : 'rgba(30,58,42,0.8)',
-                            border: `1px solid ${isCurrent ? '#c8ff00' : isSel ? '#f97316' : '#2a5a3a'}`,
+                            background: isCurrent ? 'rgba(255,31,31,0.15)' : isSel ? 'rgba(255,31,31,0.15)' : 'rgba(20,20,20,0.8)',
+                            border: `1px solid ${isCurrent ? 'rgba(255,31,31,0.4)' : isSel ? 'rgba(255,31,31,0.4)' : '#333'}`,
                             transition: 'all 0.1s',
                             display: 'flex', alignItems: 'center', padding: '0 4px', zIndex: isCurrent ? 10 : 1,
                           }}>
-                          <span style={{ fontSize: '8px', color: isCurrent ? '#c8ff00' : '#4ade80', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.1' }}>
+                          <span style={{ fontSize: '8px', color: isCurrent ? '#ff1f1f' : '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.1' }}>
                             {item.title}
                           </span>
                         </div>
@@ -2646,8 +2841,8 @@ export default function EditorPage() {
                 {/* AUDIO track */}
                 <div style={{ display: 'flex', alignItems: 'center', minHeight: '28px' }}>
                   <span style={{ width: '52px', flexShrink: 0, textAlign: 'right', paddingRight: '8px', fontSize: '9px', fontWeight: '700', color: '#71717a', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Audio</span>
-                  <div style={{ flex: 1, height: '28px', position: 'relative', background: '#0a0a0a', display: 'flex', alignItems: 'center', padding: '0 8px' }}>
-                    <span style={{ fontSize: '9px', color: '#52525b', fontStyle: 'italic' }}>Add music from Audio</span>
+                  <div style={{ flex: 1, height: '28px', position: 'relative', background: '#f8f8f5', display: 'flex', alignItems: 'center', padding: '0 8px' }}>
+                    <span style={{ fontSize: '9px', color: '#9ca3af', fontStyle: 'italic' }}>Add music from Audio</span>
                   </div>
                 </div>
               </div>
