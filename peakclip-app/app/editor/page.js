@@ -2172,32 +2172,35 @@ export default function EditorPage() {
             const isActive = currentTime >= Number(word.startTime) - 0.12 && currentTime < Number(word.endTime)
             const isPast = currentTime > Number(word.endTime)
             return (
-              <span
-                key={word.id || `${word.word}-${index}`}
-                style={{
-                  position: 'relative',
-                  display: 'inline-block',
-                  color: isActive ? hc : (isPast ? `${subtitleStyle.color}99` : `${subtitleStyle.color}99`),
-                  fontWeight: isActive ? '900' : (subtitleStyle.fontWeight || '700'),
-                  opacity: isActive ? 1 : (isPast ? 0.25 : 0.55),
-                  overflowWrap: 'break-word',
-                  wordBreak: 'break-word',
-                  whiteSpace: 'normal',
-                  transition: 'color 0.3s ease-out, opacity 0.3s ease-out',
-                }}
-              >
-                {isActive && (
-                  <span style={{
-                    position: 'absolute',
-                    inset: '-8px -14px -6px',
-                    background: `${hc}18`,
-                    borderRadius: '14px',
-                    zIndex: -1,
-                    boxShadow: `0 0 24px ${hc}18, inset 0 0 0 1px ${hc}22`,
-                    pointerEvents: 'none',
-                  }} />
-                )}
-                {index > 0 ? ' ' : ''}{word.word}
+              <span key={index}>
+                {index > 0 ? ' ' : ''}
+                <span
+                  key={word.id || `${word.word}-${index}`}
+                  style={{
+                    position: 'relative',
+                    display: 'inline-block',
+                    color: isActive ? hc : (isPast ? `${subtitleStyle.color}99` : `${subtitleStyle.color}99`),
+                    fontWeight: isActive ? '900' : (subtitleStyle.fontWeight || '700'),
+                    opacity: isActive ? 1 : (isPast ? 0.25 : 0.55),
+                    overflowWrap: 'break-word',
+                    wordBreak: 'break-word',
+                    whiteSpace: 'normal',
+                    transition: 'color 0.3s ease-out, opacity 0.3s ease-out',
+                  }}
+                >
+                  {subtitleStyle.karaokeHighlight && isActive && (
+                    <span style={{
+                      position: 'absolute',
+                      inset: '-8px -14px -6px',
+                      background: `${hc}18`,
+                      borderRadius: '14px',
+                      zIndex: -1,
+                      boxShadow: `0 0 24px ${hc}18, inset 0 0 0 1px ${hc}22`,
+                      pointerEvents: 'none',
+                    }} />
+                  )}
+                  {word.word}
+                </span>
               </span>
             )
           })
