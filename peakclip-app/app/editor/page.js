@@ -40,7 +40,7 @@ const PRESET_CATEGORIES = [
 const SUBTITLE_PRESETS = [
   { id: 'none', name: 'No captions', cat: '', isNone: true },
   { id: 'focus', name: 'Focus', cat: 'sync', color: '#ffffff', highlightColor: '#ff1f1f', fontWeight: '900', fontSize: 38, karaokeHighlight: true, stroke: true, strokeColor: '#000000', strokeWidth: 4, fontFamily: 'Montserrat', backgroundColor: '#ff1f1f', backgroundOpacity: 30, backgroundBorderRadius: 18, backgroundPadding: 16 },
-  { id: 'viral', name: 'Viral Shorts', cat: 'sync', color: '#ffffff', highlightColor: '#FFD700', fontWeight: '900', fontSize: 38, karaokeHighlight: true, stroke: true, strokeColor: '#000000', strokeWidth: 4, fontFamily: 'Montserrat', backgroundColor: '#000000', backgroundOpacity: 40, backgroundBorderRadius: 20, backgroundPadding: 18 },
+  { id: 'viral', name: 'Viral Shorts', cat: 'sync', color: '#ffffff', highlightColor: '#FFD700', fontWeight: '900', fontSize: 38, karaokeHighlight: true, stroke: true, strokeColor: '#000000', strokeWidth: 4, fontFamily: 'Montserrat' },
   { id: 'karaoke', name: 'Karaoke', cat: 'sync', color: '#ffffff', highlightColor: '#ff1f1f', fontWeight: '800', fontSize: 34, karaokeHighlight: true, stroke: true, strokeColor: '#000000', strokeWidth: 4, fontFamily: 'Montserrat' },
   { id: 'typewriter', name: 'Typewriter', cat: 'sync', color: '#ff1f1f', highlightColor: '#ff1f1f', fontWeight: '900', fontSize: 34, fontFamily: 'Courier New', textTransform: 'uppercase', stroke: true, strokeColor: '#000000', strokeWidth: 4, karaokeHighlight: true },
   { id: 'bounce', name: 'Bounce', cat: 'sync', color: '#ffffff', fontWeight: '900', fontSize: 36, fontFamily: 'Montserrat', stroke: true, strokeColor: '#000000', strokeWidth: 4, shadow: true, shadowColor: '#ff1f1f', shadowBlur: 12, shadowOffsetX: 0, shadowOffsetY: 0 },
@@ -856,7 +856,6 @@ export default function EditorPage() {
       textAlign: style?.textAlign || 'center',
       color: style?.color || base.color || '#ffffff',
       fontWeight: style?.fontWeight || base.fontWeight || '700',
-      maxWidth: '90%',
       wordBreak: 'break-word',
       display: 'block',
     }
@@ -2150,8 +2149,8 @@ export default function EditorPage() {
       top: `${subtitleStyle.positionY}%`,
       transform: 'translate(-50%, -50%)',
       textAlign: 'center',
-      maxWidth: '90%',
-      minWidth: '40%',
+      width: '100%',
+      maxWidth: '92%',
       minHeight: `${(subtitleStyle.fontSize || 22) * (subtitleStyle.lineHeight || 1.3) * 2}px`,
       whiteSpace: 'normal',
       pointerEvents: 'none',
