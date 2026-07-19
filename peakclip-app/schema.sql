@@ -44,8 +44,20 @@ CREATE TABLE IF NOT EXISTS public.clips (
   words_json JSONB,
   subtitle_style JSONB,
   brand_settings JSONB,
+  youtube_video_id TEXT,
+  youtube_thumbnail TEXT,
+  youtube_title TEXT,
+  youtube_channel TEXT,
+  youtube_duration NUMERIC,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Add YouTube metadata columns
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS youtube_video_id TEXT;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS youtube_thumbnail TEXT;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS youtube_title TEXT;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS youtube_channel TEXT;
+ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS youtube_duration NUMERIC;
 
 -- Add missing columns if table already existed without them
 ALTER TABLE public.clips ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;

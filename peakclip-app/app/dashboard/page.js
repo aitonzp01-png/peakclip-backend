@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getSupabaseClient } from '../../lib/supabase';
 import Sidebar from './components/Sidebar.jsx';
 import Topbar from './components/Topbar.jsx';
+import ClipCard from './components/ClipCard.jsx';
 import './dashboard.css';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -856,96 +856,15 @@ export default function Dashboard() {
                   ) : (
                     <div className="db-clips-grid">
                       {clips.slice(0, 4).map((clip) => (
-                        <div
+                        <ClipCard
                           key={clip.id}
-                          className="db-clip-card"
-                          onClick={() => window.location.href = `/editor?id=${clip.id}`}
-                        >
-                          <div className="db-clip-thumbnail">
-                            {clip.thumbnail_url ? (
-                              <Image
-                                src={clip.thumbnail_url}
-                                alt={clip.title || 'Clip thumbnail'}
-                                fill
-                                sizes="(max-width: 768px) 50vw, 25vw"
-                                className="db-clip-img"
-                                style={{ objectFit: 'cover' }}
-                              />
-                            ) : (
-                              <div className="db-clip-thumb-placeholder">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
-                                </svg>
-                                <span style={{ fontSize: '11px', marginTop: '4px' }}>
-                                  {clip.status === 'processing' ? 'Processing...' : 'No preview'}
-                                </span>
-                              </div>
-                            )}
-                            
-                            {/* NEW badge if created in last 24h */}
-                            {new Date() - new Date(clip.created_at) < 24 * 60 * 60 * 1000 && (
-                              <span className="db-clip-new-badge">New</span>
-                            )}
-                          </div>
-                          
-                          <div className="db-clip-info">
-                            <span className="db-clip-title">{clip.title || 'Untitled clip'}</span>
-                            <span className="db-clip-platform">{clip.platform || 'YouTube'}</span>
-                            
-                            <div className="db-clip-footer">
-                              <span className="db-clip-date">
-                                {new Date(clip.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              </span>
-                              
-                              <div style={{ position: 'relative' }}>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveDropdownClipId(activeDropdownClipId === clip.id ? null : clip.id);
-                                  }}
-                                  className="db-clip-menu-btn"
-                                >
-                                  ···
-                                </button>
-
-                                {activeDropdownClipId === clip.id && (
-                                  <div className="db-dropdown" ref={dropdownRef}>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveDropdownClipId(null);
-                                        handleRenameClip(clip.id, clip.title);
-                                      }}
-                                      className="db-dropdown-item"
-                                    >
-                                      Rename
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveDropdownClipId(null);
-                                        handleDownload(clip);
-                                      }}
-                                      className="db-dropdown-item"
-                                    >
-                                      Download
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveDropdownClipId(null);
-                                        handleDeleteClip(clip.id);
-                                      }}
-                                      className="db-dropdown-item delete"
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                          clip={clip}
+                          onRename={handleRenameClip}
+                          onDownload={handleDownload}
+                          onDelete={handleDeleteClip}
+                          activeDropdown={activeDropdownClipId}
+                          setActiveDropdown={setActiveDropdownClipId}
+                        />
                       ))}
                     </div>
                   )}
@@ -1022,95 +941,15 @@ export default function Dashboard() {
                 ) : (
                   <div className="db-clips-grid">
                     {clips.map((clip) => (
-                      <div
+                      <ClipCard
                         key={clip.id}
-                        className="db-clip-card"
-                        onClick={() => window.location.href = `/editor?id=${clip.id}`}
-                      >
-                        <div className="db-clip-thumbnail">
-                          {clip.thumbnail_url ? (
-                            <Image
-                              src={clip.thumbnail_url}
-                               alt={clip.title || 'Clip thumbnail'}
-                              fill
-                              sizes="(max-width: 768px) 50vw, 25vw"
-                              className="db-clip-img"
-                              style={{ objectFit: 'cover' }}
-                            />
-                          ) : (
-                            <div className="db-clip-thumb-placeholder">
-                              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
-                              </svg>
-                              <span style={{ fontSize: '11px', marginTop: '4px' }}>
-                                {clip.status === 'processing' ? 'Processing...' : 'No preview'}
-                              </span>
-                            </div>
-                          )}
-                          
-                          {new Date() - new Date(clip.created_at) < 24 * 60 * 60 * 1000 && (
-                             <span className="db-clip-new-badge">New</span>
-                          )}
-                        </div>
-                        
-                        <div className="db-clip-info">
-                           <span className="db-clip-title">{clip.title || 'Untitled clip'}</span>
-                          <span className="db-clip-platform">{clip.platform || 'YouTube'}</span>
-                          
-                          <div className="db-clip-footer">
-                            <span className="db-clip-date">
-                               {new Date(clip.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                            </span>
-                            
-                            <div style={{ position: 'relative' }}>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveDropdownClipId(activeDropdownClipId === clip.id ? null : clip.id);
-                                }}
-                                className="db-clip-menu-btn"
-                              >
-                                ···
-                              </button>
-
-                              {activeDropdownClipId === clip.id && (
-                                <div className="db-dropdown" ref={dropdownRef}>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveDropdownClipId(null);
-                                      handleRenameClip(clip.id, clip.title);
-                                    }}
-                                    className="db-dropdown-item"
-                                  >
-                                    Rename
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveDropdownClipId(null);
-                                      handleDownload(clip);
-                                    }}
-                                    className="db-dropdown-item"
-                                  >
-                                    Download
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveDropdownClipId(null);
-                                      handleDeleteClip(clip.id);
-                                    }}
-                                    className="db-dropdown-item delete"
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                        clip={clip}
+                        onRename={handleRenameClip}
+                        onDownload={handleDownload}
+                        onDelete={handleDeleteClip}
+                        activeDropdown={activeDropdownClipId}
+                        setActiveDropdown={setActiveDropdownClipId}
+                      />
                     ))}
                   </div>
                 )}

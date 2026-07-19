@@ -42,6 +42,62 @@ from contextlib import asynccontextmanager
 # Set at startup if the bgutil PO token server is reachable
 BGUTIL_POT_AVAILABLE = False
 
+def extract_youtube_id(url: str) -> str | None:
+    if not url:
+        return None
+    patterns = [
+        r'(?:youtube\.com/watch\?.*v=|youtu\.be/|youtube\.com/embed/|youtube\.com/shorts/)([a-zA-Z0-9_-]{11})',
+    ]
+    for p in patterns:
+        m = re.search(p, url)
+        if m:
+            return m.group(1)
+    return None
+
+
+def get_best_yt_thumbnail(yt_id: str) -> str | None:
+    urls = [
+        f"https://img.youtube.com/vi/{yt_id}/maxresdefault.jpg",
+        f"https://img.youtube.com/vi/{yt_id}/hqdefault.jpg",
+        f"https://img.youtube.com/vi/{yt_id}/mqdefault.jpg",
+        f"https://img.youtube.com/vi/{yt_id}/default.jpg",
+    ]
+    for url in urls:
+        try:
+            r = httpx.head(url, timeout=5)
+            if r.status_code == 200:
+                return url
+        except Exception:
+            continue
+    return None
+
+
+def fetch_youtube_metadata(url: str) -> dict | None:
+    yt_id = extract_youtube_id(url)
+    if not yt_id:
+        return None
+    meta = {
+        "youtube_video_id": yt_id,
+        "youtube_title": None,
+        "youtube_channel": None,
+        "youtube_duration": None,
+        "youtube_thumbnail": None,
+    }
+    try:
+        ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            meta["youtube_title"] = info.get("title")
+            meta["youtube_channel"] = info.get("channel") or info.get("uploader")
+            meta["youtube_duration"] = info.get("duration")
+    except Exception:
+        pass
+    best_thumb = get_best_yt_thumbnail(yt_id)
+    if best_thumb:
+        meta["youtube_thumbnail"] = best_thumb
+    return meta
+
+
 # ── OAuth2 auto-refresh ───────────────────────────────────────
 YOUTUBE_OAUTH_CLIENT_ID = os.environ.get("YOUTUBE_OAUTH_CLIENT_ID", "")
 YOUTUBE_OAUTH_CLIENT_SECRET = os.environ.get("YOUTUBE_OAUTH_CLIENT_SECRET", "")
@@ -1269,6 +1325,8 @@ async def process_video(req: VideoRequest, background_tasks: BackgroundTasks, us
 
 def process_video_background(job_id: str, user_id: str, url: str):
     try:
+        yt_meta = fetch_youtube_metadata(url)
+
         video_path = f"downloads/{job_id}.mp4"
         audio_path = f"downloads/{job_id}.mp3"
         local_files = [video_path, audio_path]
@@ -1892,10 +1950,15 @@ Return JSON with this exact format:
                     "srt_url": srt_storage_url or None,
                     "subtitles_srt": srt_content or None,
                     "words_json": words_json_value,
-                    "thumbnail_url": thumb_storage_url,
+                    "thumbnail_url": yt_meta["youtube_thumbnail"] if yt_meta and yt_meta["youtube_thumbnail"] else thumb_storage_url,
                     "duration": round(duration, 1),
                     "start_time": clip_start,
-                    "end_time": clip["end"]
+                    "end_time": clip["end"],
+                    "youtube_video_id": yt_meta["youtube_video_id"] if yt_meta else None,
+                    "youtube_thumbnail": yt_meta["youtube_thumbnail"] if yt_meta else None,
+                    "youtube_title": yt_meta["youtube_title"] if yt_meta else None,
+                    "youtube_channel": yt_meta["youtube_channel"] if yt_meta else None,
+                    "youtube_duration": yt_meta["youtube_duration"] if yt_meta else None
                 }
                 try:
                     supabase.table("clips").insert(clip_row).execute()
@@ -1923,7 +1986,12 @@ Return JSON with this exact format:
                     "hook_score": clip.get("hook_score", 5),
                     "file": clip_storage_url,
                     "srt_url": srt_storage_url or "",
-                    "thumbnail_url": thumb_storage_url
+                    "thumbnail_url": yt_meta["youtube_thumbnail"] if yt_meta and yt_meta["youtube_thumbnail"] else thumb_storage_url,
+                    "youtube_video_id": yt_meta["youtube_video_id"] if yt_meta else None,
+                    "youtube_thumbnail": yt_meta["youtube_thumbnail"] if yt_meta else None,
+                    "youtube_title": yt_meta["youtube_title"] if yt_meta else None,
+                    "youtube_channel": yt_meta["youtube_channel"] if yt_meta else None,
+                    "youtube_duration": yt_meta["youtube_duration"] if yt_meta else None
                 })
         finally:
             for f in local_files:
@@ -2375,6 +2443,8 @@ async def upload_video(
     user_id = user["sub"]
     job_id = str(uuid.uuid4())
 
+    yt_meta = fetch_youtube_metadata(url)
+
     user_result = supabase.table("users").select("credits,plan").eq("id", user_id).execute()
     if not user_result.data:
         supabase.table("users").insert({"id": user_id, "credits": 3, "plan": "free"}).execute()
@@ -2646,10 +2716,15 @@ Return JSON with this exact format:
                 "srt_url": srt_storage_url or None,
                 "subtitles_srt": srt_content or None,
                 "words_json": words_json_value,
-                "thumbnail_url": thumb_storage_url,
+                "thumbnail_url": yt_meta["youtube_thumbnail"] if yt_meta and yt_meta["youtube_thumbnail"] else thumb_storage_url,
                 "duration": round(duration, 1),
                 "start_time": clip_start,
-                "end_time": clip["end"]
+                "end_time": clip["end"],
+                "youtube_video_id": yt_meta["youtube_video_id"] if yt_meta else None,
+                "youtube_thumbnail": yt_meta["youtube_thumbnail"] if yt_meta else None,
+                "youtube_title": yt_meta["youtube_title"] if yt_meta else None,
+                "youtube_channel": yt_meta["youtube_channel"] if yt_meta else None,
+                "youtube_duration": yt_meta["youtube_duration"] if yt_meta else None
             }
             try:
                 supabase.table("clips").insert(clip_row).execute()
@@ -2673,7 +2748,12 @@ Return JSON with this exact format:
                 "hook_score": clip.get("hook_score", 5),
                 "file": clip_storage_url,
                 "srt_url": srt_storage_url or "",
-                "thumbnail_url": thumb_storage_url
+                "thumbnail_url": yt_meta["youtube_thumbnail"] if yt_meta and yt_meta["youtube_thumbnail"] else thumb_storage_url,
+                "youtube_video_id": yt_meta["youtube_video_id"] if yt_meta else None,
+                "youtube_thumbnail": yt_meta["youtube_thumbnail"] if yt_meta else None,
+                "youtube_title": yt_meta["youtube_title"] if yt_meta else None,
+                "youtube_channel": yt_meta["youtube_channel"] if yt_meta else None,
+                "youtube_duration": yt_meta["youtube_duration"] if yt_meta else None
             })
 
         if not output_clips:

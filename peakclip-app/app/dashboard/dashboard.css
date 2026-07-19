@@ -1241,6 +1241,189 @@ body {
   }
   
   .db-clips-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── Premium Clip Card ───────────────────────────────────────── */
+
+.pc-clip-card {
+  background-color: var(--db-surface);
+  border: 1px solid var(--db-border);
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.25s, transform 0.25s;
+}
+
+.pc-clip-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.pc-clip-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background-color: var(--db-hover);
+}
+
+.pc-clip-img {
+  object-fit: cover;
+  transition: transform 0.25s ease-out;
+}
+
+.pc-clip-card:hover .pc-clip-img {
+  transform: scale(1.05);
+}
+
+.pc-thumb-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 55%, rgba(0, 0, 0, 0.65));
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+
+.pc-clip-card:hover .pc-thumb-overlay {
+  opacity: 1;
+}
+
+.pc-play-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+
+.pc-clip-card:hover .pc-play-btn {
+  opacity: 1;
+}
+
+.pc-play-btn svg {
+  display: block;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+}
+
+.pc-duration-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.pc-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 4px;
+  padding: 2px 8px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.pc-badge-new {
+  background: var(--db-accent);
+  color: #ffffff;
+}
+
+.pc-badge-processing {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+.pc-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    var(--db-hover) 25%,
+    var(--db-border) 50%,
+    var(--db-hover) 75%
+  );
+  background-size: 200% 100%;
+  animation: pc-shimmer 1.5s infinite;
+}
+
+@keyframes pc-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.pc-clip-info {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pc-video-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--db-text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.pc-video-title svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.pc-channel-name {
+  font-size: 11px;
+  color: var(--db-text-secondary);
+}
+
+.pc-clip-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--db-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pc-clip-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.pc-clip-date {
+  font-size: 11px;
+  color: var(--db-placeholder);
+}
+
+@media (max-width: 640px) {
+  .db-clips-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pc-clip-thumb {
+    aspect-ratio: 16 / 9;
   }
 }
