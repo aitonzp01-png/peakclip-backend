@@ -1013,7 +1013,15 @@ export default function EditorPage() {
           color = isActive ? (subtitleStyle.highlightColor || '#ff1f1f') : '#ffffff'
         }
 
-        if (subtitleStyle.karaokeHighlight) {
+        const isWbw = wordByWordPresets.includes(selectedPresetId)
+
+        // Word-by-word: all words in highlight color, no opacity dim for future
+        if (isWbw) {
+          color = subtitleStyle.highlightColor || '#ff1f1f'
+          stroke = true
+          strokeColor = '#000000'
+          strokeWidth = 3
+        } else if (subtitleStyle.karaokeHighlight) {
           color = isActive ? (subtitleStyle.highlightColor || '#ff1f1f') : subtitleStyle.color
           if (isActive) {
             stroke = true
@@ -1022,15 +1030,21 @@ export default function EditorPage() {
           }
         }
 
+        // Keep the active word prominent in phrase-based presets.
+        if (!isWbw && isActive && !['beasty', 'popline'].includes(selectedPresetId)) {
+          color = subtitleStyle.highlightColor || '#ff1f1f'
+        }
+
         ctx.font = `${subtitleStyle.fontStyle || 'normal'} ${fontWeight} ${fontSize * autoScale}px ${font}`
 
         ctx.translate(startX, lineY)
 
-        // Dim inactive words for fluid feel
-        if (isFuture) {
-          ctx.globalAlpha = 0.35
-        } else if (isPast) {
-          ctx.globalAlpha = 0.2
+        // Dim inactive words — word-by-word only dims past, others dim future too
+        if (isWbw) {
+          if (isPast) ctx.globalAlpha = 0.3
+        } else {
+          if (isFuture) ctx.globalAlpha = 0.4
+          else if (isPast) ctx.globalAlpha = 0.2
         }
 
         if (subtitleStyle.shadow) {
@@ -1051,40 +1065,6 @@ export default function EditorPage() {
           if (subtitleStyle.shadow) {
             ctx.shadowColor = subtitleStyle.shadowColor || '#000000'
           }
-        }
-
-        // Active word highlight pill
-        if (isActive && subtitleStyle.highlightColor) {
-          ctx.save()
-          ctx.globalAlpha = 1
-          ctx.fillStyle = subtitleStyle.highlightColor
-          ctx.globalAlpha = 0.2
-          const barPad = 6
-          ctx.beginPath()
-          ctx.roundRect(-barPad, -fontSize * autoScale * 0.7, tw + barPad * 2, fontSize * autoScale * 1.2, 6)
-          ctx.fill()
-          ctx.shadowColor = subtitleStyle.highlightColor
-          ctx.shadowBlur = 20
-          ctx.globalAlpha = 0.06
-          ctx.beginPath()
-          ctx.roundRect(-barPad + 2, -fontSize * autoScale * 0.7, tw + barPad * 2 - 4, fontSize * autoScale * 1.2, 6)
-          ctx.fill()
-          ctx.restore()
-        }
-
-        // Keep the active word prominent in every caption template.
-        if (isActive && !['beasty', 'popline'].includes(selectedPresetId)) {
-          color = subtitleStyle.highlightColor || '#ff1f1f'
-        }
-
-        if (isActive && subtitleStyle.highlightColor) {
-          ctx.save()
-          ctx.shadowColor = subtitleStyle.highlightColor
-          ctx.shadowBlur = 14
-          ctx.fillStyle = color
-          ctx.globalAlpha = 0.12
-          ctx.fillText(lw.text, 0, 0)
-          ctx.restore()
         }
 
         ctx.fillStyle = color
@@ -2168,9 +2148,16 @@ export default function EditorPage() {
       <span style={getSubtitleStyle(subtitleWords.map(word => word.word).join(' '), selectedPresetId, subtitleStyle)}>
         {(() => {
           const hc = subtitleStyle.highlightColor || '#ff1f1f'
+          const isWbw = wordByWordPresets.includes(selectedPresetId)
           return subtitleWords.map((word, index) => {
             const isActive = currentTime >= Number(word.startTime) - 0.12 && currentTime < Number(word.endTime)
             const isPast = currentTime > Number(word.endTime)
+            const wordColor = isWbw
+              ? (isPast ? `${hc}66` : hc)
+              : (isActive ? hc : (isPast ? `${subtitleStyle.color}66` : `${subtitleStyle.color}99`))
+            const wordOpacity = isWbw
+              ? (isPast ? 0.3 : 1)
+              : (isActive ? 1 : (isPast ? 0.2 : 0.55))
             return (
               <span key={index}>
                 {index > 0 ? ' ' : ''}
@@ -2179,26 +2166,15 @@ export default function EditorPage() {
                   style={{
                     position: 'relative',
                     display: 'inline-block',
-                    color: isActive ? hc : (isPast ? `${subtitleStyle.color}99` : `${subtitleStyle.color}99`),
+                    color: wordColor,
                     fontWeight: isActive ? '900' : (subtitleStyle.fontWeight || '700'),
-                    opacity: isActive ? 1 : (isPast ? 0.25 : 0.55),
+                    opacity: wordOpacity,
                     overflowWrap: 'break-word',
                     wordBreak: 'break-word',
                     whiteSpace: 'normal',
                     transition: 'color 0.3s ease-out, opacity 0.3s ease-out',
                   }}
                 >
-                  {subtitleStyle.karaokeHighlight && isActive && (
-                    <span style={{
-                      position: 'absolute',
-                      inset: '-8px -14px -6px',
-                      background: `${hc}18`,
-                      borderRadius: '14px',
-                      zIndex: -1,
-                      boxShadow: `0 0 24px ${hc}18, inset 0 0 0 1px ${hc}22`,
-                      pointerEvents: 'none',
-                    }} />
-                  )}
                   {word.word}
                 </span>
               </span>
