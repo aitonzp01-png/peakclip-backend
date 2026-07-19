@@ -2150,14 +2150,8 @@ export default function EditorPage() {
           const hc = subtitleStyle.highlightColor || '#ff1f1f'
           const isWbw = wordByWordPresets.includes(selectedPresetId)
           return subtitleWords.map((word, index) => {
-            const isActive = currentTime >= Number(word.startTime) - 0.12 && currentTime < Number(word.endTime)
             const isPast = currentTime > Number(word.endTime)
-            const wordColor = isWbw
-              ? (isPast ? `${hc}66` : hc)
-              : (isActive ? hc : (isPast ? `${subtitleStyle.color}66` : `${subtitleStyle.color}99`))
-            const wordOpacity = isWbw
-              ? (isPast ? 0.3 : 1)
-              : (isActive ? 1 : (isPast ? 0.2 : 0.55))
+            const isActive = currentTime >= Number(word.startTime) - 0.12 && currentTime < Number(word.endTime)
             return (
               <span key={index}>
                 {index > 0 ? ' ' : ''}
@@ -2166,13 +2160,13 @@ export default function EditorPage() {
                   style={{
                     position: 'relative',
                     display: 'inline-block',
-                    color: wordColor,
-                    fontWeight: isActive ? '900' : (subtitleStyle.fontWeight || '700'),
-                    opacity: wordOpacity,
+                    color: isWbw ? hc : (isActive ? hc : `${subtitleStyle.color}99`),
+                    fontWeight: isWbw ? '900' : (isActive ? '900' : (subtitleStyle.fontWeight || '700')),
+                    opacity: isWbw ? (isPast ? 0.3 : 1) : (isActive ? 1 : 0.45),
                     overflowWrap: 'break-word',
                     wordBreak: 'break-word',
                     whiteSpace: 'normal',
-                    transition: 'color 0.3s ease-out, opacity 0.3s ease-out',
+                    transition: 'color 0.25s ease-out, opacity 0.25s ease-out',
                   }}
                 >
                   {word.word}
