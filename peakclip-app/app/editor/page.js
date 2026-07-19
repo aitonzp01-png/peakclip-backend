@@ -39,8 +39,9 @@ const PRESET_CATEGORIES = [
 
 const SUBTITLE_PRESETS = [
   { id: 'none', name: 'No captions', cat: '', isNone: true },
-  { id: 'focus', name: 'Focus', cat: 'sync', color: '#ffffff', highlightColor: '#ff1f1f', fontWeight: '900', fontSize: 38, karaokeHighlight: true, stroke: true, strokeColor: '#000000', strokeWidth: 3, fontFamily: 'Inter', backgroundColor: '#ff1f1f', backgroundOpacity: 30, backgroundBorderRadius: 18, backgroundPadding: 16 },
-  { id: 'karaoke', name: 'Karaoke', cat: 'sync', color: '#ffffff', highlightColor: '#ff1f1f', fontWeight: '800', fontSize: 34, karaokeHighlight: true, stroke: true, strokeColor: '#000000', strokeWidth: 4, fontFamily: 'Inter' },
+  { id: 'focus', name: 'Focus', cat: 'sync', color: '#ffffff', highlightColor: '#ff1f1f', fontWeight: '900', fontSize: 38, karaokeHighlight: true, stroke: true, strokeColor: '#000000', strokeWidth: 4, fontFamily: 'Montserrat', backgroundColor: '#ff1f1f', backgroundOpacity: 30, backgroundBorderRadius: 18, backgroundPadding: 16 },
+  { id: 'viral', name: 'Viral Shorts', cat: 'sync', color: '#ffffff', highlightColor: '#FFD700', fontWeight: '900', fontSize: 38, karaokeHighlight: true, stroke: true, strokeColor: '#000000', strokeWidth: 4, fontFamily: 'Montserrat', backgroundColor: '#000000', backgroundOpacity: 40, backgroundBorderRadius: 20, backgroundPadding: 18 },
+  { id: 'karaoke', name: 'Karaoke', cat: 'sync', color: '#ffffff', highlightColor: '#ff1f1f', fontWeight: '800', fontSize: 34, karaokeHighlight: true, stroke: true, strokeColor: '#000000', strokeWidth: 4, fontFamily: 'Montserrat' },
   { id: 'typewriter', name: 'Typewriter', cat: 'sync', color: '#ff1f1f', highlightColor: '#ff1f1f', fontWeight: '900', fontSize: 34, fontFamily: 'Courier New', textTransform: 'uppercase', stroke: true, strokeColor: '#000000', strokeWidth: 4, karaokeHighlight: true },
   { id: 'bounce', name: 'Bounce', cat: 'sync', color: '#ffffff', fontWeight: '900', fontSize: 36, fontFamily: 'Montserrat', stroke: true, strokeColor: '#000000', strokeWidth: 4, shadow: true, shadowColor: '#ff1f1f', shadowBlur: 12, shadowOffsetX: 0, shadowOffsetY: 0 },
   { id: 'neon', name: 'Neon Glow', cat: 'sync', color: '#ff1f1f', fontWeight: '900', fontSize: 34, fontFamily: 'Bebas Neue', shadow: true, shadowColor: '#ff1f1f', shadowBlur: 20, shadowOffsetX: 0, shadowOffsetY: 0, stroke: true, strokeColor: '#330000', strokeWidth: 2 },
@@ -670,6 +671,12 @@ export default function EditorPage() {
         textShadow: '2px 2px 0 #000',
         lineHeight: 1.2,
       },
+      viral: {
+        color: '#ffffff',
+        fontWeight: 900,
+        textShadow: '2px 2px 0 #000',
+        lineHeight: 1.2,
+      },
       karaoke: {
         color: '#ffffff',
         fontWeight: 800,
@@ -855,7 +862,7 @@ export default function EditorPage() {
     }
   }
 
-  const wordByWordPresets = ['karaoke', 'typewriter', 'bounce', 'vhs', 'neon', 'focus']
+  const wordByWordPresets = ['karaoke', 'typewriter', 'bounce', 'vhs', 'neon', 'focus', 'viral']
 
   function getSubtitleWordsAtTime(time) {
     if (wordByWordPresets.includes(selectedPresetId)) {
@@ -926,7 +933,7 @@ export default function EditorPage() {
       }
     }
     if (line.length > 0) displayLines.push(line)
-    const MAX_LINES = 3
+    const MAX_LINES = 6
     if (displayLines.length > MAX_LINES) {
       displayLines.splice(MAX_LINES)
       const last = displayLines[MAX_LINES - 1]
@@ -944,7 +951,7 @@ export default function EditorPage() {
     for (let li = 0; li < displayLines.length; li++) {
       const lineWords = displayLines[li]
       const totalLineWidth = lineWords.reduce((a, w) => a + w.width, 0)
-      const autoScale = totalLineWidth > maxLineWidth ? maxLineWidth / totalLineWidth : 1
+      const autoScale = totalLineWidth > maxLineWidth ? Math.max(0.7, Math.min(1, maxLineWidth / totalLineWidth)) : 1
       const letterSpacing = (subtitleStyle.letterSpacing || 0)
       const lineY = startY + li * lineHeight
 
@@ -1020,6 +1027,13 @@ export default function EditorPage() {
 
         ctx.translate(startX, lineY)
 
+        // Dim inactive words for fluid feel
+        if (isFuture) {
+          ctx.globalAlpha = 0.35
+        } else if (isPast) {
+          ctx.globalAlpha = 0.2
+        }
+
         if (subtitleStyle.shadow) {
           ctx.shadowColor = subtitleStyle.shadowColor || '#000000'
           ctx.shadowBlur = subtitleStyle.shadowBlur || 4
@@ -1040,18 +1054,19 @@ export default function EditorPage() {
           }
         }
 
-        // Active word highlight bar
+        // Active word highlight pill
         if (isActive && subtitleStyle.highlightColor) {
           ctx.save()
+          ctx.globalAlpha = 1
           ctx.fillStyle = subtitleStyle.highlightColor
-          ctx.globalAlpha = 0.25
+          ctx.globalAlpha = 0.2
           const barPad = 6
           ctx.beginPath()
           ctx.roundRect(-barPad, -fontSize * autoScale * 0.7, tw + barPad * 2, fontSize * autoScale * 1.2, 6)
           ctx.fill()
           ctx.shadowColor = subtitleStyle.highlightColor
           ctx.shadowBlur = 20
-          ctx.globalAlpha = 0.08
+          ctx.globalAlpha = 0.06
           ctx.beginPath()
           ctx.roundRect(-barPad + 2, -fontSize * autoScale * 0.7, tw + barPad * 2 - 4, fontSize * autoScale * 1.2, 6)
           ctx.fill()
@@ -1066,9 +1081,9 @@ export default function EditorPage() {
         if (isActive && subtitleStyle.highlightColor) {
           ctx.save()
           ctx.shadowColor = subtitleStyle.highlightColor
-          ctx.shadowBlur = 18
+          ctx.shadowBlur = 14
           ctx.fillStyle = color
-          ctx.globalAlpha = 0.15
+          ctx.globalAlpha = 0.12
           ctx.fillText(lw.text, 0, 0)
           ctx.restore()
         }
@@ -2136,8 +2151,21 @@ export default function EditorPage() {
       transform: 'translate(-50%, -50%)',
       textAlign: 'center',
       maxWidth: '90%',
+      minWidth: '40%',
+      minHeight: `${(subtitleStyle.fontSize || 22) * (subtitleStyle.lineHeight || 1.3) * 2}px`,
+      whiteSpace: 'normal',
       pointerEvents: 'none',
     }}>
+      {subtitleStyle.backgroundColor && subtitleStyle.backgroundColor !== 'transparent' && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: subtitleStyle.backgroundColor,
+          borderRadius: `${subtitleStyle.backgroundBorderRadius || 6}px`,
+          opacity: (subtitleStyle.backgroundOpacity ?? 0) / 100,
+          pointerEvents: 'none',
+        }} />
+      )}
       <span style={getSubtitleStyle(subtitleWords.map(word => word.word).join(' '), selectedPresetId, subtitleStyle)}>
         {(() => {
           const hc = subtitleStyle.highlightColor || '#ff1f1f'
@@ -2150,24 +2178,27 @@ export default function EditorPage() {
                 style={{
                   position: 'relative',
                   display: 'inline-block',
-                  color: isActive ? hc : (isPast ? subtitleStyle.color : subtitleStyle.color),
+                  color: isActive ? hc : (isPast ? `${subtitleStyle.color}99` : `${subtitleStyle.color}99`),
                   fontWeight: isActive ? '900' : (subtitleStyle.fontWeight || '700'),
-                  transform: isActive ? 'scale(1.05)' : 'scale(1)',
-                  filter: isActive ? `drop-shadow(0 0 10px ${hc}33)` : 'none',
-                  transition: 'transform 0.15s ease, color 0.15s ease, filter 0.15s ease',
+                  opacity: isActive ? 1 : (isPast ? 0.25 : 0.55),
+                  overflowWrap: 'break-word',
+                  wordBreak: 'break-word',
+                  whiteSpace: 'normal',
+                  transition: 'color 0.3s ease-out, opacity 0.3s ease-out',
                 }}
               >
                 {isActive && (
                   <span style={{
                     position: 'absolute',
-                    inset: '-8px -12px -6px',
-                    background: `${hc}1A`,
+                    inset: '-8px -14px -6px',
+                    background: `${hc}18`,
                     borderRadius: '14px',
                     zIndex: -1,
-                    boxShadow: `0 0 28px ${hc}22`,
+                    boxShadow: `0 0 24px ${hc}18, inset 0 0 0 1px ${hc}22`,
+                    pointerEvents: 'none',
                   }} />
                 )}
-                {index > 0 ? '\u00A0' : ''}{word.word}
+                {index > 0 ? ' ' : ''}{word.word}
               </span>
             )
           })
