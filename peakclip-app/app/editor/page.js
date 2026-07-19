@@ -1039,10 +1039,8 @@ export default function EditorPage() {
 
         ctx.translate(startX, lineY)
 
-        // Dim inactive words — word-by-word only dims past, others dim future too
-        if (isWbw) {
-          if (isPast) ctx.globalAlpha = 0.3
-        } else {
+        // Dim inactive words — word-by-word has no dimming, others dim future/past
+        if (!isWbw) {
           if (isFuture) ctx.globalAlpha = 0.4
           else if (isPast) ctx.globalAlpha = 0.2
         }
@@ -2162,11 +2160,11 @@ export default function EditorPage() {
                     display: 'inline-block',
                     color: isWbw ? hc : (isActive ? hc : `${subtitleStyle.color}99`),
                     fontWeight: isWbw ? '900' : (isActive ? '900' : (subtitleStyle.fontWeight || '700')),
-                    opacity: isWbw ? (isPast ? 0.3 : 1) : (isActive ? 1 : 0.45),
+                    opacity: isWbw ? 1 : (isActive ? 1 : 0.45),
                     overflowWrap: 'break-word',
                     wordBreak: 'break-word',
                     whiteSpace: 'normal',
-                    transition: 'color 0.25s ease-out, opacity 0.25s ease-out',
+                    transition: isWbw ? 'none' : 'color 0.25s ease-out, opacity 0.25s ease-out',
                   }}
                 >
                   {word.word}
