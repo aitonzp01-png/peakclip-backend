@@ -9,20 +9,9 @@ RUN apt-get update && apt-get install -y curl ca-certificates gnupg && \
 # Install remaining system dependencies: ffmpeg, build tools, git, libass/fonts, canvas deps
 RUN apt-get update && apt-get install -y \
     ffmpeg unzip gcc python3-dev libffi-dev git build-essential \
-    libass-dev fonts-freefont-ttf fonts-roboto fonts-ubuntu fonts-noto-core \
+    libass-dev fonts-freefont-ttf fonts-noto-core fonts-noto-extra \
     libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
-
-# Download common Google Fonts (Inter, Montserrat) for ASS subtitle rendering
-RUN mkdir -p /usr/share/fonts/truetype/google-fonts && \
-    for url in \
-      "https://github.com/google/fonts/raw/main/ofl/inter/Inter-VariableFont_opsz,wght.ttf" \
-      "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-VariableFont_wght.ttf" \
-      "https://github.com/google/fonts/raw/main/ofl/opensans/OpenSans-VariableFont_wdth,wght.ttf"; do \
-      curl -sL "$url" -o /usr/share/fonts/truetype/google-fonts/$(basename "$url") 2>/dev/null || true; \
-    done && \
-    fc-cache -f && \
-    echo "Fonts installed: $(ls /usr/share/fonts/truetype/google-fonts/ 2>/dev/null | wc -l) files"
 
 WORKDIR /app
 

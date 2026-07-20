@@ -2360,6 +2360,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             '-t', str(trim_d),
             '-vf', vf,
             '-r', str(req.fps),
+            '-threads', '4',
             '-map', '0:v:0',
             '-map', '0:a:0?',
             '-c:v', vcodec,
@@ -2405,11 +2406,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             except Exception as e:
                 print(f"Export: signed URL fallback to public: {e}")
 
-        # Update clip record
-        supabase.table("clips").update({
-            "video_url": signed_url,
-            "status": "done"
-        }).eq("id", req.clip_id).eq("user_id", user_id).execute()
+        # NOTE: Do NOT update clip.video_url — the project must keep the original video.
+        # The exported file is returned as a download URL only, never replacing the project source.
 
         return {
             "success": True,
