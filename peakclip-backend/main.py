@@ -3046,6 +3046,16 @@ async def debug_fonts():
             fc_matches[name] = r.stdout[:500]
         except Exception as e:
             fc_matches[name] = str(e)
+    # Also test weight-specific lookups (what libass would request)
+    for query in ("Montserrat:weight=bold", "Montserrat:weight=extra bold", "Inter:weight=bold"):
+        try:
+            r = subprocess.run(["fc-match", "-v", query], capture_output=True, text=True, timeout=10)
+            # Extract just family, style, weight, file
+            lines = r.stdout.splitlines()
+            key = query.replace(":weight=", " w")
+            fc_matches[key] = [l.strip() for l in lines if any(x in l for x in ("family:", "style:", "weight:", "file:"))][:8]
+        except Exception as e:
+            fc_matches[query] = str(e)
     return {
         "families": fc_families,
         "fc_matches": fc_matches,
