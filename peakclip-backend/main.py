@@ -2226,6 +2226,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
 
     validate_video_url(req.video_url)
 
+    cleanup_old_exports()
+
     source_path = f"downloads/{job_id}_source.mp4"
     subprocess.run([
         'ffmpeg', '-i', req.video_url, '-c', 'copy', source_path, '-y'
@@ -2252,7 +2254,6 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
     temp_files = []
 
     try:
-        cleanup_old_exports()
 
         target_w, target_h = (int(x) for x in target_res.split(':'))
 
