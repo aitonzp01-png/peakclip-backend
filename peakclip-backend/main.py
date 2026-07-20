@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import BaseModel
 from supabase import create_client
 import os
+import glob
 
 import yt_dlp
 import openai
@@ -885,26 +886,192 @@ def format_ass_time(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
 
-def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None):
-    """Generate ASS subtitle with \\k karaoke tags for progressive word-by-word reveal.
+def cleanup_old_exports():
+    """Remove all temp files from previous exports to ensure clean render."""
+    temp_dir = tempfile.gettempdir()
+    for pattern in ['*_subs.ass', '*_export.*', '*_source.mp4', '*_music.mp3']:
+        for f in glob.glob(os.path.join(temp_dir, pattern)):
+            try:
+                os.unlink(f)
+            except OSError:
+                pass
+    for d in ['downloads', 'outputs']:
+        if os.path.exists(d):
+            for f in os.listdir(d):
+                try:
+                    os.unlink(os.path.join(d, f))
+                except OSError:
+                    pass
 
-    Each phrase becomes one ASS Dialogue line with \\k<centiseconds> tags between
-    words. The libass renderer shows words filling progressively: SecondaryColour
-    (unspoken/dim) -> PrimaryColour (spoken). This creates the same progressive
-    reveal effect as the canvas preview.
+
+def _group_words_into_lines(words, max_words=4):
+    """Match frontend groupWordsIntoLines: split into lines of max N words."""
+    lines = []
+    for i in range(0, len(words), max_words):
+        lines.append(words[i:i + max_words])
+    return lines
+
+
+def _measure_text_width(text, font_family, font_size, font_weight, font_style, letter_spacing, scale):
+    """Estimate text width for ASS positioning (rough approximation)."""
+    # ASS doesn't have real text measurement, use character estimate
+    # Average char width ≈ 0.55 * font_size for typical fonts
+    base_width = len(text) * font_size * 0.55
+    # Adjust for weight
+    if font_weight in ('700', '800', '900'):
+        base_width *= 1.15
+    # Adjust for letter spacing
+    base_width += (len(text) - 1) * letter_spacing * scale
+    return base_width
+
+
+def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, target_w=1080, target_h=1920):
     """
-    clip_words = [w for w in words if w['start'] >= clip_start and w['end'] <= clip_end]
+    Generate ASS subtitle file matching EditorPreviewCanvas rendering EXACTLY.
+    
+    Frontend rendering (EditorPreviewCanvas.js):
+    - Canvas base width: 400px (reference)
+    - Font size scaled: fontSize * (canvas.width / 400)
+    - Position Y: canvas.height * positionY / 100 (percentage from top)
+    - Grouping: maxWords (default 4) words per line
+    - Line height: fontSize * lineHeight
+    - Text alignment: center/left/right
+    - Karaoke: per-word highlight color for active word
+    - Background: rounded rect per line
+    - Stroke: outline
+    - Shadow: offset + blur
+    """
+    # Filter words within clip time range
+    clip_words = [
+        w for w in words
+        if not w.get('deleted', False)
+        and w.get('start', 0) < clip_end
+        and w.get('end', 0) > clip_start
+    ]
     if not clip_words:
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write("[Script Info]\nScriptType: v4.00+\n")
         return
 
+    s = style or {}
+    
+    # ─── Style extraction (matching frontend defaults) ───
+    font_family = s.get('fontFamily', 'Inter')
+    font_fn = f"'{font_family}'" if ' ' in font_family else font_family
+    font_sz = max(8, min(200, s.get('fontSize', 32)))
+    color = s.get('color', '#ffffff')
+    highlight_color = s.get('highlightColor', '#c4ff3d')
+    bg_color = s.get('backgroundColor', 'transparent')
+    bg_opacity = max(0, min(100, s.get('backgroundOpacity', 0)))
+    max_words = max(1, min(12, s.get('maxWords', 4)))
+    text_transform = s.get('textTransform', 'none')
+    letter_spacing = max(-5, min(20, s.get('letterSpacing', 0)))
+    line_height = max(0.5, min(3.0, s.get('lineHeight', 1.2)))
+    position_y = max(0, min(100, s.get('positionY', 75)))
+    max_width = max(20, min(100, s.get('maxWidth', 90)))
+    stroke = s.get('stroke', False)
+    stroke_c = s.get('strokeColor', '#000000')
+    stroke_w = max(0, min(10, s.get('strokeWidth', 2))) if stroke else 0
+    shadow = s.get('shadow', False)
+    shadow_c = s.get('shadowColor', '#000000')
+    shadow_offset_x = s.get('shadowOffsetX', 2)
+    shadow_offset_y = s.get('shadowOffsetY', 2)
+    shadow_blur = max(0, min(10, s.get('shadowBlur', 4))) if shadow else 0
+    text_align = s.get('textAlign', 'center')
+    bold = -1 if s.get('fontWeight', '700') in ('700', '800', '900') else 0
+    italic = -1 if s.get('fontStyle', 'normal') == 'italic' else 0
+    karaoke = s.get('karaokeHighlight', True)
+    bg_padding = max(0, min(50, s.get('backgroundPadding', 8)))
+    bg_radius = max(0, min(20, s.get('backgroundBorderRadius', 4)))
+
+    # ─── Scale calculation (match frontend: canvas.width / 400) ───
+    # Frontend uses canvas width 400 as reference, backend target_w is the actual output width
+    scale = target_w / 400.0
+    
+    # Effective font size in output pixels (matching frontend: fontSize * scale)
+    eff_font_sz = font_sz * scale
+    # Clamp to reasonable ASS range
+    eff_font_sz = max(8, min(200, eff_font_sz))
+
+    # ─── Position calculation (match frontend exactly) ───
+    # Frontend: y = (canvas.height * positionY) / 100
+    # Base Y is the baseline position for the FIRST line
+    base_y = int(target_h * position_y / 100)
+    
+    # Line height in output pixels
+    line_h = eff_font_sz * line_height
+
+    # ─── Color conversion (RGB -> ASS BGR + Alpha) ───
+    def rgb_to_ass(rgb, alpha=0):
+        h = rgb.lstrip('#')
+        if len(h) == 3:
+            h = ''.join(c*2 for c in h)
+        h = h[:6].zfill(6)
+        return f"&H{alpha:02X}{h[4:6]}{h[2:4]}{h[0:2]}&"
+
+    pc = rgb_to_ass(color)           # Primary color
+    hc = rgb_to_ass(highlight_color) # Highlight (secondary for karaoke)
+    oc = rgb_to_ass(stroke_c)        # Outline
+    shc = rgb_to_ass(shadow_c)       # Shadow
+    
+    # Background color with opacity
+    if bg_color != 'transparent' and bg_opacity > 0:
+        bg_alpha = int(255 * (1 - bg_opacity / 100))
+        bgc = rgb_to_ass(bg_color, bg_alpha)
+    else:
+        bgc = "&H00000000&"  # Transparent
+
+    # ─── Group words into lines (matching frontend maxWords) ───
+    # Filter to only words within clip range for timing
+    active_words = [
+        w for w in clip_words
+        if w.get('start', 0) >= clip_start and w.get('end', 0) <= clip_end
+    ]
+    
+    # Group by maxWords
+    lines = _group_words_into_lines(active_words, max_words)
+
+    # ─── ASS header ───
+    play_res_w = target_w
+    play_res_h = target_h
+    margin_x = int(play_res_w * (100 - max_width) / 200)
+    margin_x = max(10, margin_x)
+
+    # Alignment: 2=bottom-center, 5=middle-center, 8=top-center
+    # Frontend textAlign: 'center' | 'left' | 'right'
+    # For multi-line with \N, alignment 2 (bottom-center) works best with explicit \pos
+    # We'll use \an8 (top-center) with \pos at base_y, then offset each line down
+    
+    lines_out = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        "Collisions: Normal",
+        f"PlayResX: {play_res_w}",
+        f"PlayResY: {play_res_h}",
+        "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+        f"Style: Default,{font_fn},{int(eff_font_sz)},{pc},{hc},{oc},{bgc},{bold},{italic},0,0,100,100,{int(letter_spacing * scale * 10)},0,1,{stroke_w},{shadow_blur},8,{margin_x},{margin_x},0,1",
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+
+    # ─── Build dialogue lines ───
+    # We create ONE dialogue per "phrase" (group of lines that appear together)
+    # Frontend shows all active words at current time, grouped by maxWords per line
+    # We'll create dialogues that match the timing of word groups
+    
+    # For karaoke: create dialogues per word group (phrase) with \k timing
+    # For non-karaoke: simpler dialogues
+    
+    # Group words into phrases by time gaps (same as frontend phrase logic)
     phrases = []
     current = [clip_words[0]]
     for w in clip_words[1:]:
         gap = w['start'] - current[-1]['end']
         phrase_dur = current[-1]['end'] - current[0]['start']
-        if gap < 1.0 and len(current) < 3 and phrase_dur < 3.0:
+        if gap < 1.0 and len(current) < 10 and phrase_dur < 5.0:
             current.append(w)
         else:
             phrases.append(current)
@@ -912,63 +1079,78 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None):
     if current:
         phrases.append(current)
 
-    font_name = "Arial"
-    font_size = 28
-    primary_color = "&H00FFFFFF"
-    secondary_color = "&H00333333"
-    outline_color = "&H00000000"
-    bold = 0
-    if style:
-        font_name_raw = style.get('fontFamily', 'Arial')
-        font_name = f"'{font_name_raw}'" if ' ' in font_name_raw else font_name_raw
-        font_size = max(12, min(72, style.get('fontSize', 28)))
-        _pc = style.get('color', '#ffffff').lstrip('#')
-        if len(_pc) == 3:
-            _pc = ''.join(c*2 for c in _pc)
-        primary_color = f"&H00{_pc[4:6] if len(_pc)>=6 else 'FF'}{_pc[2:4] if len(_pc)>=4 else 'FF'}{_pc[0:2]}"
-        hc = style.get('highlightColor', '#ff1f1f').lstrip('#')
-        if len(hc) == 3:
-            hc = ''.join(c*2 for c in hc)
-        secondary_color = f"&H00{hc[4:6] if len(hc)>=6 else 'FF'}{hc[2:4] if len(hc)>=4 else 'FF'}{hc[0:2]}"
-        _oc = style.get('strokeColor', '#000000').lstrip('#')
-        if len(_oc) == 3:
-            _oc = ''.join(c*2 for c in _oc)
-        outline_color = f"&H00{_oc[4:6] if len(_oc)>=6 else 'FF'}{_oc[2:4] if len(_oc)>=4 else 'FF'}{_oc[0:2]}"
-        bold = -1 if style.get('fontWeight', '400') in ('700', '800', '900') else 0
-
-    lines = [
-        "[Script Info]",
-        "ScriptType: v4.00+",
-        "Collisions: Normal",
-        "PlayResX: 1920",
-        "PlayResY: 1080",
-        "",
-        "[V4+ Styles]",
-        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        f"Style: Default,{font_name},{font_size},{primary_color},{secondary_color},{outline_color},&H00000000,{bold},0,0,0,100,100,0,0,1,2,1,2,10,10,10,1",
-        "",
-        "[Events]",
-        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
-    ]
-
     for phrase in phrases:
-        phrase_start = phrase[0]['start']
-        phrase_end = phrase[-1]['end']
-        text_parts = []
-        for w in phrase:
-            duration_cs = max(1, int(round((w['end'] - w['start']) * 100)))
-            word_text = w['word'].strip()
-            if word_text:
-                text_parts.append(f"{{\\k{duration_cs}}}{word_text}")
-        if not text_parts:
-            continue
-        dialogue_text = ' '.join(text_parts)
-        start_str = format_ass_time(max(0.0, phrase_start - clip_start))
-        end_str = format_ass_time(phrase_end - clip_start)
-        lines.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{dialogue_text}")
+        phrase_start = max(0.0, phrase[0]['start'] - clip_start)
+        phrase_end = phrase[-1]['end'] - clip_start
+        if phrase_end <= phrase_start:
+            phrase_end = phrase_start + 0.1
+        
+        # Group this phrase's words into lines by maxWords
+        phrase_lines = _group_words_into_lines(phrase, max_words)
+        
+        if karaoke:
+            # Karaoke: build text with \\k tags per word
+            line_texts = []
+            for line_idx, line in enumerate(phrase_lines):
+                line_parts = []
+                for w in line:
+                    word_text = w['word'].strip()
+                    if not word_text:
+                        continue
+                    if text_transform == 'uppercase':
+                        word_text = word_text.upper()
+                    elif text_transform == 'lowercase':
+                        word_text = word_text.lower()
+                    
+                    dur_cs = max(1, int(round((w['end'] - w['start']) * 100)))
+                    # Highlight active word: use {\\k} for timing, color change handled by SecondaryColour
+                    line_parts.append(f"{{{\\\\k{dur_cs}}}{word_text}")
+                
+                if line_parts:
+                    # Position each line: base_y + line_idx * line_h
+                    # Using \\an8 (top-center) with \\pos(x, y)
+                    line_y = base_y + line_idx * int(line_h)
+                    pos_x = play_res_w // 2
+                    # Add alignment override per line if needed
+                    align_map = {'left': 7, 'center': 8, 'right': 9}
+                    align = align_map.get(text_align, 8)
+                    reveal_tag = f"{{{\\\\an{align}\\\\pos({pos_x},{line_y})}}}"
+                    line_texts.append(reveal_tag + ' '.join(line_parts))
+            
+            if line_texts:
+                dialogue_text = '\\\\N'.join(line_texts)
+                start_str = format_ass_time(phrase_start)
+                end_str = format_ass_time(phrase_end)
+                lines_out.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{dialogue_text}")
+        else:
+            # Non-karaoke: simple text with colors
+            line_texts = []
+            for line_idx, line in enumerate(phrase_lines):
+                words_text = []
+                for w in line:
+                    word_text = w['word'].strip()
+                    if word_text:
+                        if text_transform == 'uppercase':
+                            word_text = word_text.upper()
+                        elif text_transform == 'lowercase':
+                            word_text = word_text.lower()
+                        words_text.append(word_text)
+                if words_text:
+                    line_y = base_y + line_idx * int(line_h)
+                    pos_x = play_res_w // 2
+                    align_map = {'left': 7, 'center': 8, 'right': 9}
+                    align = align_map.get(text_align, 8)
+                    reveal_tag = f"{{\\an{align}\\pos({pos_x},{line_y})}}"
+                    line_texts.append(reveal_tag + ' '.join(words_text))
+            
+            if line_texts:
+                dialogue_text = '\\N'.join(line_texts)
+                start_str = format_ass_time(phrase_start)
+                end_str = format_ass_time(phrase_end)
+                lines_out.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{dialogue_text}")
 
     with open(output_path, 'w', encoding='utf-8') as f:
-        f.write("\n".join(lines))
+        f.write("\n".join(lines_out))
 
 
 def resolve_music_path(mood: str) -> str | None:
@@ -2070,7 +2252,10 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
     temp_files = []
 
     try:
-        # Build filter chain
+        cleanup_old_exports()
+
+        target_w, target_h = (int(x) for x in target_res.split(':'))
+
         vf = f"scale={target_res}:force_original_aspect_ratio=increase,crop={target_res}"
 
         if req.filter_style == "vivid":
@@ -2084,14 +2269,17 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         elif req.filter_style == "cool":
             vf = f"{vf},colorbalance=rs=-.2:gs=.1:bs=.3"
 
-        # Subtitles: generate ASS karaoke for progressive word-by-word reveal
         ass_path = None
         if req.subtitle_style != "none" and req.subtitle_words:
             ass_path = os.path.join(tempfile.gettempdir(), f"{job_id}_subs.ass")
-            generate_ass_karaoke(req.subtitle_words, trim_s, trim_s + trim_d, ass_path, style=req.subtitle_style_obj)
+            generate_ass_karaoke(
+                req.subtitle_words, trim_s, trim_s + trim_d, ass_path,
+                style=req.subtitle_style_obj,
+                target_w=target_w, target_h=target_h
+            )
             temp_files.append(ass_path)
+            vf = f"{vf},subtitles={ass_path}"
 
-        # Watermark via textfile
         if req.watermark_text:
             pos_map_wm = {
                 "top-right": "x=w-tw-20:y=20",
@@ -2109,15 +2297,12 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             wm_filter = f"drawtext=textfile='{wm_sub_path}':fontsize=h/28:fontcolor=white@0.8:borderw=2:bordercolor=black@0.5:{wm_pos}:enable='between(t,0,{trim_d})'"
             vf = f"{vf},{wm_filter}"
 
-        # Audio filter chain
         af_parts = []
 
-        # Background music mixing
         music_path = None
         if req.music_track not in ("none", "", 0, "0", None):
             music_path = f"downloads/{job_id}_music.mp3"
             try:
-                # Map track IDs to SoundHelix free MP3 URLs
                 track_map = {
                     "epic": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
                     "hype": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
@@ -2139,12 +2324,10 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             except Exception as e:
                 print(f"Music mixing failed: {e}")
 
-        # Apply audio filter if any
         af_filter = None
         if af_parts:
             af_filter = ";".join(af_parts)
 
-        # Video codec selection
         vcodec = "libx264"
         acodec = "aac"
         if output_ext == "webm":
@@ -2153,52 +2336,6 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         elif output_ext == "mov":
             vcodec = "libx264"
             acodec = "aac"
-
-        # Burn subtitles into video frames using subtitles filter
-        if ass_path:
-            style = (req.subtitle_style_obj or {})
-            outline_width = max(0, min(10, style.get('strokeWidth', 2)))
-
-            # Override ASS style via force_style for user-customized values
-            font_name_raw = style.get('fontFamily', 'Montserrat')
-            font_name = f'"{font_name_raw}"' if ' ' in font_name_raw else font_name_raw
-            font_size = max(12, min(72, style.get('fontSize', 28)))
-            margin_v = max(0, min(200, 80 - int(style.get('positionY', 78) * 0.8)))
-            _pc = style.get('color', '#ffffff').lstrip('#')
-            if len(_pc) == 3:
-                _pc = ''.join(c*2 for c in _pc)
-            pc_ass = f"&H00{_pc[4:6] if len(_pc)>=6 else 'FF'}{_pc[2:4] if len(_pc)>=4 else 'FF'}{_pc[0:2]}"
-            hc = style.get('highlightColor', '#ff1f1f').lstrip('#')
-            if len(hc) == 3:
-                hc = ''.join(c*2 for c in hc)
-            sc_ass = f"&H00{hc[4:6] if len(hc)>=6 else 'FF'}{hc[2:4] if len(hc)>=4 else 'FF'}{hc[0:2]}"
-            _oc = style.get('strokeColor', '#000000').lstrip('#')
-            if len(_oc) == 3:
-                _oc = ''.join(c*2 for c in _oc)
-            oc_ass = f"&H00{_oc[4:6] if len(_oc)>=6 else 'FF'}{_oc[2:4] if len(_oc)>=4 else 'FF'}{_oc[0:2]}"
-            bold_val = -1 if style.get('fontWeight', '400') in ('700', '800', '900') else 0
-            # Shadow handling
-            shadow_enabled = style.get('shadow', False)
-            shadow_color = style.get('shadowColor', '#000000').lstrip('#')
-            if len(shadow_color) == 3:
-                shadow_color = ''.join(c*2 for c in shadow_color)
-            shadow_ass = f"&H00{shadow_color[4:6] if len(shadow_color)>=6 else 'FF'}{shadow_color[2:4] if len(shadow_color)>=4 else 'FF'}{shadow_color[0:2]}"
-            shadow_blur = max(0, min(10, style.get('shadowBlur', 4))) if shadow_enabled else 0
-
-            force_style = (
-                f"FontName={font_name},"
-                f"FontSize={font_size},"
-                f"PrimaryColour={pc_ass},"
-                f"SecondaryColour={sc_ass},"
-                f"OutlineColour={oc_ass},"
-                f"BackColour={shadow_ass if shadow_enabled else '&H00000000'},"
-                f"Outline={outline_width},"
-                f"Shadow={shadow_blur},"
-                f"MarginV={margin_v},"
-                f"Bold={bold_val},"
-                f"BorderStyle=1"
-            )
-            vf = f"{vf},subtitles={ass_path}:force_style='{force_style}'"
 
         cmd = [
             'ffmpeg',

@@ -357,6 +357,58 @@ export default function Dashboard() {
 
   const handleDownload = async (clip) => {
     const filename = `${clip.title?.slice(0, 40) || 'clip'}.mp4`;
+    const wordsJson = clip.words_json; // Current subtitle words
+    
+    if (wordsJson && wordsJson.length > 0) {
+      // Use the export endpoint to generate video with current subtitles
+      try {
+        const token = await getToken();
+        const response = await fetch(`${BACKEND_URL}/export`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token ? `Bearer ${token}` : '',
+          },
+          body: JSON.stringify({
+            clip_id: clip.id,
+            video_url: clip.video_url || '',
+            trim_start: 0,
+            trim_end: 100,
+            subtitle_text: clip.subtitle_text || '',
+            subtitle_style: 'custom',
+            subtitle_position: clip.subtitle_position || 'bottom',
+            font_size: clip.font_size || 14,
+            subtitle_style_obj: clip.subtitle_style || {},
+            subtitle_words: wordsJson,
+            watermark_text: '',
+            watermark_position: 'top-right',
+            music_track: 'none',
+            music_volume: 30,
+            filter_style: 'none',
+            resolution: '1080p',
+            format: 'mp4',
+            fps: 30,
+          }),
+        });
+        
+        if (!response.ok) throw new Error('Export failed');
+        const data = await response.json();
+        const downloadUrl = data.video_url;
+        if (downloadUrl) {
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          return;
+        }
+      } catch (err) {
+        console.error('Export failed, falling back to direct download:', err);
+      }
+    }
+    
+    // Fallback to direct download if no words_json or export failed
     try {
       const response = await fetch(`${clip.video_url}?download=${encodeURIComponent(filename)}`, { mode: 'cors' });
       if (!response.ok) throw new Error('Download failed');
