@@ -1104,7 +1104,7 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
                     
                     dur_cs = max(1, int(round((w['end'] - w['start']) * 100)))
                     # Highlight active word: use {\\k} for timing, color change handled by SecondaryColour
-                    line_parts.append(f"{{{\\\\k{dur_cs}}}{word_text}")
+                    line_parts.append('{\\k' + str(dur_cs) + '}' + word_text)
                 
                 if line_parts:
                     # Position each line: base_y + line_idx * line_h
@@ -1114,14 +1114,14 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
                     # Add alignment override per line if needed
                     align_map = {'left': 7, 'center': 8, 'right': 9}
                     align = align_map.get(text_align, 8)
-                    reveal_tag = f"{{{\\\\an{align}\\\\pos({pos_x},{line_y})}}}"
+                    reveal_tag = '{\\an' + str(align) + '\\pos(' + str(pos_x) + ',' + str(line_y) + ')}'
                     line_texts.append(reveal_tag + ' '.join(line_parts))
             
-            if line_texts:
-                dialogue_text = '\\\\N'.join(line_texts)
-                start_str = format_ass_time(phrase_start)
-                end_str = format_ass_time(phrase_end)
-                lines_out.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{dialogue_text}")
+                if line_texts:
+                    dialogue_text = '\\N'.join(line_texts)
+                    start_str = format_ass_time(phrase_start)
+                    end_str = format_ass_time(phrase_end)
+                    lines_out.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{dialogue_text}")
         else:
             # Non-karaoke: simple text with colors
             line_texts = []
@@ -1140,7 +1140,7 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
                     pos_x = play_res_w // 2
                     align_map = {'left': 7, 'center': 8, 'right': 9}
                     align = align_map.get(text_align, 8)
-                    reveal_tag = f"{{\\an{align}\\pos({pos_x},{line_y})}}"
+                    reveal_tag = '{\\an' + str(align) + '\\pos(' + str(pos_x) + ',' + str(line_y) + ')}'
                     line_texts.append(reveal_tag + ' '.join(words_text))
             
             if line_texts:
