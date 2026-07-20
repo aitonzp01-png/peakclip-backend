@@ -973,36 +973,36 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
     s = style or {}
 
     # ─── Style: ALL values MUST come from the editor. NO defaults. ───
-    def _req(key, typ):
+    def _req(key):
         val = s.get(key)
         if val is None:
             raise ValueError(f"[generate_ass_karaoke] editor did not send '{key}' — refusing to use a default")
-        return typ(val)
+        return val
 
-    font_family = _req('fontFamily', str)
+    font_family = str(_req('fontFamily'))
     font_fn = f"'{font_family}'" if ' ' in font_family else font_family
-    font_sz = float(_req('fontSize', (int, float)))
-    color = _req('color', str)
-    highlight_color = _req('highlightColor', str)
-    bg_color = _req('backgroundColor', str)
-    bg_opacity = float(_req('backgroundOpacity', (int, float)))
-    text_transform = _req('textTransform', str)
-    letter_spacing = float(_req('letterSpacing', (int, float)))
-    line_height = float(_req('lineHeight', (int, float)))
-    position_y = float(_req('positionY', (int, float)))
-    max_width = float(_req('maxWidth', (int, float)))
-    stroke = bool(_req('stroke', (bool, int)))
-    stroke_c = _req('strokeColor', str)
-    stroke_w = float(_req('strokeWidth', (int, float)))
-    shadow = bool(_req('shadow', (bool, int)))
-    shadow_c = _req('shadowColor', str)
-    shadow_blur = float(_req('shadowBlur', (int, float)))
-    shadow_offset_x = float(_req('shadowOffsetX', (int, float)))
-    shadow_offset_y = float(_req('shadowOffsetY', (int, float)))
-    text_align = _req('textAlign', str)
-    font_weight = _req('fontWeight', str)
-    font_style = _req('fontStyle', str)
-    karaoke = bool(_req('karaokeHighlight', (bool, int)))
+    font_sz = float(_req('fontSize'))
+    color = str(_req('color'))
+    highlight_color = str(_req('highlightColor'))
+    bg_color = str(_req('backgroundColor'))
+    bg_opacity = float(_req('backgroundOpacity'))
+    text_transform = str(_req('textTransform'))
+    letter_spacing = float(_req('letterSpacing'))
+    line_height = float(_req('lineHeight'))
+    position_y = float(_req('positionY'))
+    max_width = float(_req('maxWidth'))
+    stroke = bool(_req('stroke'))
+    stroke_c = str(_req('strokeColor'))
+    stroke_w = float(_req('strokeWidth'))
+    shadow = bool(_req('shadow'))
+    shadow_c = str(_req('shadowColor'))
+    shadow_blur = float(_req('shadowBlur'))
+    shadow_offset_x = float(_req('shadowOffsetX'))
+    shadow_offset_y = float(_req('shadowOffsetY'))
+    text_align = str(_req('textAlign'))
+    font_weight = str(_req('fontWeight'))
+    font_style = str(_req('fontStyle'))
+    karaoke = bool(_req('karaokeHighlight'))
 
     bold = -1 if font_weight in ('700', '800', '900') else 0
     italic = -1 if font_style == 'italic' else 0
