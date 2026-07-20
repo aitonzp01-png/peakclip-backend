@@ -182,7 +182,11 @@ export default function EditorPage() {
     shadowOffsetY: 2,
     karaokeHighlight: false,
     highlightColor: '#ff1f1f',
-    fontStyle: 'normal'
+    fontStyle: 'normal',
+    backgroundPadding: 8,
+    maxWords: 4,
+    entryAnimation: 'none',
+    entryDuration: 0.3
   })
 
   // Face Tracking
@@ -604,6 +608,18 @@ export default function EditorPage() {
       const position = subtitleStyle.positionY < 40 ? 'top' : subtitleStyle.positionY > 60 ? 'bottom' : 'middle'
       const trackMap = { m1: 'chill', m2: 'hype', m3: 'epic' }
 
+      // Measure exact font ascent for WYSIWYG position matching
+      let ascentRatio = 0.85
+      try {
+        const c = document.createElement('canvas')
+        const ctx = c.getContext('2d')
+        if (ctx) {
+          ctx.font = (subtitleStyle.fontStyle || 'normal') + ' ' + (subtitleStyle.fontWeight || '700') + ' ' + (subtitleStyle.fontSize || 32) + 'px "' + (subtitleStyle.fontFamily || 'Inter') + '"'
+          const m = ctx.measureText('Ay')
+          ascentRatio = Math.max(0.5, Math.min(1.0, m.actualBoundingBoxAscent / (subtitleStyle.fontSize || 32) || 0.85))
+        }
+      } catch {}
+
       const subtitleWords = activeTranscript.filter(w => !w.deleted).map(w => ({
         word: w.word,
         start: w.startTime,
@@ -617,7 +633,7 @@ export default function EditorPage() {
         subtitle_text: subtitleText || 'PeakClip',
         subtitle_style: selectedPresetId === 'none' ? 'none' : 'custom',
         subtitle_position: position,
-        subtitle_style_obj: subtitleStyle,
+        subtitle_style_obj: { ...subtitleStyle, ascentRatio },
         subtitle_words: subtitleWords,
         subtitle_mode: wordByWordPresets.includes(selectedPresetId) ? 'word' : 'phrase',
         font_size: subtitleStyle.fontSize,

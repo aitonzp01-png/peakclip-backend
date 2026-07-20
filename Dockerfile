@@ -13,16 +13,26 @@ RUN apt-get update && apt-get install -y \
     libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Download Inter font (used as default in the editor)
-RUN mkdir -p /usr/share/fonts/truetype/inter && \
+# Download common Google Fonts used in the editor (Inter, Montserrat, Roboto, Open Sans, Poppins)
+RUN mkdir -p /usr/share/fonts/truetype/google-fonts && \
     for url in \
       "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Regular.ttf" \
       "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-SemiBold.ttf" \
       "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Bold.ttf" \
-      "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-ExtraBold.ttf"; do \
-      curl -sL --connect-timeout 10 "$url" -o "/usr/share/fonts/truetype/inter/$(basename "$url")" || true; \
+      "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-ExtraBold.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Regular.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-SemiBold.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Bold.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-ExtraBold.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/roboto/static/Roboto-Regular.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/roboto/static/Roboto-Bold.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/opensans/static/OpenSans-Regular.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/opensans/static/OpenSans-Bold.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/poppins/static/Poppins-Regular.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/poppins/static/Poppins-Bold.ttf"; do \
+      curl -sL --connect-timeout 10 "$url" -o "/usr/share/fonts/truetype/google-fonts/$(basename "$url")" || true; \
     done && \
-    fc-cache -f && echo "Inter font download complete"
+    fc-cache -f && echo "Google Fonts download complete"
 
 WORKDIR /app
 

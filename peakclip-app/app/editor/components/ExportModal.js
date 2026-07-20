@@ -23,6 +23,21 @@ const formatTime = (s) => {
 
 const wordByWordPresets = ['karaoke', 'typewriter', 'bounce', 'vhs', 'neon', 'focus', 'viral']
 
+/* ─── Measure exact font ascent ratio for WYSIWYG positioning ───
+   Returns the ratio of actualBoundingBoxAscent to fontSize, so the backend
+   can calculate the exact text top position from the baseline.            */
+function measureFontAscentRatio(fontFamily, fontSize, fontWeight, fontStyle) {
+  try {
+    const c = document.createElement('canvas')
+    const ctx = c.getContext('2d')
+    if (!ctx) return 0.85
+    ctx.font = fontStyle + ' ' + fontWeight + ' ' + fontSize + 'px "' + fontFamily + '"'
+    const m = ctx.measureText('Ay')
+    const ratio = m.actualBoundingBoxAscent / fontSize
+    return Math.max(0.5, Math.min(1.0, ratio || 0.85))
+  } catch { return 0.85 }
+}
+
 /* ─── WYSIWYG VALIDATION ───
    Compares the editor's subtitle style with the payload being sent to the export
    endpoint. Logs any missing, extra, or mismatched property to the console so we
@@ -163,6 +178,14 @@ export default function ExportModal({
           id: w.id,
         }))
 
+      // Measure exact font ascent for WYSIWYG position matching
+      const ascentRatio = measureFontAscentRatio(
+        subtitleStyle.fontFamily || 'Inter',
+        subtitleStyle.fontSize || 32,
+        subtitleStyle.fontWeight || '700',
+        subtitleStyle.fontStyle || 'normal'
+      )
+
       const position =
         subtitleStyle.positionY < 40
           ? 'top'
@@ -192,7 +215,7 @@ export default function ExportModal({
           subtitle_text: subtitleWords.map((w) => w.word).join(' '),
           subtitle_style: 'custom',
           subtitle_position: position,
-          subtitle_style_obj: subtitleStyle,
+          subtitle_style_obj: { ...subtitleStyle, ascentRatio },
           subtitle_words: subtitleWords,
           subtitle_mode: subtitleMode || 'phrase',
           font_size: subtitleStyle.fontSize || 28,

@@ -1022,6 +1022,7 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
     font_weight = str(_req('fontWeight'))
     font_style = str(_req('fontStyle'))
     karaoke = bool(_req('karaokeHighlight'))
+    ascent_ratio = float(s.get('ascentRatio', 0.85))
 
     bold = -1 if font_weight in ('700', '800', '900') else 0
     italic = -1 if font_style == 'italic' else 0
@@ -1030,8 +1031,11 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
     eff_font_sz = font_sz * scale
     eff_font_sz = max(8, min(200, eff_font_sz))
 
-    base_y = int(target_h * position_y / 100 - eff_font_sz * 0.85)
+    # Use frontend-measured ascent ratio for exact baseline→top conversion
+    base_y = int(target_h * position_y / 100 - eff_font_sz * ascent_ratio)
     base_y = max(0, base_y)
+    # ASS shadow depth = magnitude of (shadowOffsetX, shadowOffsetY), not blur
+    shadow_mag = int((shadow_offset_x**2 + shadow_offset_y**2)**0.5) if shadow else 0
 
     def rgb_to_ass(rgb, alpha=0):
         h = rgb.lstrip('#')
@@ -1064,7 +1068,7 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        f"Style: Default,{font_fn},{int(eff_font_sz)},{pc},{hc},{oc},{bgc},{bold},{italic},0,0,100,100,{int(letter_spacing * scale * 10)},0,1,{int(stroke_w)},{int(shadow_blur)},8,{margin_x},{margin_x},0,1",
+        f"Style: Default,{font_fn},{int(eff_font_sz)},{pc},{hc},{oc},{bgc},{bold},{italic},0,0,100,100,{int(letter_spacing * scale * 10)},0,1,{int(stroke_w)},{shadow_mag},8,{margin_x},{margin_x},0,1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
