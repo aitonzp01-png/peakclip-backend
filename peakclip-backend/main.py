@@ -289,24 +289,23 @@ def upload_with_verification(supabase, bucket, file_path, storage_path, content_
 def ensure_fonts():
     import httpx as _httpx
     FONT_DIR = "/usr/share/fonts/truetype"
-    # Download static font files (libass has poor variable font support)
-    STATIC_FONTS = [
-        ("Montserrat-Regular.ttf",   "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Regular.ttf"),
-        ("Montserrat-Bold.ttf",      "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Bold.ttf"),
-        ("Montserrat-ExtraBold.ttf", "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-ExtraBold.ttf"),
-        ("Montserrat-Medium.ttf",    "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Medium.ttf"),
-        ("Montserrat-SemiBold.ttf",  "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-SemiBold.ttf"),
-        ("Inter-Regular.ttf",        "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Regular.ttf"),
-        ("Inter-Bold.ttf",           "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Bold.ttf"),
+    FONTS = [
+        ("Montserrat-Regular.ttf",   "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"),
+        ("Montserrat-Bold.ttf",      "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"),
+        ("Montserrat-ExtraBold.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"),
+        ("Montserrat-Medium.ttf",    "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"),
+        ("Montserrat-SemiBold.ttf",  "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"),
+        ("Inter-Regular.ttf",        "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf"),
+        ("Inter-Bold.ttf",           "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf"),
     ]
-    for fname, url in STATIC_FONTS:
+    for fname, url in FONTS:
         dest = os.path.join(FONT_DIR, fname)
         if os.path.exists(dest):
             print(f"[FONTS] already present: {fname}")
             continue
         try:
             r = _httpx.get(url, follow_redirects=True, timeout=60)
-            if r.status_code == 200 and len(r.content) > 1000:
+            if r.status_code == 200 and len(r.content) > 10000:
                 with open(dest, 'wb') as f:
                     f.write(r.content)
                 print(f"[FONTS] downloaded {fname} ({len(r.content)} bytes)")
@@ -3025,9 +3024,22 @@ async def debug_fonts():
         fc_out = r.stdout
     except Exception as e:
         fc_out = f"fc-list error: {e}"
+    try:
+        r = subprocess.run(["fc-list", "--format=%{family}\n"], capture_output=True, text=True, timeout=15)
+        fc_families = sorted(set(r.stdout.strip().splitlines()))
+    except Exception:
+        fc_families = []
     ttf_files = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
+    fc_matches = {}
+    for name in ("Montserrat", "Inter", "FreeSans", "Noto Sans"):
+        try:
+            r = subprocess.run(["fc-match", "-v", name], capture_output=True, text=True, timeout=10)
+            fc_matches[name] = r.stdout[:500]
+        except Exception as e:
+            fc_matches[name] = str(e)
     return {
-        "fc_list": fc_out.splitlines()[:80],
+        "families": fc_families,
+        "fc_matches": fc_matches,
         "ttf_files": ttf_files,
     }
 
