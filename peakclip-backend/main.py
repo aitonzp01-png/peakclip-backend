@@ -957,7 +957,12 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
     
     # ─── Style extraction (matching frontend defaults) ───
     font_family = s.get('fontFamily', 'Inter')
-    font_fn = f"'{font_family}'" if ' ' in font_family else font_family
+    # ASS font fallback chain: requested font then common system fonts
+    fallback_fonts = 'FreeSans,DejaVu Sans, Liberation Sans, Arial'
+    if ' ' in font_family:
+        font_fn = f"'{font_family}',{fallback_fonts}"
+    else:
+        font_fn = f"{font_family},{fallback_fonts}"
     font_sz = max(8, min(200, s.get('fontSize', 32)))
     color = s.get('color', '#ffffff')
     highlight_color = s.get('highlightColor', '#c4ff3d')
@@ -994,9 +999,11 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
     eff_font_sz = max(8, min(200, eff_font_sz))
 
     # ─── Position calculation (match frontend exactly) ───
-    # Frontend: y = (canvas.height * positionY) / 100
-    # Base Y is the baseline position for the FIRST line
-    base_y = int(target_h * position_y / 100)
+    # Frontend: fillText baseline at y = (canvas.height * positionY) / 100
+    # ASS \an8: top of text at \pos(x, y)
+    # Convert baseline to top by subtracting ~85% of font size
+    base_y = int(target_h * position_y / 100 - eff_font_sz * 0.85)
+    base_y = max(0, base_y)
     
     # Line height in output pixels
     line_h = eff_font_sz * line_height
