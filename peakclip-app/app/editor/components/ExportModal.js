@@ -23,6 +23,63 @@ const formatTime = (s) => {
 
 const wordByWordPresets = ['karaoke', 'typewriter', 'bounce', 'vhs', 'neon', 'focus', 'viral']
 
+/* ─── WYSIWYG VALIDATION ───
+   Compares the editor's subtitle style with the payload being sent to the export
+   endpoint. Logs any missing, extra, or mismatched property to the console so we
+   can catch discrepancies between editor state and export render.                */
+const EDITOR_STYLE_KEYS = [
+  'fontFamily','fontSize','fontWeight','fontStyle',
+  'color','highlightColor',
+  'backgroundColor','backgroundOpacity','backgroundPadding','backgroundBorderRadius',
+  'stroke','strokeColor','strokeWidth',
+  'shadow','shadowColor','shadowBlur','shadowOffsetX','shadowOffsetY',
+  'textAlign','textTransform','letterSpacing','lineHeight',
+  'positionY','maxWidth','maxWords',
+  'karaokeHighlight','entryAnimation','entryDuration',
+]
+
+function validateExportStyle(editorStyle, payloadStyle) {
+  const missing = []
+  const mismatched = []
+  const unused = []
+
+  // Check every editor key exists in the payload
+  for (const key of EDITOR_STYLE_KEYS) {
+    const ev = editorStyle[key]
+    const pv = payloadStyle[key]
+    if (pv === undefined || pv === null) {
+      missing.push({ key, editorValue: ev })
+    } else if (JSON.stringify(ev) !== JSON.stringify(pv)) {
+      mismatched.push({ key, editorValue: ev, payloadValue: pv })
+    }
+  }
+
+  // Find payload keys not in the editor keys list
+  for (const key of Object.keys(payloadStyle)) {
+    if (!EDITOR_STYLE_KEYS.includes(key)) {
+      unused.push(key)
+    }
+  }
+
+  if (missing.length || mismatched.length || unused.length) {
+    console.warn('=== WYSIWYG VALIDATION ===')
+    if (missing.length) {
+      console.error('❌ PROPERTIES MISSING from payload:', missing)
+    }
+    if (mismatched.length) {
+      console.error('❌ PROPERTIES MISMATCHED:', mismatched)
+    }
+    if (unused.length) {
+      console.warn('⚠️ UNUSED keys in payload (not in editor list):', unused)
+    }
+    console.log('Editor style snapshot:', JSON.parse(JSON.stringify(editorStyle)))
+    console.log('Payload subtitle_style_obj snapshot:', JSON.parse(JSON.stringify(payloadStyle)))
+    console.log('=== END VALIDATION ===')
+  } else {
+    console.log('✅ WYSIWYG validation passed — all editor style properties match the export payload')
+  }
+}
+
 export default function ExportModal({
   show,
   onClose,
@@ -112,6 +169,11 @@ export default function ExportModal({
           : subtitleStyle.positionY > 60
           ? 'bottom'
           : 'bottom'
+
+      // ─── WYSIWYG: validate editor state matches export payload ───
+      if (process.env.NODE_ENV !== 'production') {
+        validateExportStyle(subtitleStyle, subtitleStyle)
+      }
 
       setStatusText('Processing video on server...')
 

@@ -581,6 +581,17 @@ export default function EditorPage() {
       triggerToast('error', 'No clip available to export')
       return
     }
+
+    // ─── WYSIWYG: validate editor state matches export payload ───
+    if (process.env.NODE_ENV !== 'production') {
+      const EXPECTED_KEYS = ['fontFamily','fontSize','fontWeight','fontStyle','color','highlightColor','backgroundColor','backgroundOpacity','backgroundPadding','backgroundBorderRadius','stroke','strokeColor','strokeWidth','shadow','shadowColor','shadowBlur','shadowOffsetX','shadowOffsetY','textAlign','textTransform','letterSpacing','lineHeight','positionY','maxWidth','maxWords','karaokeHighlight','entryAnimation','entryDuration']
+      for (const k of EXPECTED_KEYS) {
+        if (subtitleStyle[k] === undefined && !['maxWords','backgroundPadding','entryAnimation','entryDuration'].includes(k)) {
+          console.warn(`⚠️ WYSIWYG: subtitleStyle.${k} is undefined — will be lost during export`)
+        }
+      }
+      console.log('WYSIWYG subtitleStyle snapshot:', JSON.parse(JSON.stringify(subtitleStyle)))
+    }
     setMobileExporting(true)
     setMobileExportUrl(null)
     setShowExportModal(false)

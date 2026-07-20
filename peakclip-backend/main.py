@@ -972,6 +972,25 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
 
     s = style or {}
 
+    # ─── WYSIWYG VALIDATION: log all received keys ───
+    KNOWN_KEYS = {
+        'fontFamily','fontSize','fontWeight','fontStyle',
+        'color','highlightColor',
+        'backgroundColor','backgroundOpacity','backgroundPadding','backgroundBorderRadius',
+        'stroke','strokeColor','strokeWidth',
+        'shadow','shadowColor','shadowBlur','shadowOffsetX','shadowOffsetY',
+        'textAlign','textTransform','letterSpacing','lineHeight',
+        'positionY','maxWidth','maxWords',
+        'karaokeHighlight','entryAnimation','entryDuration',
+    }
+    received = set(s.keys())
+    unused = received - KNOWN_KEYS
+    missing_known = KNOWN_KEYS - received
+    if unused:
+        print(f"[WYSIWYG] ⚠️ IGNORED style keys (not read by ASS generator): {sorted(unused)}")
+    if missing_known:
+        print(f"[WYSIWYG] ⚠️ MISSING expected style keys (editor may not include them): {sorted(missing_known)}")
+
     # ─── Style: ALL values MUST come from the editor. NO defaults. ───
     def _req(key):
         val = s.get(key)
