@@ -289,16 +289,21 @@ def upload_with_verification(supabase, bucket, file_path, storage_path, content_
 def ensure_fonts():
     import httpx as _httpx
     FONT_DIR = "/usr/share/fonts/truetype"
-    FONTS = [
-        ("Montserrat-Regular.ttf",   "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"),
-        ("Montserrat-Bold.ttf",      "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"),
-        ("Montserrat-ExtraBold.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"),
-        ("Montserrat-Medium.ttf",    "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"),
-        ("Montserrat-SemiBold.ttf",  "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"),
-        ("Inter-Regular.ttf",        "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf"),
-        ("Inter-Bold.ttf",           "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf"),
+    # Static TTF from Google Fonts CDN (NOT variable fonts — libass cannot resolve
+    # weight instances from variable fonts, always falling back to Regular).
+    STATIC_FONTS = [
+        # Montserrat
+        ("Montserrat-Regular.ttf",   "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Ew-.ttf"),
+        ("Montserrat-Bold.ttf",      "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM70w-.ttf"),
+        ("Montserrat-ExtraBold.ttf", "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCvr70w-.ttf"),
+        ("Montserrat-Medium.ttf",    "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCt1H6Ew-.ttf"),
+        ("Montserrat-SemiBold.ttf",  "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuV76Ew-.ttf"),
+        # Inter
+        ("Inter-Regular.ttf",        "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf"),
+        ("Inter-Bold.ttf",           "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZg.ttf"),
+        ("Inter-ExtraBold.ttf",      "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuDyYMZg.ttf"),
     ]
-    for fname, url in FONTS:
+    for fname, url in STATIC_FONTS:
         dest = os.path.join(FONT_DIR, fname)
         if os.path.exists(dest):
             print(f"[FONTS] already present: {fname}")
