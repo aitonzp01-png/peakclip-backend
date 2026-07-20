@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y curl ca-certificates gnupg && \
 # Install remaining system dependencies: ffmpeg, build tools, git, libass/fonts, canvas deps
 RUN apt-get update && apt-get install -y \
     ffmpeg unzip gcc python3-dev libffi-dev git build-essential \
-    libass-dev fonts-freefont-ttf \
+    libass-dev fonts-freefont-ttf fonts-inter fonts-montserrat \
     libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 

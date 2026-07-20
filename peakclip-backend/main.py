@@ -286,9 +286,43 @@ def upload_with_verification(supabase, bucket, file_path, storage_path, content_
         return None
 
 
-@asynccontextmanager
+def ensure_fonts():
+    import httpx as _httpx
+    FONT_DIR = "/usr/share/fonts/truetype"
+    # Download static font files (libass has poor variable font support)
+    STATIC_FONTS = [
+        ("Montserrat-Regular.ttf",   "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Regular.ttf"),
+        ("Montserrat-Bold.ttf",      "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Bold.ttf"),
+        ("Montserrat-ExtraBold.ttf", "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-ExtraBold.ttf"),
+        ("Montserrat-Medium.ttf",    "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Medium.ttf"),
+        ("Montserrat-SemiBold.ttf",  "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-SemiBold.ttf"),
+        ("Inter-Regular.ttf",        "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Regular.ttf"),
+        ("Inter-Bold.ttf",           "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Bold.ttf"),
+    ]
+    for fname, url in STATIC_FONTS:
+        dest = os.path.join(FONT_DIR, fname)
+        if os.path.exists(dest):
+            print(f"[FONTS] already present: {fname}")
+            continue
+        try:
+            r = _httpx.get(url, follow_redirects=True, timeout=60)
+            if r.status_code == 200 and len(r.content) > 1000:
+                with open(dest, 'wb') as f:
+                    f.write(r.content)
+                print(f"[FONTS] downloaded {fname} ({len(r.content)} bytes)")
+            else:
+                print(f"[FONTS] FAILED {fname}: HTTP {r.status_code}, len={len(r.content)}")
+        except Exception as e:
+            print(f"[FONTS] ERROR {fname}: {e}")
+    try:
+        subprocess.run(["fc-cache", "-f"], capture_output=True, timeout=30)
+        print("[FONTS] fc-cache done")
+    except Exception as e:
+        print(f"[FONTS] fc-cache error: {e}")
+
 async def lifespan(app: FastAPI):
     # Startup
+    ensure_fonts()
     print(f"yt-dlp version: {yt_dlp.version.__version__}")
     # Remove any stale cookies.txt — they cause "No video formats found" when expired.
     # Proxy + PoToken are sufficient for YouTube access.
@@ -982,6 +1016,7 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
         'textAlign','textTransform','letterSpacing','lineHeight',
         'positionY','maxWidth','maxWords',
         'karaokeHighlight','entryAnimation','entryDuration',
+        'ascentRatio',
     }
     received = set(s.keys())
     unused = received - KNOWN_KEYS
@@ -990,6 +1025,7 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
         print(f"[WYSIWYG] ⚠️ IGNORED style keys (not read by ASS generator): {sorted(unused)}")
     if missing_known:
         print(f"[WYSIWYG] ⚠️ MISSING expected style keys (editor may not include them): {sorted(missing_known)}")
+    print(f"[WYSIWYG] 📦 ALL received style values: {json.dumps({k: s[k] for k in sorted(received)}, default=str)}")
 
     # ─── Style: ALL values MUST come from the editor. NO defaults. ───
     def _req(key):
@@ -2271,7 +2307,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             temp_files.append(ass_path)
             if os.path.exists(ass_path):
                 with open(ass_path) as f:
-                    print(f"ASS file ({ass_path}) content:\n{f.read()[:500]}")
+                    ass_content = f.read()
+                    print(f"ASS file ({ass_path}) content:\n{ass_content[:2000]}")
             vf = f"{vf},subtitles={ass_path}:fontsdir=/usr/share/fonts/truetype"
 
         if req.watermark_text:
@@ -2371,6 +2408,9 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                 print(f"stdout:\n{full_stdout}")
             full_err = full_stderr[:3000] or full_stdout[:1000]
             raise HTTPException(status_code=400, detail=f"Export error (rc={result.returncode}): {full_err}")
+        stderr_last = (result.stderr or "")[-2000:]
+        if stderr_last.strip():
+            print(f"FFMPEG OK - stderr tail:\n{stderr_last}")
         local_files.append(output_path)
 
         # Upload to Supabase Storage
@@ -2975,6 +3015,21 @@ async def create_portal_session(user: dict = Depends(get_current_user)):
         return RedirectResponse(url=session.url)
     except Exception as e:
         return RedirectResponse(url=f"{FRONTEND_URL}/dashboard?tab=settings&error={str(e)[:50]}")
+
+
+@app.get("/debug/fonts")
+async def debug_fonts():
+    import subprocess, glob
+    try:
+        r = subprocess.run(["fc-list", ":lang=en"], capture_output=True, text=True, timeout=15)
+        fc_out = r.stdout
+    except Exception as e:
+        fc_out = f"fc-list error: {e}"
+    ttf_files = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
+    return {
+        "fc_list": fc_out.splitlines()[:80],
+        "ttf_files": ttf_files,
+    }
 
 
 if __name__ == "__main__":
