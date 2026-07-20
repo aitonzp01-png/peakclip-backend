@@ -957,12 +957,9 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
     
     # ─── Style extraction (matching frontend defaults) ───
     font_family = s.get('fontFamily', 'Inter')
-    # ASS font fallback chain: requested font then common system fonts
-    fallback_fonts = 'FreeSans,DejaVu Sans, Liberation Sans, Arial'
-    if ' ' in font_family:
-        font_fn = f"'{font_family}',{fallback_fonts}"
-    else:
-        font_fn = f"{font_family},{fallback_fonts}"
+    # ASS Fontname must be a single name (comma breaks the ASS format entirely).
+    # libass + fontconfig handles fallback automatically when the font is missing.
+    font_fn = f"'{font_family}'" if ' ' in font_family else font_family
     font_sz = max(8, min(200, s.get('fontSize', 32)))
     color = s.get('color', '#ffffff')
     highlight_color = s.get('highlightColor', '#c4ff3d')
