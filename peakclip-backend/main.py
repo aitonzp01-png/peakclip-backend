@@ -2278,7 +2278,10 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
                 target_w=target_w, target_h=target_h
             )
             temp_files.append(ass_path)
-            vf = f"{vf},subtitles={ass_path}"
+            if os.path.exists(ass_path):
+                with open(ass_path) as f:
+                    print(f"ASS file ({ass_path}) content:\n{f.read()[:500]}")
+            vf = f"{vf},subtitles={ass_path}:fontsdir=/usr/share/fonts/truetype"
 
         if req.watermark_text:
             pos_map_wm = {
@@ -2366,10 +2369,15 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             cmd.extend(['-filter_complex', af_filter])
         cmd.extend(['-y', output_path])
 
+        print(f"FFMPEG CMD: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            full_err = (result.stderr or "")[:2000] or (result.stdout or "")[:500]
-            print(f"Export ffmpeg failed (rc={result.returncode}). stderr:\n{result.stderr}")
+            full_stderr = result.stderr or ""
+            full_stdout = result.stdout or ""
+            print(f"Export ffmpeg failed (rc={result.returncode}). FULL stderr:\n{full_stderr}")
+            if full_stdout:
+                print(f"stdout:\n{full_stdout}")
+            full_err = full_stderr[:3000] or full_stdout[:1000]
             raise HTTPException(status_code=400, detail=f"Export error (rc={result.returncode}): {full_err}")
         local_files.append(output_path)
 
