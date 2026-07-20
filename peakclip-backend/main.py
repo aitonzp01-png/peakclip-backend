@@ -927,21 +927,15 @@ def _measure_text_width(text, font_family, font_size, font_weight, font_style, l
 
 def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, target_w=1080, target_h=1920):
     """
-    Generate ASS subtitle file matching EditorPreviewCanvas rendering EXACTLY.
+    Generate ASS subtitle file that EXACTLY matches the editor timeline.
     
-    Frontend rendering (EditorPreviewCanvas.js):
-    - Canvas base width: 400px (reference)
-    - Font size scaled: fontSize * (canvas.width / 400)
-    - Position Y: canvas.height * positionY / 100 (percentage from top)
-    - Grouping: maxWords (default 4) words per line
-    - Line height: fontSize * lineHeight
-    - Text alignment: center/left/right
-    - Karaoke: per-word highlight color for active word
-    - Background: rounded rect per line
-    - Stroke: outline
-    - Shadow: offset + blur
+    RULE: The editor is the single source of truth.
+    - Each word from the timeline is rendered as its own Dialogue line
+    - NO re-grouping, NO phrase detection, NO line merging
+    - Each word keeps its exact timing, position, and style
+    - The exported video must be a visual clone of the editor preview
     """
-    # Filter words within clip time range
+    # Filter words within clip time range (keep ANY word that overlaps the clip)
     clip_words = [
         w for w in words
         if not w.get('deleted', False)
@@ -954,18 +948,15 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
         return
 
     s = style or {}
-    
-    # ─── Style extraction (matching frontend defaults) ───
+
+    # ─── Style extraction ───
     font_family = s.get('fontFamily', 'Inter')
-    # ASS Fontname must be a single name (comma breaks the ASS format entirely).
-    # libass + fontconfig handles fallback automatically when the font is missing.
     font_fn = f"'{font_family}'" if ' ' in font_family else font_family
     font_sz = max(8, min(200, s.get('fontSize', 32)))
     color = s.get('color', '#ffffff')
     highlight_color = s.get('highlightColor', '#c4ff3d')
     bg_color = s.get('backgroundColor', 'transparent')
     bg_opacity = max(0, min(100, s.get('backgroundOpacity', 0)))
-    max_words = max(1, min(12, s.get('maxWords', 4)))
     text_transform = s.get('textTransform', 'none')
     letter_spacing = max(-5, min(20, s.get('letterSpacing', 0)))
     line_height = max(0.5, min(3.0, s.get('lineHeight', 1.2)))
@@ -976,36 +967,22 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
     stroke_w = max(0, min(10, s.get('strokeWidth', 2))) if stroke else 0
     shadow = s.get('shadow', False)
     shadow_c = s.get('shadowColor', '#000000')
-    shadow_offset_x = s.get('shadowOffsetX', 2)
-    shadow_offset_y = s.get('shadowOffsetY', 2)
     shadow_blur = max(0, min(10, s.get('shadowBlur', 4))) if shadow else 0
     text_align = s.get('textAlign', 'center')
     bold = -1 if s.get('fontWeight', '700') in ('700', '800', '900') else 0
     italic = -1 if s.get('fontStyle', 'normal') == 'italic' else 0
     karaoke = s.get('karaokeHighlight', True)
-    bg_padding = max(0, min(50, s.get('backgroundPadding', 8)))
-    bg_radius = max(0, min(20, s.get('backgroundBorderRadius', 4)))
 
-    # ─── Scale calculation (match frontend: canvas.width / 400) ───
-    # Frontend uses canvas width 400 as reference, backend target_w is the actual output width
+    # ─── Scale ───
     scale = target_w / 400.0
-    
-    # Effective font size in output pixels (matching frontend: fontSize * scale)
     eff_font_sz = font_sz * scale
-    # Clamp to reasonable ASS range
     eff_font_sz = max(8, min(200, eff_font_sz))
 
-    # ─── Position calculation (match frontend exactly) ───
-    # Frontend: fillText baseline at y = (canvas.height * positionY) / 100
-    # ASS \an8: top of text at \pos(x, y)
-    # Convert baseline to top by subtracting ~85% of font size
+    # ─── Position ───
     base_y = int(target_h * position_y / 100 - eff_font_sz * 0.85)
     base_y = max(0, base_y)
-    
-    # Line height in output pixels
-    line_h = eff_font_sz * line_height
 
-    # ─── Color conversion (RGB -> ASS BGR + Alpha) ───
+    # ─── Color conversion ───
     def rgb_to_ass(rgb, alpha=0):
         h = rgb.lstrip('#')
         if len(h) == 3:
@@ -1013,39 +990,22 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
         h = h[:6].zfill(6)
         return f"&H{alpha:02X}{h[4:6]}{h[2:4]}{h[0:2]}&"
 
-    pc = rgb_to_ass(color)           # Primary color
-    hc = rgb_to_ass(highlight_color) # Highlight (secondary for karaoke)
-    oc = rgb_to_ass(stroke_c)        # Outline
-    shc = rgb_to_ass(shadow_c)       # Shadow
-    
-    # Background color with opacity
+    pc = rgb_to_ass(color)
+    hc = rgb_to_ass(highlight_color)
+    oc = rgb_to_ass(stroke_c)
+
     if bg_color != 'transparent' and bg_opacity > 0:
         bg_alpha = int(255 * (1 - bg_opacity / 100))
         bgc = rgb_to_ass(bg_color, bg_alpha)
     else:
-        bgc = "&H00000000&"  # Transparent
+        bgc = "&H00000000&"
 
-    # ─── Group words into lines (matching frontend maxWords) ───
-    # Filter to only words within clip range for timing
-    active_words = [
-        w for w in clip_words
-        if w.get('start', 0) >= clip_start and w.get('end', 0) <= clip_end
-    ]
-    
-    # Group by maxWords
-    lines = _group_words_into_lines(active_words, max_words)
-
-    # ─── ASS header ───
     play_res_w = target_w
     play_res_h = target_h
     margin_x = int(play_res_w * (100 - max_width) / 200)
     margin_x = max(10, margin_x)
 
-    # Alignment: 2=bottom-center, 5=middle-center, 8=top-center
-    # Frontend textAlign: 'center' | 'left' | 'right'
-    # For multi-line with \N, alignment 2 (bottom-center) works best with explicit \pos
-    # We'll use \an8 (top-center) with \pos at base_y, then offset each line down
-    
+    # ─── ASS header ───
     lines_out = [
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -1061,97 +1021,46 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
 
-    # ─── Build dialogue lines ───
-    # We create ONE dialogue per "phrase" (group of lines that appear together)
-    # Frontend shows all active words at current time, grouped by maxWords per line
-    # We'll create dialogues that match the timing of word groups
-    
-    # For karaoke: create dialogues per word group (phrase) with \k timing
-    # For non-karaoke: simpler dialogues
-    
-    # Group words into phrases by time gaps (same as frontend phrase logic)
-    phrases = []
-    current = [clip_words[0]]
-    for w in clip_words[1:]:
-        gap = w['start'] - current[-1]['end']
-        phrase_dur = current[-1]['end'] - current[0]['start']
-        if gap < 1.0 and len(current) < 10 and phrase_dur < 5.0:
-            current.append(w)
-        else:
-            phrases.append(current)
-            current = [w]
-    if current:
-        phrases.append(current)
+    # ─── Each word is its own Dialogue line ───
+    # NO grouping, NO phrasing, NO line-merging.
+    # Every word from the editor timeline gets its own entry with exact timing + position.
+    align_map = {'left': 7, 'center': 8, 'right': 9}
+    align = align_map.get(text_align, 8)
 
-    for phrase in phrases:
-        phrase_start = max(0.0, phrase[0]['start'] - clip_start)
-        phrase_end = phrase[-1]['end'] - clip_start
-        if phrase_end <= phrase_start:
-            phrase_end = phrase_start + 0.1
-        
-        # Group this phrase's words into lines by maxWords
-        phrase_lines = _group_words_into_lines(phrase, max_words)
-        
-        if karaoke:
-            # Karaoke: build text with \\k tags per word
-            line_texts = []
-            for line_idx, line in enumerate(phrase_lines):
-                line_parts = []
-                for w in line:
-                    word_text = w['word'].strip()
-                    if not word_text:
-                        continue
-                    if text_transform == 'uppercase':
-                        word_text = word_text.upper()
-                    elif text_transform == 'lowercase':
-                        word_text = word_text.lower()
-                    
-                    dur_cs = max(1, int(round((w['end'] - w['start']) * 100)))
-                    # Highlight active word: use {\\k} for timing, color change handled by SecondaryColour
-                    line_parts.append('{\\k' + str(dur_cs) + '}' + word_text)
-                
-                if line_parts:
-                    # Position each line: base_y + line_idx * line_h
-                    # Using \\an8 (top-center) with \\pos(x, y)
-                    line_y = base_y + line_idx * int(line_h)
-                    pos_x = play_res_w // 2
-                    # Add alignment override per line if needed
-                    align_map = {'left': 7, 'center': 8, 'right': 9}
-                    align = align_map.get(text_align, 8)
-                    reveal_tag = '{\\an' + str(align) + '\\pos(' + str(pos_x) + ',' + str(line_y) + ')}'
-                    line_texts.append(reveal_tag + ' '.join(line_parts))
-            
-                if line_texts:
-                    dialogue_text = '\\N'.join(line_texts)
-                    start_str = format_ass_time(phrase_start)
-                    end_str = format_ass_time(phrase_end)
-                    lines_out.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{dialogue_text}")
+    for w in clip_words:
+        word_text = w.get('word', '').strip()
+        if not word_text:
+            continue
+
+        if text_transform == 'uppercase':
+            word_text = word_text.upper()
+        elif text_transform == 'lowercase':
+            word_text = word_text.lower()
+
+        # Each word uses its own start/end, clamped to clip boundaries
+        w_start = max(0.0, w.get('start', 0) - clip_start)
+        w_end = max(w_start + 0.1, w.get('end', 0) - clip_start)
+
+        if karaoke and w.get('end', 0) > w.get('start', 0):
+            dur_cs = max(1, int(round((w['end'] - w['start']) * 100)))
+            tagged = '{\\k' + str(dur_cs) + '}' + word_text
         else:
-            # Non-karaoke: simple text with colors
-            line_texts = []
-            for line_idx, line in enumerate(phrase_lines):
-                words_text = []
-                for w in line:
-                    word_text = w['word'].strip()
-                    if word_text:
-                        if text_transform == 'uppercase':
-                            word_text = word_text.upper()
-                        elif text_transform == 'lowercase':
-                            word_text = word_text.lower()
-                        words_text.append(word_text)
-                if words_text:
-                    line_y = base_y + line_idx * int(line_h)
-                    pos_x = play_res_w // 2
-                    align_map = {'left': 7, 'center': 8, 'right': 9}
-                    align = align_map.get(text_align, 8)
-                    reveal_tag = '{\\an' + str(align) + '\\pos(' + str(pos_x) + ',' + str(line_y) + ')}'
-                    line_texts.append(reveal_tag + ' '.join(words_text))
-            
-            if line_texts:
-                dialogue_text = '\\N'.join(line_texts)
-                start_str = format_ass_time(phrase_start)
-                end_str = format_ass_time(phrase_end)
-                lines_out.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{dialogue_text}")
+            tagged = word_text
+
+        # Position: per-word override or global
+        if w.get('x') is not None and w.get('y') is not None:
+            wx = int(w['x'] * scale)
+            wy = int(w['y'] * scale - eff_font_sz * 0.85)
+        else:
+            wx = play_res_w // 2
+            wy = base_y
+
+        reveal_tag = '{\\an' + str(align) + '\\pos(' + str(wx) + ',' + str(max(0, wy)) + ')}'
+        dialogue_text = reveal_tag + tagged
+
+        start_str = format_ass_time(w_start)
+        end_str = format_ass_time(w_end)
+        lines_out.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{dialogue_text}")
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("\n".join(lines_out))
