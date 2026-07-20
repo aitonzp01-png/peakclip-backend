@@ -289,6 +289,13 @@ def upload_with_verification(supabase, bucket, file_path, storage_path, content_
 def ensure_fonts():
     import httpx as _httpx
     FONT_DIR = "/usr/share/fonts/truetype"
+    # Remove old broken font files (HTML error pages from broken URLs)
+    for olddir in ("google-fonts",):
+        oldpath = os.path.join(FONT_DIR, olddir)
+        if os.path.isdir(oldpath):
+            import shutil
+            shutil.rmtree(oldpath, ignore_errors=True)
+            print(f"[FONTS] removed broken directory: {oldpath}")
     # Static TTF from Google Fonts CDN (NOT variable fonts — libass cannot resolve
     # weight instances from variable fonts, always falling back to Regular).
     STATIC_FONTS = [
@@ -305,9 +312,6 @@ def ensure_fonts():
     ]
     for fname, url in STATIC_FONTS:
         dest = os.path.join(FONT_DIR, fname)
-        if os.path.exists(dest):
-            print(f"[FONTS] already present: {fname}")
-            continue
         try:
             r = _httpx.get(url, follow_redirects=True, timeout=60)
             if r.status_code == 200 and len(r.content) > 10000:
