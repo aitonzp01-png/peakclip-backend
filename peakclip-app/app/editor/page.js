@@ -608,6 +608,7 @@ export default function EditorPage() {
         subtitle_position: position,
         subtitle_style_obj: subtitleStyle,
         subtitle_words: subtitleWords,
+        subtitle_mode: wordByWordPresets.includes(selectedPresetId) ? 'word' : 'phrase',
         font_size: subtitleStyle.fontSize,
         watermark_text: '',
         watermark_position: 'top-right',
@@ -2942,6 +2943,7 @@ export default function EditorPage() {
         duration={duration}
         musicTrack={activeMusicTrack}
         musicVolume={musicVolume}
+        subtitleMode={wordByWordPresets.includes(selectedPresetId) ? 'word' : 'phrase'}
       />
 
       {/* --- TOAST --- */}

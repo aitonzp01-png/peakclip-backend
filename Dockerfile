@@ -13,6 +13,17 @@ RUN apt-get update && apt-get install -y \
     libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
+# Download Inter font (used as default in the editor)
+RUN mkdir -p /usr/share/fonts/truetype/inter && \
+    for url in \
+      "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Regular.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-SemiBold.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Bold.ttf" \
+      "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-ExtraBold.ttf"; do \
+      curl -sL --connect-timeout 10 "$url" -o "/usr/share/fonts/truetype/inter/$(basename "$url")" || true; \
+    done && \
+    fc-cache -f && echo "Inter font download complete"
+
 WORKDIR /app
 
 # Copiar e instalar dependencias Python

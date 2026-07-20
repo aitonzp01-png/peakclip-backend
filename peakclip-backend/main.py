@@ -678,6 +678,7 @@ class ExportRequest(BaseModel):
     font_size: int = 14
     subtitle_style_obj: dict = {}
     subtitle_words: list[dict[str, Any]] = []
+    subtitle_mode: str = "phrase"
     watermark_text: str = ""
     watermark_position: str = "top-right"
     music_track: str = "none"
@@ -925,17 +926,39 @@ def _measure_text_width(text, font_family, font_size, font_weight, font_style, l
     return base_width
 
 
-def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, target_w=1080, target_h=1920):
+def group_words_into_phrases(words):
+    """Match frontend groupWordsIntoPhrases exactly."""
+    active = sorted(words, key=lambda w: w['start'])
+    phrases = []
+    current = []
+    for w in active:
+        if not current:
+            current.append(w)
+        else:
+            last = current[-1]
+            gap = w['start'] - last['end']
+            current_duration = last['end'] - current[0]['start']
+            if gap < 0.8 and current_duration < 3.5 and len(current) < 3:
+                current.append(w)
+            else:
+                phrases.append(current)
+                current = [w]
+    if current:
+        phrases.append(current)
+    return phrases
+
+
+def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, target_w=1080, target_h=1920, mode='word'):
     """
     Generate ASS subtitle file that EXACTLY matches the editor timeline.
     
-    RULE: The editor is the single source of truth.
-    - Each word from the timeline is rendered as its own Dialogue line
-    - NO re-grouping, NO phrase detection, NO line merging
-    - Each word keeps its exact timing, position, and style
-    - The exported video must be a visual clone of the editor preview
+    RULE: The editor is the single source of truth — no defaults, no re-grouping,
+    no re-interpretation. The exported ASS must be a visual clone of the editor preview.
+    
+    mode='word':   Each word is its own Dialogue line (no grouping).
+                   Word-by-word presets: karaoke, typewriter, bounce, vhs, neon, focus, viral.
+    mode='phrase': Group words into phrases matching the editor's phrase logic.
     """
-    # Filter words within clip time range (keep ANY word that overlaps the clip)
     clip_words = [
         w for w in words
         if not w.get('deleted', False)
@@ -949,40 +972,48 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
 
     s = style or {}
 
-    # ─── Style extraction ───
-    font_family = s.get('fontFamily', 'Inter')
-    font_fn = f"'{font_family}'" if ' ' in font_family else font_family
-    font_sz = max(8, min(200, s.get('fontSize', 32)))
-    color = s.get('color', '#ffffff')
-    highlight_color = s.get('highlightColor', '#c4ff3d')
-    bg_color = s.get('backgroundColor', 'transparent')
-    bg_opacity = max(0, min(100, s.get('backgroundOpacity', 0)))
-    text_transform = s.get('textTransform', 'none')
-    letter_spacing = max(-5, min(20, s.get('letterSpacing', 0)))
-    line_height = max(0.5, min(3.0, s.get('lineHeight', 1.2)))
-    position_y = max(0, min(100, s.get('positionY', 75)))
-    max_width = max(20, min(100, s.get('maxWidth', 90)))
-    stroke = s.get('stroke', False)
-    stroke_c = s.get('strokeColor', '#000000')
-    stroke_w = max(0, min(10, s.get('strokeWidth', 2))) if stroke else 0
-    shadow = s.get('shadow', False)
-    shadow_c = s.get('shadowColor', '#000000')
-    shadow_blur = max(0, min(10, s.get('shadowBlur', 4))) if shadow else 0
-    text_align = s.get('textAlign', 'center')
-    bold = -1 if s.get('fontWeight', '700') in ('700', '800', '900') else 0
-    italic = -1 if s.get('fontStyle', 'normal') == 'italic' else 0
-    karaoke = s.get('karaokeHighlight', True)
+    # ─── Style: ALL values MUST come from the editor. NO defaults. ───
+    def _req(key, typ):
+        val = s.get(key)
+        if val is None:
+            raise ValueError(f"[generate_ass_karaoke] editor did not send '{key}' — refusing to use a default")
+        return typ(val)
 
-    # ─── Scale ───
+    font_family = _req('fontFamily', str)
+    font_fn = f"'{font_family}'" if ' ' in font_family else font_family
+    font_sz = float(_req('fontSize', (int, float)))
+    color = _req('color', str)
+    highlight_color = _req('highlightColor', str)
+    bg_color = _req('backgroundColor', str)
+    bg_opacity = float(_req('backgroundOpacity', (int, float)))
+    text_transform = _req('textTransform', str)
+    letter_spacing = float(_req('letterSpacing', (int, float)))
+    line_height = float(_req('lineHeight', (int, float)))
+    position_y = float(_req('positionY', (int, float)))
+    max_width = float(_req('maxWidth', (int, float)))
+    stroke = bool(_req('stroke', (bool, int)))
+    stroke_c = _req('strokeColor', str)
+    stroke_w = float(_req('strokeWidth', (int, float)))
+    shadow = bool(_req('shadow', (bool, int)))
+    shadow_c = _req('shadowColor', str)
+    shadow_blur = float(_req('shadowBlur', (int, float)))
+    shadow_offset_x = float(_req('shadowOffsetX', (int, float)))
+    shadow_offset_y = float(_req('shadowOffsetY', (int, float)))
+    text_align = _req('textAlign', str)
+    font_weight = _req('fontWeight', str)
+    font_style = _req('fontStyle', str)
+    karaoke = bool(_req('karaokeHighlight', (bool, int)))
+
+    bold = -1 if font_weight in ('700', '800', '900') else 0
+    italic = -1 if font_style == 'italic' else 0
+
     scale = target_w / 400.0
     eff_font_sz = font_sz * scale
     eff_font_sz = max(8, min(200, eff_font_sz))
 
-    # ─── Position ───
     base_y = int(target_h * position_y / 100 - eff_font_sz * 0.85)
     base_y = max(0, base_y)
 
-    # ─── Color conversion ───
     def rgb_to_ass(rgb, alpha=0):
         h = rgb.lstrip('#')
         if len(h) == 3:
@@ -1005,7 +1036,6 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
     margin_x = int(play_res_w * (100 - max_width) / 200)
     margin_x = max(10, margin_x)
 
-    # ─── ASS header ───
     lines_out = [
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -1015,52 +1045,75 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        f"Style: Default,{font_fn},{int(eff_font_sz)},{pc},{hc},{oc},{bgc},{bold},{italic},0,0,100,100,{int(letter_spacing * scale * 10)},0,1,{stroke_w},{shadow_blur},8,{margin_x},{margin_x},0,1",
+        f"Style: Default,{font_fn},{int(eff_font_sz)},{pc},{hc},{oc},{bgc},{bold},{italic},0,0,100,100,{int(letter_spacing * scale * 10)},0,1,{int(stroke_w)},{int(shadow_blur)},8,{margin_x},{margin_x},0,1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
 
-    # ─── Each word is its own Dialogue line ───
-    # NO grouping, NO phrasing, NO line-merging.
-    # Every word from the editor timeline gets its own entry with exact timing + position.
     align_map = {'left': 7, 'center': 8, 'right': 9}
     align = align_map.get(text_align, 8)
 
-    for w in clip_words:
-        word_text = w.get('word', '').strip()
-        if not word_text:
-            continue
-
+    def _format_word(w, karaoke_active):
+        txt = w.get('word', '').strip()
+        if not txt:
+            return None
         if text_transform == 'uppercase':
-            word_text = word_text.upper()
+            txt = txt.upper()
         elif text_transform == 'lowercase':
-            word_text = word_text.lower()
-
-        # Each word uses its own start/end, clamped to clip boundaries
-        w_start = max(0.0, w.get('start', 0) - clip_start)
-        w_end = max(w_start + 0.1, w.get('end', 0) - clip_start)
-
-        if karaoke and w.get('end', 0) > w.get('start', 0):
+            txt = txt.lower()
+        if karaoke_active and w.get('end', 0) > w.get('start', 0):
             dur_cs = max(1, int(round((w['end'] - w['start']) * 100)))
-            tagged = '{\\k' + str(dur_cs) + '}' + word_text
-        else:
-            tagged = word_text
+            txt = '{\\k' + str(dur_cs) + '}' + txt
+        return txt
 
-        # Position: per-word override or global
+    def _word_position(w):
         if w.get('x') is not None and w.get('y') is not None:
             wx = int(w['x'] * scale)
             wy = int(w['y'] * scale - eff_font_sz * 0.85)
         else:
             wx = play_res_w // 2
             wy = base_y
+        return wx, max(0, wy)
 
-        reveal_tag = '{\\an' + str(align) + '\\pos(' + str(wx) + ',' + str(max(0, wy)) + ')}'
-        dialogue_text = reveal_tag + tagged
+    def _dialogue(start_sec, end_sec, text):
+        s_str = format_ass_time(start_sec)
+        e_str = format_ass_time(end_sec)
+        return f"Dialogue: 0,{s_str},{e_str},Default,,0,0,0,,{text}"
 
-        start_str = format_ass_time(w_start)
-        end_str = format_ass_time(w_end)
-        lines_out.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{dialogue_text}")
+    # ─── Dialogue generation by mode ───
+    if mode == 'word':
+        # Word-by-word: each word is an independent, non-overlapping Dialogue
+        for w in clip_words:
+            txt = _format_word(w, karaoke)
+            if txt is None:
+                continue
+            w_start = max(0.0, w['start'] - clip_start)
+            w_end = max(w_start + 0.1, w['end'] - clip_start)
+            wx, wy = _word_position(w)
+            tag = '{\\an' + str(align) + '\\pos(' + str(wx) + ',' + str(wy) + ')}'
+            lines_out.append(_dialogue(w_start, w_end, tag + txt))
+
+    elif mode == 'phrase':
+        # Phrase mode: group words into phrases matching frontend logic
+        phrases = group_words_into_phrases(clip_words)
+        for phrase in phrases:
+            p_start = max(0.0, phrase[0]['start'] - clip_start)
+            p_end = max(p_start + 0.1, phrase[-1]['end'] - clip_start)
+            parts = []
+            for w in phrase:
+                txt = _format_word(w, karaoke)
+                if txt:
+                    parts.append(txt)
+            if not parts:
+                continue
+            text_str = ' '.join(parts)
+            wx, wy = _word_position(phrase[0])
+            tag = '{\\an' + str(align) + '\\pos(' + str(wx) + ',' + str(wy) + ')}'
+            lines_out.append(_dialogue(p_start, p_end, tag + text_str))
+
+    else:
+        raise ValueError(f"[generate_ass_karaoke] unknown mode: {mode}")
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("\n".join(lines_out))
@@ -2189,7 +2242,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             generate_ass_karaoke(
                 req.subtitle_words, trim_s, trim_s + trim_d, ass_path,
                 style=req.subtitle_style_obj,
-                target_w=target_w, target_h=target_h
+                target_w=target_w, target_h=target_h,
+                mode=req.subtitle_mode
             )
             temp_files.append(ass_path)
             if os.path.exists(ass_path):

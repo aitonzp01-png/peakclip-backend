@@ -21,6 +21,8 @@ const formatTime = (s) => {
   return m + ':' + sec.toString().padStart(2, '0')
 }
 
+const wordByWordPresets = ['karaoke', 'typewriter', 'bounce', 'vhs', 'neon', 'focus', 'viral']
+
 export default function ExportModal({
   show,
   onClose,
@@ -33,6 +35,7 @@ export default function ExportModal({
   duration,
   musicTrack,
   musicVolume,
+  subtitleMode,
 }) {
   const [resolution, setResolution] = useState('1080p')
   const [format, setFormat] = useState('mp4')
@@ -129,6 +132,7 @@ export default function ExportModal({
           subtitle_position: position,
           subtitle_style_obj: subtitleStyle,
           subtitle_words: subtitleWords,
+          subtitle_mode: subtitleMode || 'phrase',
           font_size: subtitleStyle.fontSize || 28,
           watermark_text: '',
           watermark_position: 'top-right',
