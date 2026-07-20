@@ -18,6 +18,8 @@ export default function Topbar({
         return 'New campaign';
       case 'clips':
         return 'My clips';
+      case 'ai_rankings':
+        return 'AI Rankings';
       case 'calendar':
         return 'Publishing calendar';
       case 'analytics':

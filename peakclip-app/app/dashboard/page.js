@@ -6,6 +6,7 @@ import { getSupabaseClient } from '../../lib/supabase';
 import Sidebar from './components/Sidebar.jsx';
 import Topbar from './components/Topbar.jsx';
 import ClipCard from './components/ClipCard.jsx';
+import AIRankings from './components/AIRankings.jsx';
 import './dashboard.css';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -954,6 +955,11 @@ export default function Dashboard() {
                   </div>
                 )}
               </motion.div>
+            )}
+
+            {/* VIEW: AI RANKINGS */}
+            {activeTab === 'ai_rankings' && (
+              <AIRankings setToast={setToast} />
             )}
 
             {/* VIEW: CALENDAR */}

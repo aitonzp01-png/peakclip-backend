@@ -84,7 +84,7 @@ def fetch_youtube_metadata(url: str) -> dict | None:
         "youtube_thumbnail": None,
     }
     try:
-        ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+        ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             meta["youtube_title"] = info.get("title")
@@ -2219,8 +2219,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         if vcodec == 'libx264':
             cmd.extend(['-pix_fmt', 'yuv420p', '-profile:v', 'high', '-movflags', '+faststart'])
         cmd.extend([
-            '-preset', 'medium',
-            '-crf', '18',
+            '-preset', 'veryfast',
+            '-crf', '23',
             '-c:a', acodec,
         ])
         if acodec == 'aac':
