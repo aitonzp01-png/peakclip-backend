@@ -2314,6 +2314,8 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         ass_path = None
         if req.subtitle_style != "none" and req.subtitle_words:
             ass_path = os.path.join(tempfile.gettempdir(), f"{job_id}_subs.ass")
+            print(f"[PEAKCLIP] subtitle_style_obj received: {json.dumps(req.subtitle_style_obj, default=str)}")
+            print(f"[PEAKCLIP] subtitle_mode: {req.subtitle_mode}")
             generate_ass_karaoke(
                 req.subtitle_words, trim_s, trim_s + trim_d, ass_path,
                 style=req.subtitle_style_obj,
