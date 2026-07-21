@@ -1098,6 +1098,10 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
     else:
         bgc = "&H00000000&"
 
+    # ─── Style overrides to match editor EXACTLY ───
+    # Editor word-by-word mode ALWAYS forces: color=highlightColor, stroke=true, strokeWidth=3
+    ass_stroke_w = 3.0 if mode == 'word' else stroke_w
+
     play_res_w = target_w
     play_res_h = target_h
     margin_x = int(play_res_w * (100 - max_width) / 200)
@@ -1112,7 +1116,7 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        f"Style: Default,{font_fn},{int(eff_font_sz)},{pc},{hc},{oc},{bgc},{bold},{italic},0,0,100,100,{int(letter_spacing * scale * 10)},0,1,{int(stroke_w)},{shadow_mag},8,{margin_x},{margin_x},0,1",
+        f"Style: Default,{font_fn},{int(eff_font_sz)},{pc},{hc},{oc},{bgc},{bold},{italic},0,0,100,100,{int(letter_spacing * scale * 10)},0,1,{int(ass_stroke_w)},{shadow_mag},8,{margin_x},{margin_x},0,1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -1129,6 +1133,7 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
             txt = txt.upper()
         elif text_transform == 'lowercase':
             txt = txt.lower()
+        # karaoke_active = True → phrase mode with karaoke (add \k for standard karaoke progression)
         if karaoke_active and w.get('end', 0) > w.get('start', 0):
             dur_cs = max(1, int(round((w['end'] - w['start']) * 100)))
             txt = '{\\k' + str(dur_cs) + '}' + txt
@@ -1150,15 +1155,18 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
 
     # ─── Dialogue generation by mode ───
     if mode == 'word':
-        # Word-by-word: each word is an independent, non-overlapping Dialogue
+        # Word-by-word: editor shows ALL words in highlightColor with stroke 3, NO progression
+        hc_ass = rgb_to_ass(highlight_color)
+        oc_ass = rgb_to_ass(stroke_c)
         for w in clip_words:
-            txt = _format_word(w, karaoke)
+            txt = _format_word(w, False)
             if txt is None:
                 continue
             w_start = max(0.0, w['start'] - clip_start)
             w_end = max(w_start + 0.1, w['end'] - clip_start)
             wx, wy = _word_position(w)
-            tag = '{\\an' + str(align) + '\\pos(' + str(wx) + ',' + str(wy) + ')}'
+            # Editor forces: color=highlightColor, strokeColor=#000000, strokeWidth=3 for wbw
+            tag = '{\\an' + str(align) + '\\pos(' + str(wx) + ',' + str(wy) + ')\\c' + hc_ass + '\\3c&H00000000&}'
             lines_out.append(_dialogue(w_start, w_end, tag + txt))
 
     elif mode == 'phrase':
