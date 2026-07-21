@@ -231,6 +231,31 @@ async def oauth_token_monitor():
 
 # ────────────────────────────────────────────────────────────────
 
+# ── Cookie support ────────────────────────────────────────────
+COOKIES_PATH = os.path.join(OAUTH_TOKEN_CACHE_DIR, 'cookies.txt')
+
+def setup_cookies() -> str | None:
+    """Load cookies from YOUTUBE_COOKIES_B64 env var (Netscape format) and write to disk.
+
+    Export cookies from your browser using a browser extension, base64-encode the
+    file, and set it as the YOUTUBE_COOKIES_B64 env var on Railway.
+    """
+    cookies_b64 = os.environ.get('YOUTUBE_COOKIES_B64', '').strip()
+    if not cookies_b64:
+        return None
+    try:
+        data = base64.b64decode(cookies_b64).decode('utf-8')
+        if 'youtube.com' not in data.lower() and '.google.com' not in data.lower():
+            print(f"COOKIES: WARNING — decoded data does not appear to contain YouTube cookies")
+        os.makedirs(OAUTH_TOKEN_CACHE_DIR, exist_ok=True)
+        with open(COOKIES_PATH, 'w', encoding='utf-8') as f:
+            f.write(data)
+        print(f"COOKIES: written to {COOKIES_PATH} ({len(data)} bytes)")
+        return COOKIES_PATH
+    except Exception as e:
+        print(f"COOKIES: failed to load from env: {e}")
+        return None
+
 
 def upload_with_verification(supabase, bucket, file_path, storage_path, content_type):
     """Upload a file to Supabase Storage via direct HTTP PUT and verify it."""
@@ -342,6 +367,11 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
     setup_oauth2_tokens()
+    setup_cookies()
+
+    # Start OAuth2 token monitor in background
+    if YOUTUBE_OAUTH_CLIENT_ID:
+        asyncio.create_task(oauth_token_monitor())
     await run_migrations()
     await fetch_jwks()
     # Check if bgutil PO token server is reachable (started by Dockerfile CMD)
@@ -356,6 +386,25 @@ async def lifespan(app: FastAPI):
             print(f"POT SERVER: unexpected status {r.status_code}")
     except Exception as e:
         print(f"POT SERVER: not available ({e})")
+
+    # ── Log auth status clearly ──
+    auth_methods = []
+    if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH):
+        auth_methods.append(f"OAuth2 (client_id={YOUTUBE_OAUTH_CLIENT_ID[:8]}...)")
+    if os.path.exists(COOKIES_PATH):
+        auth_methods.append(f"Cookies ({COOKIES_PATH})")
+    if os.environ.get('YOUTUBE_PROXY'):
+        auth_methods.append("Proxy")
+    if BGUTIL_POT_AVAILABLE:
+        auth_methods.append("BGutil PO Token")
+    if os.environ.get('YOUTUBE_PO_TOKEN'):
+        auth_methods.append("Static PO Token")
+    if auth_methods:
+        print(f"AUTH: available methods: {', '.join(auth_methods)}")
+    else:
+        print("AUTH: WARNING — NO authentication methods configured!")
+        print("AUTH: YouTube will likely block downloads or return 360p only.")
+        print("AUTH: Configure at least one of: YOUTUBE_OAUTH_TOKENS_B64, YOUTUBE_COOKIES_B64, YOUTUBE_PROXY")
     yield
     # Shutdown (nothing to do)
 
@@ -1591,22 +1640,20 @@ def process_video_background(job_id: str, user_id: str, url: str):
             'Mozilla/5.0 (SMART-TV; Linux; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/128.0.0.0 TV Safari/537.36',
         ]
         format_fallbacks = [
-            # Try 4K first if available
-            'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160]/best',
-            # 1080p
-            'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best',
-            # WebM best
-            'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
-            # Best MP4
-            'best[ext=mp4]/best',
-            # Any format
-            'bestvideo+bestaudio/best',
-            # H.264 specifically
-            'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]',
-            # Quick fallback to any
-            'best',
-            # Reliable worst
-            'worst[ext=mp4]/worst',
+            # Best possible with DASH (separate video+audio)
+            'bestvideo[height<=2160]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio',
+            # 1080p DASH
+            'bestvideo[height<=1080]+bestaudio/bestvideo[height<=1080]+bestaudio',
+            # Any DASH with audio
+            'bestvideo+bestaudio',
+            # 4K progressive (combined)
+            'best[height<=2160][ext=mp4]/best[height<=2160]',
+            # 1080p progressive
+            'best[height<=1080][ext=mp4]/best[height<=1080]',
+            # 720p progressive (minimum acceptable)
+            'best[height<=720][ext=mp4]/best[height<=720]',
+            # H.264 + AAC (safest codec combo)
+            'bv[ext=mp4][vcodec^=avc1]+ba[ext=m4a]',
         ]
         impersonate_profiles = [None, 'chrome', 'safari', 'chrome-120', 'chrome-119', 'safari-17']
 
@@ -1618,6 +1665,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
         last_err = None
         max_attempts = 16
         proxy_disabled = False
+        bot_detection_count = 0
         for attempt in range(max_attempts):
             check_deadline("download")
             cfg = strategies[attempt % len(strategies)]
@@ -1654,8 +1702,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                         'Accept-Language': 'en-US,en;q=0.5',
                     },
-                    'youtube_include_dash_manifest': False,
-                    'youtube_include_hls_manifest': False,
+                    'youtube_include_dash_manifest': True,
+                    'youtube_include_hls_manifest': True,
                     'source_address': '0.0.0.0',
                 }
                 if imp:
@@ -1666,6 +1714,9 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH):
                     ydl_opts['use_oauth'] = True
                     ydl_opts['token_path'] = OAUTH_TOKEN_PATH
+                # Cookies from browser export — provides authenticated YouTube session
+                if os.path.exists(COOKIES_PATH):
+                    ydl_opts['cookiefile'] = COOKIES_PATH
                 extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
                 if po_token:
                     extractor_args['youtube']['po_token'] = po_token
@@ -1675,7 +1726,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     extractor_args['youtubepot-bgutilhttp'] = {}
                 if extractor_args['youtube'] or 'youtubepot-bgutilhttp' in extractor_args:
                     ydl_opts['extractor_args'] = extractor_args
-                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled else 'no'} oauth={'yes' if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH) else 'no'}")
+                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled else 'no'} oauth={'yes' if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH) else 'no'} cookies={'yes' if os.path.exists(COOKIES_PATH) else 'no'}")
                 # Run yt-dlp in a subprocess so we can hard-kill it on timeout
                 ytdlp_script = os.path.join(os.path.dirname(__file__), 'ytdlp_download.py')
                 sub_opts = dict(ydl_opts)
@@ -1691,11 +1742,20 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     if result.returncode != 0:
                         stderr_tail = (result.stderr or '')[-1000:]
                         stdout_tail = (result.stdout or '')[-500:]
+                        combined_output = (stderr_tail + stdout_tail).lower()
                         print(f"yt-dlp attempt {attempt+1} exit={result.returncode}")
                         if stderr_tail:
                             print(f"  stderr[-1000]: {stderr_tail}")
                         if stdout_tail:
                             print(f"  stdout[-500]: {stdout_tail}")
+                        # Detect YouTube bot detection specifically
+                        if any(x in combined_output for x in ['sign in to confirm', 'not a bot', 'no video formats found', 'confirm you']):
+                            bot_detection_count += 1
+                            print(f"  >>> YOUTUBE BOT DETECTION detected ({bot_detection_count} times). "
+                                  f"Authentication needed for high-quality downloads.")
+                            if bot_detection_count >= 2:
+                                print(f"  >>> PERSISTENT BOT DETECTION — YouTube is actively blocking this IP.")
+                                print(f"  >>> Configure YOUTUBE_OAUTH_TOKENS_B64, YOUTUBE_COOKIES_B64, or YOUTUBE_PROXY to fix.")
                         raise Exception(f"yt-dlp exited {result.returncode}: {stderr_tail[:200]}")
                 except subprocess.TimeoutExpired as e:
                     stderr_tail = (e.stderr or '')[-300:] if hasattr(e, 'stderr') else ''
@@ -1762,7 +1822,17 @@ def process_video_background(job_id: str, user_id: str, url: str):
             if not fallback_success or not os.path.exists(video_path) or os.path.getsize(video_path) < 1024:
                 print(f"Job {job_id}: all fallback downloaders failed")
                 ytdlp_err = str(last_err)[:200] if last_err else "unknown"
-                jobs_store[job_id] = {"status": "error", "message": "Download failed. Railway's IP is blocked by YouTube. Solutions: (1) Run peakclip-backend/oauth_setup.py locally and set YOUTUBE_OAUTH_TOKENS_B64 on Railway. (2) Export fresh cookies from your browser and set YOUTUBE_COOKIES_B64. (3) Set YOUTUBE_PROXY with residential proxy credentials. (4) Self-host the backend on a residential connection."}
+                jobs_store[job_id] = {
+                    "status": "error",
+                    "message": (
+                        "Download failed. YouTube is blocking this server's IP. "
+                        "To fix this, configure at least ONE authentication method:\n"
+                        "1. YOUTUBE_OAUTH_TOKENS_B64 — Run oauth_setup.py locally, encode the token file, set on Railway\n"
+                        "2. YOUTUBE_COOKIES_B64 — Export cookies from your browser (Netscape format), base64-encode, set on Railway\n"
+                        "3. YOUTUBE_PROXY — Set a residential proxy URL (http://user:pass@host:port)\n"
+                        "Without authentication, YouTube limits downloads to 360p or blocks entirely."
+                    ),
+                }
                 return
 
         # Verify resolution — warn if below 720p (will be upscaled during render)
@@ -1771,15 +1841,28 @@ def process_video_background(job_id: str, user_id: str, url: str):
             '-show_entries', 'stream=width,height',
             '-of', 'csv=p=0', video_path
         ], capture_output=True, text=True, timeout=30)
+        src_w, src_h = 0, 0
         if probe_res.stdout.strip():
             parts = probe_res.stdout.strip().split(',')
             if len(parts) == 2:
                 try:
-                    w, h = int(parts[0]), int(parts[1])
-                    src_res = min(w, h)
-                    print(f"Job {job_id}: source resolution {w}x{h}")
+                    src_w, src_h = int(parts[0]), int(parts[1])
+                    src_res = min(src_w, src_h)
+                    print(f"Job {job_id}: source resolution {src_w}x{src_h}")
                     if src_res < 720:
-                        print(f"Job {job_id}: WARNING source below 720p ({src_res}p), will upscale to 720p")
+                        msg = (
+                            f"LOW QUALITY DOWNLOAD: {src_w}x{src_h} ({src_res}p). "
+                            f"YouTube likely blocked high-quality formats (bot detection). "
+                            f"This WILL degrade: auto-reframe accuracy, face tracking, smart zoom, final clip quality. "
+                            f"Configure authentication (YOUTUBE_OAUTH_TOKENS_B64, YOUTUBE_COOKIES_B64, or YOUTUBE_PROXY) "
+                            f"to get 1080p+ downloads."
+                        )
+                        print(f"Job {job_id}: {msg}")
+                        jobs_store[job_id] = {
+                            "status": "processing",
+                            "message": f"Warning: downloaded at {src_res}p (low quality). Configure auth for 1080p+.",
+                            "source_resolution": f"{src_w}x{src_h}",
+                        }
                 except ValueError:
                     pass
 
