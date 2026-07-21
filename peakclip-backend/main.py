@@ -1071,7 +1071,7 @@ def generate_ass_karaoke(words, clip_start, clip_end, output_path, style=None, t
     bold = -1 if font_weight in ('700', '800', '900') else 0
     italic = -1 if font_style == 'italic' else 0
 
-    scale = target_w / 400.0
+    scale = target_w / 360.0
     eff_font_sz = font_sz * scale
     eff_font_sz = max(8, min(200, eff_font_sz))
 

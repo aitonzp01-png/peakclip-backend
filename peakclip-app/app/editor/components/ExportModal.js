@@ -195,7 +195,7 @@ export default function ExportModal({
 
       // ─── WYSIWYG: validate editor state matches export payload ───
       if (process.env.NODE_ENV !== 'production') {
-        validateExportStyle(subtitleStyle, subtitleStyle)
+        validateExportStyle(subtitleStyle, { ...subtitleStyle, ascentRatio })
       }
 
       setStatusText('Processing video on server...')
