@@ -1661,6 +1661,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
         proxy_url = os.environ.get('YOUTUBE_PROXY')
         po_token = os.environ.get('YOUTUBE_PO_TOKEN')
         visitor_data = os.environ.get('YOUTUBE_VISITOR_DATA')
+        has_cookies = os.path.exists(COOKIES_PATH)
 
         last_err = None
         max_attempts = 16
@@ -1708,7 +1709,15 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 }
                 if imp:
                     ydl_opts['impersonate'] = imp
-                if proxy_url and not proxy_disabled:
+                # Alternate between proxy and direct to avoid IP mismatch with cookies.
+                # When cookies are from user's home IP but proxy sends from datacenter IP,
+                # YouTube detects the mismatch and blocks harder.
+                use_proxy = proxy_url and not proxy_disabled
+                if has_cookies and proxy_url and not proxy_disabled:
+                    # Alternate: even attempts = direct (cookies work best without IP mismatch)
+                    #             odd attempts = proxy (in case direct IP is also blocked)
+                    use_proxy = (attempt % 2 == 1)
+                if use_proxy:
                     ydl_opts['proxy'] = proxy_url
                 # OAuth2 for download — bypasses many YouTube IP blocks
                 if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH):
@@ -1726,7 +1735,7 @@ def process_video_background(job_id: str, user_id: str, url: str):
                     extractor_args['youtubepot-bgutilhttp'] = {}
                 if extractor_args['youtube'] or 'youtubepot-bgutilhttp' in extractor_args:
                     ydl_opts['extractor_args'] = extractor_args
-                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if proxy_url and not proxy_disabled else 'no'} oauth={'yes' if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH) else 'no'} cookies={'yes' if os.path.exists(COOKIES_PATH) else 'no'}")
+                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if use_proxy else 'no'} oauth={'yes' if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH) else 'no'} cookies={'yes' if has_cookies else 'no'}")
                 # Run yt-dlp in a subprocess so we can hard-kill it on timeout
                 ytdlp_script = os.path.join(os.path.dirname(__file__), 'ytdlp_download.py')
                 sub_opts = dict(ydl_opts)
@@ -1785,13 +1794,9 @@ def process_video_background(job_id: str, user_id: str, url: str):
                         if attempt < max_attempts - 1:
                             time.sleep(2)
                             continue
-                if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format", "too small", "proxy", "tunnel connection"]):
-                    if attempt >= 1 and proxy_url and not proxy_disabled:
-                        print(f"Proxy failing repeatedly ({err_lower[:80]}). Disabling proxy to try direct connection.")
-                        proxy_disabled = True
-                        if attempt < max_attempts - 1:
-                            time.sleep(2)
-                            continue
+                if any(x in err_lower for x in ["rate-limited", "no video formats", "format not available", "requested format"]):
+                    # These are YouTube-side blocks, NOT proxy failures.
+                    # Keep proxy enabled — disabling it would make things worse.
                     if attempt < max_attempts - 1:
                         wait = min(3 + attempt, 15)
                         print(f"YouTube issue (attempt {attempt+1}/{max_attempts}): {err_lower[:80]}, waiting {wait}s...")
