@@ -2394,6 +2394,13 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         if music_path and os.path.exists(music_path):
             cmd.extend(['-i', music_path])
 
+        crf_map = {"720p": "19", "1080p": "18", "4k": "17"}
+        maxrate_map = {"720p": "8M", "1080p": "16M", "4k": "40M"}
+        bufsize_map = {"720p": "16M", "1080p": "32M", "4k": "80M"}
+        target_crf = crf_map.get(req.resolution, "18")
+        target_maxrate = maxrate_map.get(req.resolution, "16M")
+        target_bufsize = bufsize_map.get(req.resolution, "32M")
+
         cmd.extend([
             '-t', str(trim_d),
             '-vf', vf,
@@ -2405,13 +2412,30 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         ])
         if vcodec == 'libx264':
             cmd.extend(['-pix_fmt', 'yuv420p', '-profile:v', 'high', '-movflags', '+faststart'])
-        cmd.extend([
-            '-preset', 'veryfast',
-            '-crf', '23',
-            '-c:a', acodec,
-        ])
+            cmd.extend([
+                '-preset', 'medium',
+                '-crf', target_crf,
+                '-maxrate', target_maxrate,
+                '-bufsize', target_bufsize,
+                '-c:a', acodec,
+            ])
+        elif vcodec == 'libvpx-vp9':
+            cmd.extend([
+                '-crf', target_crf,
+                '-b:v', '0',
+                '-deadline', 'good',
+                '-c:a', acodec,
+            ])
+        else:
+            cmd.extend([
+                '-preset', 'medium',
+                '-crf', target_crf,
+                '-c:a', acodec,
+            ])
         if acodec == 'aac':
-            cmd.extend(['-b:a', '192k'])
+            cmd.extend(['-b:a', '256k'])
+        elif acodec == 'libopus':
+            cmd.extend(['-b:a', '160k'])
         if af_filter:
             cmd.extend(['-filter_complex', af_filter])
         cmd.extend(['-y', output_path])
