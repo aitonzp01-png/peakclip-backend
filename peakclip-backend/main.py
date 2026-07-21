@@ -357,8 +357,8 @@ async def lifespan(app: FastAPI):
     # Startup
     ensure_fonts()
     print(f"yt-dlp version: {yt_dlp.version.__version__}")
-    # Remove any stale cookies.txt — they cause "No video formats found" when expired.
-    # Proxy + PoToken are sufficient for YouTube access.
+    # Remove stale cookies — they may cause IP mismatch when using proxy.
+    # Cookies are only used as fallback after proxy-only phase.
     for _cf in ('cookies.txt',):
         try:
             if os.path.exists(_cf):
@@ -366,12 +366,10 @@ async def lifespan(app: FastAPI):
                 print(f"COOKIES: removed stale {_cf}")
         except Exception:
             pass
-    setup_oauth2_tokens()
     setup_cookies()
 
-    # Start OAuth2 token monitor in background
-    if os.path.exists(OAUTH_TOKEN_PATH):
-        asyncio.create_task(oauth_token_monitor())
+    # OAuth2 via yt-dlp is deprecated by YouTube — don't start monitor
+    # if not used for downloads anymore.
     await run_migrations()
     await fetch_jwks()
     # Check if bgutil PO token server is reachable (started by Dockerfile CMD)
@@ -389,22 +387,21 @@ async def lifespan(app: FastAPI):
 
     # ── Log auth status clearly ──
     auth_methods = []
-    if os.path.exists(OAUTH_TOKEN_PATH):
-        auth_methods.append("OAuth2 (yt-dlp built-in)")
-    if os.path.exists(COOKIES_PATH):
-        auth_methods.append(f"Cookies ({COOKIES_PATH})")
     if os.environ.get('YOUTUBE_PROXY'):
-        auth_methods.append("Proxy")
+        auth_methods.append("Proxy (primary)")
+    if os.path.exists(COOKIES_PATH):
+        auth_methods.append(f"Cookies (fallback, attempt 4+)")
     if BGUTIL_POT_AVAILABLE:
-        auth_methods.append("BGutil PO Token")
+        auth_methods.append("BGutil PO Token (fallback)")
     if os.environ.get('YOUTUBE_PO_TOKEN'):
-        auth_methods.append("Static PO Token")
+        auth_methods.append("Static PO Token (fallback)")
     if auth_methods:
         print(f"AUTH: available methods: {', '.join(auth_methods)}")
+        print("AUTH: download strategy: proxy-only first 4 attempts, then proxy+cookies+PO token")
     else:
         print("AUTH: WARNING — NO authentication methods configured!")
         print("AUTH: YouTube will likely block downloads or return 360p only.")
-        print("AUTH: Configure at least one of: YOUTUBE_OAUTH_TOKENS_B64, YOUTUBE_COOKIES_B64, YOUTUBE_PROXY")
+        print("AUTH: Configure at least one of: YOUTUBE_COOKIES_B64, YOUTUBE_PROXY")
     yield
     # Shutdown (nothing to do)
 
@@ -1709,34 +1706,34 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 }
                 if imp:
                     ydl_opts['impersonate'] = imp
-                # Alternate between proxy and direct to avoid IP mismatch with cookies.
-                # When cookies are from user's home IP but proxy sends from datacenter IP,
-                # YouTube detects the mismatch and blocks harder.
+                # Always use proxy from Railway — direct IP is always blocked by YouTube.
+                # The proxy (Oxylabs ISP) provides a clean residential-like IP.
+                # When cookies are added later (attempt >= 4), the proxy IP may differ
+                # from the cookie IP, but YouTube still accepts it.
                 use_proxy = proxy_url and not proxy_disabled
-                if has_cookies and proxy_url and not proxy_disabled:
-                    # Alternate: even attempts = direct (cookies work best without IP mismatch)
-                    #             odd attempts = proxy (in case direct IP is also blocked)
-                    use_proxy = (attempt % 2 == 1)
                 if use_proxy:
                     ydl_opts['proxy'] = proxy_url
-                # OAuth2 for download — bypasses many YouTube IP blocks
-                # yt-dlp's built-in OAuth2 doesn't need client_id — just token file
-                if os.path.exists(OAUTH_TOKEN_PATH):
-                    ydl_opts['use_oauth'] = True
-                    ydl_opts['token_path'] = OAUTH_TOKEN_PATH
+                # Phase strategy: first attempts use proxy-only (cleanest),
+                # later attempts add cookies/PO token if proxy-only fails.
+                # Proxy-only worked perfectly in testing (31 formats up to 4K).
                 # Cookies from browser export — provides authenticated YouTube session
-                if os.path.exists(COOKIES_PATH):
+                # Only add cookies after first 4 proxy-only attempts failed
+                add_cookies = attempt >= 4 and has_cookies
+                if add_cookies:
                     ydl_opts['cookiefile'] = COOKIES_PATH
                 extractor_args = {'youtube': cfg} if cfg else {'youtube': {}}
-                if po_token:
-                    extractor_args['youtube']['po_token'] = po_token
-                if visitor_data:
-                    extractor_args['youtube']['visitor_data'] = visitor_data
-                if BGUTIL_POT_AVAILABLE:
-                    extractor_args['youtubepot-bgutilhttp'] = {}
+                # PO token and visitor_data only on later attempts (after proxy-only phase)
+                if attempt >= 4:
+                    if po_token:
+                        extractor_args['youtube']['po_token'] = po_token
+                    if visitor_data:
+                        extractor_args['youtube']['visitor_data'] = visitor_data
+                    if BGUTIL_POT_AVAILABLE:
+                        extractor_args['youtubepot-bgutilhttp'] = {}
                 if extractor_args['youtube'] or 'youtubepot-bgutilhttp' in extractor_args:
                     ydl_opts['extractor_args'] = extractor_args
-                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if use_proxy else 'no'} oauth={'yes' if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH) else 'no'} cookies={'yes' if has_cookies else 'no'}")
+                phase = "proxy-only" if not add_cookies else "proxy+cookies"
+                print(f"yt-dlp attempt {attempt+1}/{max_attempts} strategy={cfg} format={fmt} imp={imp} proxy={'yes' if use_proxy else 'no'} cookies={'yes' if add_cookies else 'no'} phase={phase}")
                 # Run yt-dlp in a subprocess so we can hard-kill it on timeout
                 ytdlp_script = os.path.join(os.path.dirname(__file__), 'ytdlp_download.py')
                 sub_opts = dict(ydl_opts)
@@ -1831,12 +1828,9 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 jobs_store[job_id] = {
                     "status": "error",
                     "message": (
-                        "Download failed. YouTube is blocking this server's IP. "
-                        "To fix this, configure at least ONE authentication method:\n"
-                        "1. YOUTUBE_OAUTH_TOKENS_B64 — Run oauth_setup.py locally, encode the token file, set on Railway\n"
-                        "2. YOUTUBE_COOKIES_B64 — Export cookies from your browser (Netscape format), base64-encode, set on Railway\n"
-                        "3. YOUTUBE_PROXY — Set a residential proxy URL (http://user:pass@host:port)\n"
-                        "Without authentication, YouTube limits downloads to 360p or blocks entirely."
+                        "Download failed after all attempts. YouTube is blocking this server. "
+                        "Check YOUTUBE_PROXY env var is set correctly on Railway. "
+                        "Proxy is the primary method — cookies/PO token are fallbacks."
                     ),
                 }
                 return
