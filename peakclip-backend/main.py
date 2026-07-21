@@ -216,16 +216,16 @@ def ensure_valid_oauth_token() -> str | None:
 
 
 async def oauth_token_monitor():
-    """Background task: check & refresh OAuth2 token every 30 minutes."""
+    """Background task: check OAuth2 token file every 30 minutes."""
     print("OAUTH MONITOR: started (interval=1800s)")
     while True:
         try:
             await asyncio.sleep(1800)
-            path = ensure_valid_oauth_token()
-            if path:
-                print("OAUTH MONITOR: token OK")
+            if os.path.exists(OAUTH_TOKEN_PATH):
+                size = os.path.getsize(OAUTH_TOKEN_PATH)
+                print(f"OAUTH MONITOR: token OK ({size} bytes)")
             else:
-                print("OAUTH MONITOR: no tokens available")
+                print("OAUTH MONITOR: no token file found")
         except Exception as e:
             print(f"OAUTH MONITOR: error: {e}")
 
@@ -370,7 +370,7 @@ async def lifespan(app: FastAPI):
     setup_cookies()
 
     # Start OAuth2 token monitor in background
-    if YOUTUBE_OAUTH_CLIENT_ID:
+    if os.path.exists(OAUTH_TOKEN_PATH):
         asyncio.create_task(oauth_token_monitor())
     await run_migrations()
     await fetch_jwks()
@@ -389,8 +389,8 @@ async def lifespan(app: FastAPI):
 
     # ── Log auth status clearly ──
     auth_methods = []
-    if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH):
-        auth_methods.append(f"OAuth2 (client_id={YOUTUBE_OAUTH_CLIENT_ID[:8]}...)")
+    if os.path.exists(OAUTH_TOKEN_PATH):
+        auth_methods.append("OAuth2 (yt-dlp built-in)")
     if os.path.exists(COOKIES_PATH):
         auth_methods.append(f"Cookies ({COOKIES_PATH})")
     if os.environ.get('YOUTUBE_PROXY'):
@@ -1720,7 +1720,8 @@ def process_video_background(job_id: str, user_id: str, url: str):
                 if use_proxy:
                     ydl_opts['proxy'] = proxy_url
                 # OAuth2 for download — bypasses many YouTube IP blocks
-                if YOUTUBE_OAUTH_CLIENT_ID and os.path.exists(OAUTH_TOKEN_PATH):
+                # yt-dlp's built-in OAuth2 doesn't need client_id — just token file
+                if os.path.exists(OAUTH_TOKEN_PATH):
                     ydl_opts['use_oauth'] = True
                     ydl_opts['token_path'] = OAUTH_TOKEN_PATH
                 # Cookies from browser export — provides authenticated YouTube session
