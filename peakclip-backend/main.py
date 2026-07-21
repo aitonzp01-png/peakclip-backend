@@ -2065,67 +2065,65 @@ Return JSON with this exact format:
                 # -ss before -i seeks to keyframe, then decodes to exact clip_start (frame-accurate)
                 no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
                 local_files.append(no_subs)
-                audio_filter = ""
+
+                # ── Step 1: Extract raw clip segment (video + audio) ──
+                raw_clip = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}_raw.mp4")
+                extract_cmd = [
+                    'ffmpeg', '-y', '-ss', str(clip_start),
+                    '-i', video_path, '-t', str(duration),
+                    '-c', 'copy', raw_clip
+                ]
+                _ffmpeg(extract_cmd, f"clip{i+1}_extract", timeout=120)
+                if not os.path.exists(raw_clip) or os.path.getsize(raw_clip) < 1024:
+                    print(f"CLIP {i+1}: raw extraction failed, skipping")
+                    continue
+
+                # ── Step 2: Smart reframe (face tracking + dynamic crop) ──
+                reframed = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}_reframed.mp4")
+                try:
+                    from smart_reframe import smart_reframe
+                    smart_reframe(raw_clip, reframed, target_w=1080, target_h=1920)
+                except Exception as e:
+                    print(f"CLIP {i+1}: smart_reframe failed ({e}), falling back to static crop")
+                    fallback_cmd = [
+                        'ffmpeg', '-y', '-i', raw_clip,
+                        '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,setsar=1,format=yuv420p',
+                        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
+                        '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+                        reframed
+                    ]
+                    _ffmpeg(fallback_cmd, f"clip{i+1}_fallback_crop", timeout=300)
+
+                if not os.path.exists(reframed) or os.path.getsize(reframed) < 1024:
+                    print(f"CLIP {i+1}: reframing failed, skipping")
+                    continue
+
+                # ── Step 3: Mix audio + attach SRT metadata ──
+                cmd = ['ffmpeg', '-y', '-i', reframed]
                 if music_path:
                     music_path_ff = music_path.replace('\\', '/')
-                    audio_filter = "[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]"
+                    cmd += ['-stream_loop', '-1', '-i', music_path_ff]
+                if srt_has_data:
+                    cmd += ['-i', srt_path]
+
+                input_idx = 1
+                if music_path:
+                    cmd += ['-filter_complex',
+                            '[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]']
+                    cmd += ['-map', '[a]']
                 else:
-                    audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
+                    cmd += ['-map', '0:a']
 
-                render_attempts = [
-                    {"scale": "1080:1920", "preset": "medium", "crf": "18", "label": "med_1080p", "b_v": "6000k", "maxrate": "8000k", "bufsize": "12000k"},
-                    {"scale": "720:1280", "preset": "medium", "crf": "18", "label": "med_720p", "b_v": "4000k", "maxrate": "6000k", "bufsize": "8000k"},
-                ]
-                rendered = False
-                for att in render_attempts:
-                    scale_flags = f"scale={att['scale']}:force_original_aspect_ratio=increase:flags=lanczos"
-                    vid_filter = f"{scale_flags},crop={att['scale']},setsar=1,format=yuv420p"
-                    parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-                    cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-                    if music_path:
-                        cmd += ['-stream_loop', '-1', '-i', music_path_ff]
-                    if srt_has_data:
-                        cmd += ['-i', srt_path]
-                    sub_idx = 2 if music_path else 1 if srt_has_data else None
-                    cmd += ['-t', str(duration),
-                            '-threads', '4',
-                            '-filter_complex', ';'.join(parts),
-                            '-map', '[v]', '-map', '[a]']
-                    if sub_idx is not None:
-                        cmd += ['-map', f'{sub_idx}:s']
-                    cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-                            '-preset', att['preset'], '-crf', att['crf'],
-                            '-b:v', att['b_v'], '-maxrate', att['maxrate'], '-bufsize', att['bufsize'],
-                            '-c:a', 'aac', '-b:a', '128k']
-                    if sub_idx is not None:
-                        cmd += ['-c:s', 'mov_text', '-disposition:s:0', 'default']
-                    cmd += ['-movflags', '+faststart', '-y', no_subs]
-                    try:
-                        _ffmpeg(cmd, f"clip{i+1}_{att['label']}", timeout=300)
-                    except subprocess.TimeoutExpired:
-                        continue
-                    if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
-                        rendered = True
-                        break
+                cmd += ['-map', '0:v']
+                cmd += ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-shortest']
 
-                if not rendered:
-                    cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-                    if srt_has_data:
-                        cmd += ['-i', srt_path]
-                    sub_idx = 1 if srt_has_data else None
-                    cmd += ['-t', str(duration),
-                            '-threads', '4',
-                            '-vf', 'scale=720:1280:force_original_aspect_ratio=increase:flags=lanczos,crop=720:1280',
-                            '-map', '0:v', '-map', '0:a']
-                    if sub_idx is not None:
-                        cmd += ['-map', f'{sub_idx}:s']
-                    cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'medium', '-crf', '22',
-                            '-b:v', '2000k', '-maxrate', '3000k', '-bufsize', '6000k',
-                            '-c:a', 'aac', '-b:a', '128k']
-                    if sub_idx is not None:
-                        cmd += ['-c:s', 'mov_text', '-disposition:s:0', 'default']
-                    cmd += ['-movflags', '+faststart', '-y', no_subs]
-                    _ffmpeg(cmd, f"clip{i+1}_raw", timeout=300)
+                sub_input_idx = 2 if music_path else 1
+                if srt_has_data:
+                    cmd += ['-map', f'{sub_input_idx}:s']
+                    cmd += ['-c:s', 'mov_text', '-disposition:s:0', 'default']
+
+                cmd += ['-movflags', '+faststart', '-y', no_subs]
+                _ffmpeg(cmd, f"clip{i+1}_mux", timeout=180)
 
                 if os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024:
                     output_path = no_subs
@@ -2852,45 +2850,54 @@ Return JSON with this exact format:
 
             music_path = resolve_music_path(clip_mood)
             
-            # Render video (no subtitles burned — uploaded separately)
-            scale_target = "720:1280"
-            scale_flags = f"scale={scale_target}:force_original_aspect_ratio=increase:flags=lanczos"
-            vid_filter = f"{scale_flags},crop={scale_target},setsar=1,format=yuv420p"
             no_subs = f"outputs/{job_id}_clip{i+1}_nosubs.mp4"
             local_files.append(no_subs)
-            audio_filter = ""
+
+            # ── Step 1: Extract raw clip segment ──
+            raw_clip = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}_raw.mp4")
+            extract_cmd = [
+                'ffmpeg', '-y', '-ss', str(clip_start),
+                '-i', video_path, '-t', str(duration),
+                '-c', 'copy', raw_clip
+            ]
+            subprocess.run(extract_cmd, capture_output=True, timeout=120)
+
+            # ── Step 2: Smart reframe ──
+            reframed = os.path.join(tempfile.gettempdir(), f"{job_id}_clip{i+1}_reframed.mp4")
+            try:
+                from smart_reframe import smart_reframe
+                smart_reframe(raw_clip, reframed, target_w=1080, target_h=1920)
+            except Exception as e:
+                print(f"CLIP {i+1}: smart_reframe failed ({e}), falling back to static crop")
+                fallback_cmd = [
+                    'ffmpeg', '-y', '-i', raw_clip,
+                    '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,setsar=1,format=yuv420p',
+                    '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
+                    '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+                    reframed
+                ]
+                subprocess.run(fallback_cmd, capture_output=True, timeout=300)
+
+            if not (os.path.exists(reframed) and os.path.getsize(reframed) >= 1024):
+                print(f"CLIP {i+1}: reframing failed, skipping")
+                continue
+
+            # ── Step 3: Mix audio + attach SRT metadata ──
+            cmd = ['ffmpeg', '-y', '-i', reframed]
             if music_path:
                 music_path_ff = music_path.replace('\\', '/')
-                audio_filter = "[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]"
-            else:
-                audio_filter = "[0:a]dynaudnorm=p=0.95[a]"
-            parts = [f"[0:v]{vid_filter}[v]", audio_filter]
-            cmd = ['ffmpeg', '-ss', str(clip_start), '-i', video_path]
-            if music_path:
                 cmd += ['-stream_loop', '-1', '-i', music_path_ff]
-            cmd += ['-t', str(duration), '-threads', '4',
-                    '-filter_complex', ';'.join(parts),
-                    '-map', '[v]', '-map', '[a]',
-                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-                    '-preset', 'medium', '-crf', '18',
-                    '-b:v', '4000k', '-maxrate', '6000k', '-bufsize', '8000k',
-                    '-c:a', 'aac', '-b:a', '128k',
-                    '-movflags', '+faststart', '-y', no_subs]
-            print(f"FFMPEG: clip{i+1} render: {' '.join(cmd)}")
-            subprocess.run(cmd, capture_output=True, timeout=300)
+                cmd += ['-filter_complex',
+                        '[0:a]volume=1.0[a_main];[1:a]volume=0.15[a_music];[a_main][a_music]amix=inputs=2:duration=first:dropout_transition=2[a]']
+                cmd += ['-map', '[a]']
+            else:
+                cmd += ['-map', '0:a']
 
-            if not (os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024):
-                cmd_fb = ['ffmpeg', '-ss', str(clip_start), '-i', video_path, '-t', str(duration),
-                          '-threads', '4',
-                          '-vf', f'scale={scale_target}:force_original_aspect_ratio=increase:flags=lanczos,crop={scale_target}',
-                          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'medium', '-crf', '22',
-                          '-b:v', '2000k', '-maxrate', '3000k', '-bufsize', '6000k',
-                          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', no_subs]
-                print(f"FFMPEG: clip{i+1} fallback: {' '.join(cmd_fb)}")
-                subprocess.run(cmd_fb, capture_output=True, timeout=300)
-                if not (os.path.exists(no_subs) and os.path.getsize(no_subs) >= 1024):
-                    print(f"CLIP {i+1}: render failed, skipping")
-                    continue
+            cmd += ['-map', '0:v',
+                    '-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-shortest',
+                    '-movflags', '+faststart', '-y', no_subs]
+            print(f"CLIP {i+1}: muxing...")
+            subprocess.run(cmd, capture_output=True, timeout=180)
 
             # Upload video (no subs burned)
             storage_path = f"{job_id}/{job_id}_clip{i+1}.mp4"
