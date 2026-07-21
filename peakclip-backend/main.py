@@ -2171,7 +2171,7 @@ Return JSON with this exact format:
                     fallback_cmd = [
                         'ffmpeg', '-y', '-i', raw_clip,
                         '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,setsar=1,format=yuv420p',
-                        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
+                        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18',
                         '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
                         reframed
                     ]
@@ -2486,7 +2486,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             '-t', str(trim_d),
             '-vf', vf,
             '-r', str(req.fps),
-            '-threads', '4',
+            '-threads', '2',
             '-map', '0:v:0',
             '-map', '0:a:0?',
             '-c:v', vcodec,
@@ -2494,7 +2494,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         if vcodec == 'libx264':
             cmd.extend(['-pix_fmt', 'yuv420p', '-profile:v', 'high', '-movflags', '+faststart'])
             cmd.extend([
-                '-preset', 'medium',
+                '-preset', 'veryfast',
                 '-crf', target_crf,
                 '-maxrate', target_maxrate,
                 '-bufsize', target_bufsize,
@@ -2522,7 +2522,7 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
         cmd.extend(['-y', output_path])
 
         print(f"FFMPEG CMD: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         if result.returncode != 0:
             full_stderr = result.stderr or ""
             full_stdout = result.stdout or ""
@@ -2530,7 +2530,11 @@ async def export_clip(req: ExportRequest, user: dict = Depends(get_current_user)
             if full_stdout:
                 print(f"stdout:\n{full_stdout}")
             full_err = full_stderr[:3000] or full_stdout[:1000]
-            raise HTTPException(status_code=400, detail=f"Export error (rc={result.returncode}): {full_err}")
+            if result.returncode == -9 or 'signal 9' in full_err.lower() or 'oom' in full_err.lower():
+                detail = "Server ran out of memory during export. Try: (1) lower resolution to 720p, (2) shorter duration, (3) fewer filters."
+            else:
+                detail = f"Export error (rc={result.returncode}): {full_err}"
+            raise HTTPException(status_code=400, detail=detail)
         stderr_last = (result.stderr or "")[-2000:]
         if stderr_last.strip():
             print(f"FFMPEG OK - stderr tail:\n{stderr_last}")
